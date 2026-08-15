@@ -28,6 +28,18 @@ describe("asianHandicapMarket", () => {
     expect(home.push).toBeCloseTo(away.push, 9);
   });
 
+  it("mirrors the two sides on an integer line with genuine push mass", () => {
+    // -0.5 always has push === 0, which makes the mirror assertion above
+    // trivially 0 ≈ 0. Use an integer line, where a draw at exactly the
+    // handicap is possible, to exercise invert()'s push-mirroring for real.
+    const home = leg(-1, "AH:-1:HOME");
+    const away = leg(-1, "AH:-1:AWAY");
+    expect(home.push).toBeGreaterThan(0);
+    expect(home.push).toBeCloseTo(away.push, 9);
+    expect(home.win).toBeCloseTo(away.lose, 9);
+    expect(home.lose).toBeCloseTo(away.win, 9);
+  });
+
   it("reduces to draw-no-bet at handicap 0", () => {
     // The level-ball handicap refunds on a draw, exactly like DNB.
     const dnb = drawNoBetMarket(MATRIX);
