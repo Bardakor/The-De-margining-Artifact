@@ -372,8 +372,11 @@ describe("buildScorelineMatrix", () => {
   });
 
   it("raises low-scoring draw probability relative to independent Poisson", () => {
-    // This is the whole point of Dixon-Coles: plain Poisson under-counts 0-0 and 1-1.
-    const withRho = buildScorelineMatrix(LAMBDAS, 0.1);
+    // The whole point of Dixon-Coles: plain Poisson under-counts 0-0 and 1-1.
+    // Note the SIGN. With tau as defined above, tau(0,0) = 1 - lambda*mu*rho and
+    // tau(1,1) = 1 - rho, so it is NEGATIVE rho that inflates the low draws.
+    // Dixon & Coles' own fitted rho is negative (about -0.13).
+    const withRho = buildScorelineMatrix(LAMBDAS, -0.1);
     const withoutRho = buildScorelineMatrix(LAMBDAS, 0);
     expect(withRho.cells[1]?.[1] ?? 0).toBeGreaterThan(withoutRho.cells[1]?.[1] ?? 0);
   });
@@ -536,7 +539,7 @@ import {
 } from "../src/markets/matchOdds.js";
 
 const TOL = 1e-9;
-const MATRIX = buildScorelineMatrix({ home: 1.6, away: 1.1 }, 0.06);
+const MATRIX = buildScorelineMatrix({ home: 1.6, away: 1.1 }, -0.06);
 
 function prob(market: { selections: readonly { key: string; probability: number }[] }, key: string): number {
   const found = market.selections.find((s) => s.key === key);
@@ -560,7 +563,7 @@ describe("matchOddsMarket", () => {
   it("gives a plausible draw probability, never the runaway price of the old model", () => {
     // Regression guard for defect D1. An evenly matched fixture should land
     // near a real-world draw rate, roughly 24-30%, never below 15%.
-    const even = buildScorelineMatrix({ home: 1.35, away: 1.25 }, 0.06);
+    const even = buildScorelineMatrix({ home: 1.35, away: 1.25 }, -0.06);
     const p = prob(matchOddsMarket(even), "1X2:DRAW");
     expect(p).toBeGreaterThan(0.15);
     expect(p).toBeLessThan(0.40);
@@ -569,7 +572,7 @@ describe("matchOddsMarket", () => {
   });
 
   it("never yields a negative probability, even for extreme mismatches", () => {
-    const lopsided = buildScorelineMatrix({ home: 4.2, away: 0.3 }, 0.02);
+    const lopsided = buildScorelineMatrix({ home: 4.2, away: 0.3 }, -0.02);
     for (const s of matchOddsMarket(lopsided).selections) {
       expect(s.probability).toBeGreaterThanOrEqual(0);
       expect(s.probability).toBeLessThanOrEqual(1);
@@ -740,7 +743,7 @@ import { bttsMarket } from "../src/markets/btts.js";
 import { correctScoreMarket } from "../src/markets/correctScore.js";
 
 const TOL = 1e-9;
-const MATRIX = buildScorelineMatrix({ home: 1.6, away: 1.1 }, 0.06);
+const MATRIX = buildScorelineMatrix({ home: 1.6, away: 1.1 }, -0.06);
 
 function prob(m: { selections: readonly { key: string; probability: number }[] }, key: string): number {
   const found = m.selections.find((s) => s.key === key);
@@ -977,7 +980,7 @@ import { drawNoBetMarket } from "../src/markets/matchOdds.js";
 import { asianHandicapMarket } from "../src/markets/asianHandicap.js";
 
 const TOL = 1e-9;
-const MATRIX = buildScorelineMatrix({ home: 1.6, away: 1.1 }, 0.06);
+const MATRIX = buildScorelineMatrix({ home: 1.6, away: 1.1 }, -0.06);
 
 function leg(h: number, key: string) {
   const found = asianHandicapMarket(MATRIX, h).selections.find((s) => s.key === key);
@@ -1191,7 +1194,7 @@ import {
 } from "../src/pricing/overround.js";
 
 const TOL = 1e-9;
-const MARKET = matchOddsMarket(buildScorelineMatrix({ home: 1.6, away: 1.1 }, 0.06));
+const MARKET = matchOddsMarket(buildScorelineMatrix({ home: 1.6, away: 1.1 }, -0.06));
 
 describe("solvePowerExponent", () => {
   it("returns 1 when the target equals the fair book sum", () => {
@@ -1802,7 +1805,7 @@ export interface FixturePricing {
 }
 
 export const DEFAULT_PRICING_CONFIG: PricingConfig = {
-  rho: 0.06,
+  rho: -0.10,
   targetBookSum: 1.05,
   totalsLines: [0.5, 1.5, 2.5, 3.5, 4.5],
   handicaps: [-2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2],
@@ -2224,6 +2227,24 @@ for applying the margin. That is wrong: Shin is an inverse method that recovers
 true probabilities from bookmaker odds. Task 6 applies margin by the power method
 and keeps Shin for de-margining historical closing odds in Plan 2's backtest.
 Spec §3.7 should be amended to match.
+
+**Rho sign correction, found during Task 2 and verified empirically.** With tau
+defined as `tau(0,0) = 1 - lambda*mu*rho` and `tau(1,1) = 1 - rho`, it is NEGATIVE
+rho that inflates the low-scoring draws. The first draft used a positive default
+(`rho: 0.06`), which pushed total draw probability DOWN from 24.9% to 23.5% for a
+1.6/1.1 fixture — the opposite of the correction's purpose, and working against the
+D1 fix this plan exists to deliver. Measured on the Task 2 implementation:
+
+| rho | P(0-0) | P(1-1) | P(draw) | fair draw odds |
+|---|---|---|---|---|
+| -0.20 | 0.09086 | 0.14194 | 0.29622 | 3.376 |
+| -0.10 | 0.07903 | 0.13011 | 0.27257 | 3.669 |
+| 0.00 | 0.06721 | 0.11828 | 0.24891 | 4.017 |
+| +0.06 | 0.06011 | 0.11118 | 0.23472 | 4.260 |
+
+The default is now `rho: -0.10`, giving a 27.3% draw rate consistent with real
+football. Dixon & Coles' own fitted rho is negative (about -0.13). Task 2's tests
+were corrected during implementation; Tasks 3 to 8 fixtures use negative rho.
 
 **Pre-flight fix, recorded.** The first draft of Task 8 called
 `applyOverround(doubleChanceMarket(matrix), 1.05)`, and its test skipped DC and CS
