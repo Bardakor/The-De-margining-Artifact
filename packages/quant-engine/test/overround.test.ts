@@ -24,6 +24,25 @@ describe("solvePowerExponent", () => {
     expect(() => solvePowerExponent([0.5, 0.3, 0.2], 1.05)).not.toThrow();
   });
 
+  it("rejects a negative probability instead of silently dropping it", () => {
+    // Regression guard for Finding 2: the `p > 0` filter used to just drop
+    // negative values out of the sum, so a market containing one produced a
+    // healthy-looking book instead of an error.
+    expect(() => solvePowerExponent([0.5, -0.1, 0.6], 1.05)).toThrow(RangeError);
+  });
+
+  it("rejects a NaN probability instead of silently dropping it", () => {
+    expect(() => solvePowerExponent([0.5, Number.NaN, 0.5], 1.05)).toThrow(RangeError);
+  });
+
+  it("rejects a probability above 1", () => {
+    expect(() => solvePowerExponent([0.5, 1.4, 0.6], 1.05)).toThrow(RangeError);
+  });
+
+  it("accepts a probability of exactly 0 (a legitimate impossible outcome)", () => {
+    expect(() => solvePowerExponent([0.5, 0, 0.5], 1.05)).not.toThrow();
+  });
+
   it("throws when the target is unreachable for a single-selection book", () => {
     // For n=1, sumAt(k) = p^k has supremum 1 as k -> 0+ and never exceeds it,
     // so any target above 1 is mathematically unreachable. Before the
@@ -101,6 +120,47 @@ describe("applyOverround", () => {
 
   it("still succeeds for a normal multi-selection market (guard is not over-eager)", () => {
     expect(() => applyOverround(MARKET, 1.05)).not.toThrow();
+  });
+
+  function threeSelectionMarket(probabilities: readonly [number, number, number]): Market {
+    return {
+      key: "TEST",
+      label: "Three Selection Test Market",
+      selections: probabilities.map((p, i) => ({
+        key: `SEL${i}`,
+        label: `Selection ${i}`,
+        probability: p,
+        fairOdds: toFairOdds(p),
+      })),
+    };
+  }
+
+  it("throws on a negative probability instead of fabricating a healthy book", () => {
+    // Regression guard for Finding 2: before the fix this returned a
+    // PricedMarket with bookSum exactly 1.05 and no error at all, because the
+    // negative probability was silently dropped and its odds set to Infinity.
+    expect(() => applyOverround(threeSelectionMarket([0.5, -0.1, 0.6]), 1.05)).toThrow(
+      RangeError,
+    );
+  });
+
+  it("throws on a NaN probability instead of fabricating a healthy book", () => {
+    expect(() =>
+      applyOverround(threeSelectionMarket([0.5, Number.NaN, 0.5]), 1.05),
+    ).toThrow(RangeError);
+  });
+
+  it("throws on a probability above 1", () => {
+    expect(() => applyOverround(threeSelectionMarket([0.5, 1.4, 0.6]), 1.05)).toThrow(
+      RangeError,
+    );
+  });
+
+  it("still prices a probability of exactly 0 as Infinity odds without throwing", () => {
+    const priced = applyOverround(threeSelectionMarket([0.5, 0, 0.5]), 1.05);
+    const zeroSelection = priced.selections[1];
+    expect(zeroSelection).toBeDefined();
+    expect(zeroSelection?.odds).toBe(Number.POSITIVE_INFINITY);
   });
 });
 

@@ -21,11 +21,29 @@ const POSTCONDITION_TOLERANCE = 1e-9;
  * toward the low end of the bracket instead of a real root. The postcondition
  * check catches that and fails loudly instead of returning a k whose implied
  * book sum is nowhere near what was asked for.
+ *
+ * Every probability must be a legitimate value in [0, 1]. NaN, negative, and
+ * above-1 values are rejected explicitly here rather than being silently
+ * dropped by the `p > 0` filter below: without this check, a NaN or negative
+ * probability would simply fail to appear in `positive`, and the caller
+ * (applyOverround) would go on to map it to Infinity odds as if it were a
+ * legitimate impossible outcome, fabricating a healthy-looking book out of
+ * invalid input instead of failing loudly like every other entry point in
+ * this package. A probability of exactly 0 is legitimate (an impossible
+ * outcome, which correctly maps to Infinity odds) and is not rejected here.
  */
 export function solvePowerExponent(
   probabilities: readonly number[],
   targetBookSum: number,
 ): number {
+  for (const p of probabilities) {
+    if (Number.isNaN(p) || p < 0 || p > 1) {
+      throw new RangeError(
+        `solvePowerExponent: probability must be a number in [0, 1], received ${p}`,
+      );
+    }
+  }
+
   const positive = probabilities.filter((p) => p > 0);
   const sumAt = (k: number): number =>
     positive.reduce((acc, p) => acc + Math.pow(p, k), 0);
