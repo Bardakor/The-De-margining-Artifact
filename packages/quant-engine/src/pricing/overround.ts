@@ -2,6 +2,7 @@ import type { Market, PricedMarket, PricedSelection } from "../types.js";
 
 const DEFAULT_BOOK_SUM = 1.05;
 const BISECTION_ITERATIONS = 200;
+const POSTCONDITION_TOLERANCE = 1e-9;
 
 /**
  * Solves for the exponent k such that the sum of p^k equals `targetBookSum`.
@@ -10,6 +11,16 @@ const BISECTION_ITERATIONS = 200;
  * monotonic and bisection converges. Using an exponent rather than a constant
  * multiplier reproduces the favourite-longshot bias: the margin taken from a
  * longshot is proportionally larger than from a favourite.
+ *
+ * Not every target is reachable, though: as k -> 0+, the sum of p^k tends to
+ * `probabilities.length` (each term tends to 1), so any target above that
+ * count (most notably a book of a single selection, where the supremum is 1
+ * and a target above 1 is never attained) leaves the bracket-expansion loops
+ * unable to find a k where sumAt(k) actually clears the target. The loop
+ * below still runs to completion in that case, but it silently converges
+ * toward the low end of the bracket instead of a real root. The postcondition
+ * check catches that and fails loudly instead of returning a k whose implied
+ * book sum is nowhere near what was asked for.
  */
 export function solvePowerExponent(
   probabilities: readonly number[],
@@ -31,7 +42,15 @@ export function solvePowerExponent(
     if (sumAt(mid) > targetBookSum) low = mid;
     else high = mid;
   }
-  return (low + high) / 2;
+  const k = (low + high) / 2;
+  const achieved = sumAt(k);
+  if (Math.abs(achieved - targetBookSum) > POSTCONDITION_TOLERANCE) {
+    throw new RangeError(
+      `solvePowerExponent: target book sum ${targetBookSum} is unreachable ` +
+        `for the given probabilities (achieved ${achieved} at k=${k})`,
+    );
+  }
+  return k;
 }
 
 /**
