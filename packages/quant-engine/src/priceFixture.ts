@@ -38,6 +38,23 @@ export interface FixturePricing {
   readonly lambdas: MatchLambdas;
   readonly matrix: ScorelineMatrix;
   readonly markets: readonly PricedMarket[];
+  /**
+   * Asian handicap markets, carrying FAIR odds ONLY -- NO margin has been
+   * applied, unlike every market in `markets`.
+   *
+   * This is deliberate, not an oversight: AH legs are not a probability
+   * simplex (win + push + lose = 1 per side, not across both sides), so the
+   * power-method margin in pricing/overround.ts -- which solves for book sum
+   * over a set of selections that partition probability 1 -- does not apply
+   * to it. By construction, 1/fairHome + 1/fairAway equals exactly 1 for
+   * every handicap line, so leaving these unmargined is what makes them
+   * fair, not what makes them wrong.
+   *
+   * A consumer looping this array and publishing `fairOdds` directly would
+   * ship the highest-volume market in the book at 0.00% margin. Callers MUST
+   * apply their own margin (e.g. shorten each side's odds proportionally
+   * before publishing) before quoting these prices to a bettor.
+   */
   readonly asianHandicaps: readonly AsianHandicapMarket[];
   readonly config: PricingConfig;
 }

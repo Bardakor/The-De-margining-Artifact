@@ -23,5 +23,25 @@ describe("golden pricing snapshots", () => {
       }));
       expect(summary).toMatchSnapshot();
     });
+
+    it(`prices "${name}" Asian handicaps stably (fair odds, no margin -- see Finding 4)`, () => {
+      // asianHandicaps is deliberately excluded from applyOverround (fair
+      // odds only, see the doc comment on FixturePricing.asianHandicaps), and
+      // until now it was entirely unlocked by the golden suite. Lock it in
+      // like every other market.
+      const pricing = priceFixture(lambdas);
+      const summary = pricing.asianHandicaps.map((m) => ({
+        key: m.key,
+        handicap: m.handicap,
+        selections: m.selections.map((s) => ({
+          key: s.key,
+          win: Number(s.win.toFixed(6)),
+          push: Number(s.push.toFixed(6)),
+          lose: Number(s.lose.toFixed(6)),
+          fairOdds: Number.isFinite(s.fairOdds) ? Number(s.fairOdds.toFixed(4)) : "Infinity",
+        })),
+      }));
+      expect(summary).toMatchSnapshot();
+    });
   }
 });

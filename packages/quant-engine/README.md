@@ -52,6 +52,24 @@ separately, which is also what real books do.
 Shin's method is provided as the inverse, for de-margining historical closing
 odds when backtesting.
 
+## Asian handicap carries NO margin
+
+`FixturePricing.asianHandicaps` is returned **outside** the `markets` array,
+and its `fairOdds` are exactly that: fair, zero-margin prices. Unlike every
+market in `markets`, `applyOverround` is never run on it.
+
+This is deliberate. Asian handicap legs are not a probability simplex --
+win + push + lose sums to 1 *per side*, not across both sides -- so the
+power-method margin (which solves for a book sum over selections that
+partition probability 1) does not apply. `1/fairHome + 1/fairAway` equals
+exactly 1 for every handicap line by construction, which is what makes
+leaving it unmargined correct rather than an oversight.
+
+**A consumer looping `pricing.asianHandicaps` and rendering `fairOdds`
+directly would publish the book's highest-volume market at 0.00% margin.**
+Applying a margin to Asian handicap odds before publishing them is the
+caller's responsibility, not this engine's.
+
 ## Usage
 
 ```ts
