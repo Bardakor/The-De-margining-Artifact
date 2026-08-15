@@ -1674,11 +1674,33 @@ describe("priceFixture", () => {
     expect(p.asianHandicaps.length).toBe(DEFAULT_PRICING_CONFIG.handicaps.length);
   });
 
-  it("gives every market the configured book sum", () => {
+  it("gives every exhaustive market the configured book sum", () => {
     for (const m of priceFixture(LAMBDAS).markets) {
-      if (m.key === "CS" || m.key === "DC") continue; // not two/three-way books
+      // Double chance is excluded deliberately and asserted separately below:
+      // its selections each cover two outcomes, so a fair DC book sums to 2.
+      if (m.key === "DC") continue;
       expect(Math.abs(m.bookSum - DEFAULT_PRICING_CONFIG.targetBookSum)).toBeLessThan(TOL);
     }
+  });
+
+  it("gives double chance exactly twice the target book sum", () => {
+    // Each of 1X, 12 and X2 covers two of the three outcomes, so the DC book
+    // is 2 x (the 1X2 book). Deriving DC from the margined 1X2 rather than
+    // applying a margin to it directly is what makes this exact.
+    const dc = market(priceFixture(LAMBDAS), "DC");
+    expect(Math.abs(dc.bookSum - 2 * DEFAULT_PRICING_CONFIG.targetBookSum)).toBeLessThan(TOL);
+  });
+
+  it("prices double chance consistently with the margined 1X2 book", () => {
+    const p = priceFixture(LAMBDAS);
+    const x2 = market(p, "1X2");
+    const dc = market(p, "DC");
+    const impl = (m: typeof x2, key: string): number => {
+      const found = m.selections.find((s) => s.key === key);
+      return found ? 1 / found.odds : 0;
+    };
+    expect(impl(dc, "DC:1X")).toBeCloseTo(impl(x2, "1X2:HOME") + impl(x2, "1X2:DRAW"), 9);
+    expect(impl(dc, "DC:X2")).toBeCloseTo(impl(x2, "1X2:DRAW") + impl(x2, "1X2:AWAY"), 9);
   });
 
   it("keeps derived markets consistent with one another", () => {
@@ -1741,7 +1763,13 @@ Expected: FAIL — cannot resolve `../src/priceFixture.js`.
 `packages/quant-engine/src/priceFixture.ts`:
 
 ```ts
-import type { MatchLambdas, PricedMarket, ScorelineMatrix } from "./types.js";
+import type {
+  Market,
+  MatchLambdas,
+  PricedMarket,
+  PricedSelection,
+  ScorelineMatrix,
+} from "./types.js";
 import { buildScorelineMatrix } from "./poisson/dixonColes.js";
 import {
   doubleChanceMarket,
@@ -1781,6 +1809,53 @@ export const DEFAULT_PRICING_CONFIG: PricingConfig = {
   maxGoals: 10,
 };
 
+/** Which 1X2 outcomes each double-chance selection covers. */
+const DOUBLE_CHANCE_LEGS: Readonly<Record<string, readonly string[]>> = {
+  "DC:1X": ["1X2:HOME", "1X2:DRAW"],
+  "DC:12": ["1X2:HOME", "1X2:AWAY"],
+  "DC:X2": ["1X2:DRAW", "1X2:AWAY"],
+};
+
+/**
+ * Double chance cannot carry a book margin of its own. Each of its selections
+ * covers two of the three outcomes, so a fair DC book sums to 2, and solving
+ * the power method against a target of 1.05 would produce meaningless prices.
+ *
+ * Instead the margined 1X2 implied probabilities are summed pairwise. The DC
+ * book therefore lands at exactly twice the 1X2 book, and the two markets
+ * cannot drift apart.
+ */
+function priceDoubleChance(
+  fair: Market,
+  pricedMatchOdds: PricedMarket,
+): PricedMarket {
+  const impliedOf = (key: string): number => {
+    const found = pricedMatchOdds.selections.find((s) => s.key === key);
+    return found && Number.isFinite(found.odds) ? 1 / found.odds : 0;
+  };
+
+  const selections: PricedSelection[] = fair.selections.map((s) => {
+    const implied = (DOUBLE_CHANCE_LEGS[s.key] ?? []).reduce(
+      (acc, key) => acc + impliedOf(key),
+      0,
+    );
+    return {
+      ...s,
+      odds: implied > 0 ? 1 / implied : Number.POSITIVE_INFINITY,
+    };
+  });
+
+  return {
+    key: fair.key,
+    label: fair.label,
+    selections,
+    bookSum: selections.reduce(
+      (acc, s) => acc + (Number.isFinite(s.odds) ? 1 / s.odds : 0),
+      0,
+    ),
+  };
+}
+
 /**
  * Prices every supported market for one fixture from its expected goals.
  *
@@ -1795,9 +1870,14 @@ export function priceFixture(
   const resolved: PricingConfig = { ...DEFAULT_PRICING_CONFIG, ...config };
   const matrix = buildScorelineMatrix(lambdas, resolved.rho, resolved.maxGoals);
 
+  const pricedMatchOdds = applyOverround(
+    matchOddsMarket(matrix),
+    resolved.targetBookSum,
+  );
+
   const markets: PricedMarket[] = [
-    applyOverround(matchOddsMarket(matrix), resolved.targetBookSum),
-    applyOverround(doubleChanceMarket(matrix), resolved.targetBookSum),
+    pricedMatchOdds,
+    priceDoubleChance(doubleChanceMarket(matrix), pricedMatchOdds),
     applyOverround(drawNoBetMarket(matrix), resolved.targetBookSum),
     applyOverround(bttsMarket(matrix), resolved.targetBookSum),
     applyOverround(correctScoreMarket(matrix), resolved.targetBookSum),
@@ -2144,6 +2224,16 @@ for applying the margin. That is wrong: Shin is an inverse method that recovers
 true probabilities from bookmaker odds. Task 6 applies margin by the power method
 and keeps Shin for de-margining historical closing odds in Plan 2's backtest.
 Spec §3.7 should be amended to match.
+
+**Pre-flight fix, recorded.** The first draft of Task 8 called
+`applyOverround(doubleChanceMarket(matrix), 1.05)`, and its test skipped DC and CS
+from the book-sum assertion. That was wrong twice over: a fair double-chance book
+sums to 2, not 1, so solving the power method against 1.05 produces meaningless
+prices — and skipping DC in the assertion hid the error rather than catching it.
+Task 8 now derives DC by summing the margined 1X2 implied probabilities pairwise,
+which puts the DC book at exactly twice the 1X2 book, and the test asserts that
+relationship explicitly. CS is exhaustive, so it is now included in the 1.05
+assertion as it always should have been.
 
 **Type consistency.** `MatchLambdas`, `ScorelineMatrix`, `Market`, `Selection`,
 `PricedMarket` and `PricedSelection` are defined once in Task 2's `types.ts` and
