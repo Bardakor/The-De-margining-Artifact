@@ -39,16 +39,20 @@ describe("priceFixture", () => {
     expect(Math.abs(dc.bookSum - 2 * DEFAULT_PRICING_CONFIG.targetBookSum)).toBeLessThan(TOL);
   });
 
-  it("prices double chance consistently with the margined 1X2 book", () => {
+  it("keeps double chance probability-consistent with 1X2", () => {
+    // DC and 1X2 are both marginals of the same matrix, so their FAIR
+    // probabilities must agree even though each market is margined separately.
     const p = priceFixture(LAMBDAS);
     const x2 = market(p, "1X2");
     const dc = market(p, "DC");
-    const impl = (m: typeof x2, key: string): number => {
-      const found = m.selections.find((s) => s.key === key);
-      return found ? 1 / found.odds : 0;
-    };
-    expect(impl(dc, "DC:1X")).toBeCloseTo(impl(x2, "1X2:HOME") + impl(x2, "1X2:DRAW"), 9);
-    expect(impl(dc, "DC:X2")).toBeCloseTo(impl(x2, "1X2:DRAW") + impl(x2, "1X2:AWAY"), 9);
+    const prob = (m: typeof x2, key: string): number =>
+      m.selections.find((s) => s.key === key)?.probability ?? 0;
+    expect(prob(dc, "DC:1X")).toBeCloseTo(
+      prob(x2, "1X2:HOME") + prob(x2, "1X2:DRAW"), 9,
+    );
+    expect(prob(dc, "DC:X2")).toBeCloseTo(
+      prob(x2, "1X2:DRAW") + prob(x2, "1X2:AWAY"), 9,
+    );
   });
 
   it("keeps derived markets consistent with one another", () => {
@@ -87,6 +91,26 @@ describe("priceFixture", () => {
           if (s.probability > 1e-6) {
             expect(s.odds).toBeGreaterThan(1);
             expect(Number.isFinite(s.odds)).toBe(true);
+          }
+        }
+      }
+    }
+  });
+
+  it("never publishes a price at or below 1, for any fixture", () => {
+    for (const lambdas of [
+      { home: 3.8, away: 0.3 },
+      { home: 2.5, away: 0.3 },
+      { home: 2.0, away: 0.3 },
+      { home: 0.3, away: 3.8 },
+      { home: 0.35, away: 0.3 },
+      { home: 3.2, away: 3.0 },
+    ]) {
+      const p = priceFixture(lambdas);
+      for (const m of p.markets) {
+        for (const s of m.selections) {
+          if (s.probability > 1e-9) {
+            expect(s.odds).toBeGreaterThan(1);
           }
         }
       }

@@ -1,8 +1,6 @@
 import type {
-  Market,
   MatchLambdas,
   PricedMarket,
-  PricedSelection,
   ScorelineMatrix,
 } from "./types.js";
 import { buildScorelineMatrix } from "./poisson/dixonColes.js";
@@ -44,63 +42,6 @@ export const DEFAULT_PRICING_CONFIG: PricingConfig = {
   maxGoals: 10,
 };
 
-/** Which 1X2 outcomes each double-chance selection covers. */
-const DOUBLE_CHANCE_LEGS: Readonly<Record<string, readonly string[]>> = {
-  "DC:1X": ["1X2:HOME", "1X2:DRAW"],
-  "DC:12": ["1X2:HOME", "1X2:AWAY"],
-  "DC:X2": ["1X2:DRAW", "1X2:AWAY"],
-};
-
-/**
- * Double chance cannot carry a book margin of its own. Each of its selections
- * covers two of the three outcomes, so a fair DC book sums to 2, and solving
- * the power method against a target of 1.05 would produce meaningless prices.
- *
- * Instead the margined 1X2 implied probabilities are summed pairwise. The DC
- * book therefore lands at exactly twice the 1X2 book, and the two markets
- * cannot drift apart.
- */
-function priceDoubleChance(
-  fair: Market,
-  pricedMatchOdds: PricedMarket,
-): PricedMarket {
-  const impliedOf = (key: string): number => {
-    const found = pricedMatchOdds.selections.find((s) => s.key === key);
-    return found && Number.isFinite(found.odds) ? 1 / found.odds : 0;
-  };
-
-  const selections: PricedSelection[] = fair.selections.map((s) => {
-    const rawImplied = (DOUBLE_CHANCE_LEGS[s.key] ?? []).reduce(
-      (acc, key) => acc + impliedOf(key),
-      0,
-    );
-    // Each individual 1X2 leg's margined implied probability is guaranteed
-    // < 1 (applyOverround raises a probability in (0,1) to a positive power,
-    // which cannot reach or exceed 1). Summing two such legs has no such
-    // guarantee: the power method's favourite-longshot bias inflates small
-    // probabilities (e.g. a longshot draw) proportionally far more than
-    // large ones, so for a strongly lopsided fixture the pair can sum to
-    // just over 1, which would price the DC selection at odds <= 1. Clamp
-    // just under 1 so DC odds stay strictly > 1 like every other market;
-    // this is a no-op for any fixture where the pairwise sum is < 1.
-    const implied = Math.min(rawImplied, 1 - 1e-9);
-    return {
-      ...s,
-      odds: implied > 0 ? 1 / implied : Number.POSITIVE_INFINITY,
-    };
-  });
-
-  return {
-    key: fair.key,
-    label: fair.label,
-    selections,
-    bookSum: selections.reduce(
-      (acc, s) => acc + (Number.isFinite(s.odds) ? 1 / s.odds : 0),
-      0,
-    ),
-  };
-}
-
 /**
  * Prices every supported market for one fixture from its expected goals.
  *
@@ -120,9 +61,33 @@ export function priceFixture(
     resolved.targetBookSum,
   );
 
+  // Double chance cannot be margined against a target of 1: each selection
+  // covers two of the three outcomes, so a fair DC book already sums to 2.
+  // It is margined independently, against twice the configured book sum.
+  //
+  // The rejected alternative was deriving DC by summing the already-margined
+  // 1X2 implied probabilities pairwise. That breaks down on heavy favourites
+  // (lambdas 2.5 vs 0.3 already produce implied probabilities that sum past
+  // 1, i.e. odds below 1) because summing two margined legs has no upper
+  // bound, whereas a single margined leg is always < 1 by construction.
+  //
+  // Margining DC directly avoids that structurally: every fair DC
+  // probability is strictly below 1, and p^k < 1 for any k > 0, so the
+  // margined implied probability can never reach 1 and the odds can never
+  // fall to or below 1, for any fixture.
+  //
+  // DC still stays probability-consistent with 1X2: both are marginals of
+  // the same scoreline matrix, so their FAIR probabilities agree exactly
+  // (DC:1X fair probability equals 1X2:HOME + 1X2:DRAW fair probability).
+  // Only the margin is applied to each market separately.
+  const pricedDoubleChance = applyOverround(
+    doubleChanceMarket(matrix),
+    2 * resolved.targetBookSum,
+  );
+
   const markets: PricedMarket[] = [
     pricedMatchOdds,
-    priceDoubleChance(doubleChanceMarket(matrix), pricedMatchOdds),
+    pricedDoubleChance,
     applyOverround(drawNoBetMarket(matrix), resolved.targetBookSum),
     applyOverround(bttsMarket(matrix), resolved.targetBookSum),
     applyOverround(correctScoreMarket(matrix), resolved.targetBookSum),
