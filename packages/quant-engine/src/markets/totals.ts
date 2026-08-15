@@ -2,9 +2,14 @@ import type { Market, ScorelineMatrix } from "../types.js";
 import { sumWhere, toFairOdds } from "./matchOdds.js";
 
 /**
- * Over/Under total goals. Only half-integer lines are supported, because a
- * whole-number line admits a push, which is a different settlement rule than
- * the two-way market this returns.
+ * Over/Under total goals. Only POSITIVE half-integer lines (0.5, 1.5, 2.5,
+ * ...) are accepted. A whole-number line is rejected because it admits a
+ * push (total goals can land exactly on the line), which is a different
+ * settlement rule than the two-way, no-push market this function returns.
+ * Negative half-integer lines (-0.5, -1.5, ...) are also rejected: they are
+ * not meaningful for a non-negative total-goals count, and JavaScript's `%`
+ * operator keeps the sign of the dividend, so this validation correctly
+ * excludes them as well.
  */
 export function totalsMarket(matrix: ScorelineMatrix, line: number): Market {
   if (!Number.isFinite(line) || (line * 2) % 2 !== 1) {
