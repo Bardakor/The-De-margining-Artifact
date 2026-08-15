@@ -11,7 +11,8 @@
     "backend/odds-service",
     "backend/wallet-service",
     "backend/bet-service",
-    "backend/result-service"
+    "backend/result-service",
+    "packages/quant-engine"
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:gateway\" \"npm run dev:main\" \"npm run dev:fixtures\" \"npm run dev:odds\" \"npm run dev:wallet\" \"npm run dev:bet\" \"npm run dev:result\"",
