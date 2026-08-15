@@ -43,3 +43,10 @@ export {
   type FixturePricing,
   type PricingConfig,
 } from "./priceFixture.js";
+export { logGamma, logFactorial } from "./math/gamma.js";
+export { besselI, logBesselI } from "./math/bessel.js";
+export {
+  skellamMatchProbabilities,
+  skellamPmf,
+  skellamSupremacyMarket,
+} from "./skellam/skellam.js";
