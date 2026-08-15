@@ -24,6 +24,14 @@ export interface PricingConfig {
   readonly totalsLines: readonly number[];
   readonly handicaps: readonly number[];
   readonly maxGoals: number;
+  /**
+   * Floor on a published correct-score selection's fair probability. Any
+   * scoreline cell below this is folded into CS:OTHER rather than published
+   * on its own, capping the maximum published correct-score price at roughly
+   * `1 / minSelectionProbability` without touching the market's exact sum-to-1
+   * invariant. See correctScoreMarket in markets/correctScore.ts.
+   */
+  readonly minSelectionProbability: number;
 }
 
 export interface FixturePricing {
@@ -40,6 +48,7 @@ export const DEFAULT_PRICING_CONFIG: PricingConfig = {
   totalsLines: [0.5, 1.5, 2.5, 3.5, 4.5],
   handicaps: [-2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2],
   maxGoals: 10,
+  minSelectionProbability: 1e-4,
 };
 
 /**
@@ -90,7 +99,10 @@ export function priceFixture(
     pricedDoubleChance,
     applyOverround(drawNoBetMarket(matrix), resolved.targetBookSum),
     applyOverround(bttsMarket(matrix), resolved.targetBookSum),
-    applyOverround(correctScoreMarket(matrix), resolved.targetBookSum),
+    applyOverround(
+      correctScoreMarket(matrix, undefined, resolved.minSelectionProbability),
+      resolved.targetBookSum,
+    ),
     ...resolved.totalsLines.map((line) =>
       applyOverround(totalsMarket(matrix, line), resolved.targetBookSum),
     ),
