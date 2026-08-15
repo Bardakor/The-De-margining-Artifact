@@ -179,13 +179,20 @@ construction. This is asserted in tests (§6).
 
 ### 3.7 Pricing and overround
 
-Fair probabilities convert to fair odds as `1/p`. The book margin is then applied using **Shin's
-method**, which distributes the overround according to outcome probability rather than scaling all
-legs equally — naive scaling overcharges longshots.
+Fair probabilities convert to fair odds as `1/p`. The book margin is then applied by the **power
+method**: solve for the exponent `k` such that `Σ pᵢ^k` equals the target book sum. Because every
+`pᵢ` is in `(0,1)`, the sum is monotonic in `k` and bisection converges. Using an exponent rather
+than a constant multiplier reproduces favourite-longshot bias — the margin taken from a longshot is
+proportionally larger than that taken from a favourite.
+
+**Shin's method** is the *inverse* operation: it recovers true probabilities *from* a bookmaker's
+implied probabilities by modelling the proportion of insider money. It is therefore not used to
+price our markets. It is used in §3.9 to de-margin historical closing odds, so the model is
+benchmarked against the market on equal terms.
 
 The target overround is configurable (default 1.05). Defect D2 is fixed by construction: the
-implementation solves for the margin parameter such that `Σ(1/odds)` equals the target exactly,
-and a test asserts this.
+implementation solves for the exponent such that `Σ(1/odds)` equals the target exactly, and a test
+asserts both that equality and that applying margin *shortens* every price relative to fair odds.
 
 ### 3.8 Value detection and staking
 
