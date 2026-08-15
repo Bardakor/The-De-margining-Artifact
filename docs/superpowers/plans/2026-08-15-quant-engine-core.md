@@ -1694,16 +1694,43 @@ describe("priceFixture", () => {
     expect(Math.abs(dc.bookSum - 2 * DEFAULT_PRICING_CONFIG.targetBookSum)).toBeLessThan(TOL);
   });
 
-  it("prices double chance consistently with the margined 1X2 book", () => {
+  it("keeps double chance probability-consistent with 1X2", () => {
+    // DC and 1X2 are both marginals of the same matrix, so their FAIR
+    // probabilities must agree even though each market is margined separately.
     const p = priceFixture(LAMBDAS);
     const x2 = market(p, "1X2");
     const dc = market(p, "DC");
-    const impl = (m: typeof x2, key: string): number => {
-      const found = m.selections.find((s) => s.key === key);
-      return found ? 1 / found.odds : 0;
-    };
-    expect(impl(dc, "DC:1X")).toBeCloseTo(impl(x2, "1X2:HOME") + impl(x2, "1X2:DRAW"), 9);
-    expect(impl(dc, "DC:X2")).toBeCloseTo(impl(x2, "1X2:DRAW") + impl(x2, "1X2:AWAY"), 9);
+    const prob = (m: typeof x2, key: string): number =>
+      m.selections.find((s) => s.key === key)?.probability ?? 0;
+    expect(prob(dc, "DC:1X")).toBeCloseTo(
+      prob(x2, "1X2:HOME") + prob(x2, "1X2:DRAW"), 9,
+    );
+    expect(prob(dc, "DC:X2")).toBeCloseTo(
+      prob(x2, "1X2:DRAW") + prob(x2, "1X2:AWAY"), 9,
+    );
+  });
+
+  it("never publishes a price at or below 1, for any fixture", () => {
+    // Regression guard for the double-chance defect: deriving DC from the
+    // margined 1X2 legs produced odds below 1 for heavy favourites. A decimal
+    // odd of 1 or less is not payable, so this must hold everywhere.
+    for (const lambdas of [
+      { home: 3.8, away: 0.3 },
+      { home: 2.5, away: 0.3 },
+      { home: 2.0, away: 0.3 },
+      { home: 0.3, away: 3.8 },
+      { home: 0.35, away: 0.3 },
+      { home: 3.2, away: 3.0 },
+    ]) {
+      const p = priceFixture(lambdas);
+      for (const m of p.markets) {
+        for (const s of m.selections) {
+          if (s.probability > 1e-9) {
+            expect(s.odds).toBeGreaterThan(1);
+          }
+        }
+      }
+    }
   });
 
   it("keeps derived markets consistent with one another", () => {
@@ -1812,53 +1839,26 @@ export const DEFAULT_PRICING_CONFIG: PricingConfig = {
   maxGoals: 10,
 };
 
-/** Which 1X2 outcomes each double-chance selection covers. */
-const DOUBLE_CHANCE_LEGS: Readonly<Record<string, readonly string[]>> = {
-  "DC:1X": ["1X2:HOME", "1X2:DRAW"],
-  "DC:12": ["1X2:HOME", "1X2:AWAY"],
-  "DC:X2": ["1X2:DRAW", "1X2:AWAY"],
-};
-
 /**
- * Double chance cannot carry a book margin of its own. Each of its selections
- * covers two of the three outcomes, so a fair DC book sums to 2, and solving
- * the power method against a target of 1.05 would produce meaningless prices.
+ * Double chance cannot be margined against a target of 1: each of its three
+ * selections covers two of the three outcomes, so a FAIR double-chance book
+ * already sums to 2.
  *
- * Instead the margined 1X2 implied probabilities are summed pairwise. The DC
- * book therefore lands at exactly twice the 1X2 book, and the two markets
- * cannot drift apart.
+ * It is margined independently, by the same power method as every other market,
+ * against a target of twice the book sum. This is what guarantees a valid price:
+ * every fair DC probability is strictly below 1, and `p^k < 1` for any `k > 0`,
+ * so the implied probability can never reach 1 and the odds can never fall to
+ * or below 1 — for any fixture, including extreme favourites.
+ *
+ * The rejected alternative was summing the already-margined 1X2 implied
+ * probabilities pairwise. That is tidier — the DC book lands at exactly twice
+ * the 1X2 book — but it breaks down on heavy favourites: at lambdas of 2.5 and
+ * 0.3 the summed legs exceed implied probability 1, producing decimal odds
+ * below 1, which is not a payable price.
+ *
+ * DC remains probability-consistent with 1X2 because both are derived from the
+ * same scoreline matrix; only the margin is applied separately.
  */
-function priceDoubleChance(
-  fair: Market,
-  pricedMatchOdds: PricedMarket,
-): PricedMarket {
-  const impliedOf = (key: string): number => {
-    const found = pricedMatchOdds.selections.find((s) => s.key === key);
-    return found && Number.isFinite(found.odds) ? 1 / found.odds : 0;
-  };
-
-  const selections: PricedSelection[] = fair.selections.map((s) => {
-    const implied = (DOUBLE_CHANCE_LEGS[s.key] ?? []).reduce(
-      (acc, key) => acc + impliedOf(key),
-      0,
-    );
-    return {
-      ...s,
-      odds: implied > 0 ? 1 / implied : Number.POSITIVE_INFINITY,
-    };
-  });
-
-  return {
-    key: fair.key,
-    label: fair.label,
-    selections,
-    bookSum: selections.reduce(
-      (acc, s) => acc + (Number.isFinite(s.odds) ? 1 / s.odds : 0),
-      0,
-    ),
-  };
-}
-
 /**
  * Prices every supported market for one fixture from its expected goals.
  *
@@ -1880,7 +1880,7 @@ export function priceFixture(
 
   const markets: PricedMarket[] = [
     pricedMatchOdds,
-    priceDoubleChance(doubleChanceMarket(matrix), pricedMatchOdds),
+    applyOverround(doubleChanceMarket(matrix), 2 * resolved.targetBookSum),
     applyOverround(drawNoBetMarket(matrix), resolved.targetBookSum),
     applyOverround(bttsMarket(matrix), resolved.targetBookSum),
     applyOverround(correctScoreMarket(matrix), resolved.targetBookSum),
@@ -2227,6 +2227,22 @@ for applying the margin. That is wrong: Shin is an inverse method that recovers
 true probabilities from bookmaker odds. Task 6 applies margin by the power method
 and keeps Shin for de-margining historical closing odds in Plan 2's backtest.
 Spec §3.7 should be amended to match.
+
+**Double-chance pricing, escalated and decided during Task 8.** The plan originally
+derived DC by summing the already-margined 1X2 implied probabilities pairwise, so the
+DC book landed at exactly twice the 1X2 book. That invariant is tidy and wrong: for a
+heavy favourite the summed legs exceed implied probability 1, producing decimal odds
+below 1, which is not a payable price. The break point is only lambdas 2.5 vs 0.3 — an
+ordinary heavy favourite, not an edge case — and the plan's own reference code failed
+the plan's own "never returns a negative or non-finite price" test.
+
+DC is now margined independently by the power method against a target of twice the book
+sum. Every fair DC probability is strictly below 1, and `p^k < 1` for any `k > 0`, so
+valid odds are guaranteed structurally rather than by clamping. DC stays
+probability-consistent with 1X2 because both are marginals of the same matrix; only the
+margin is applied separately, which is also what real books do. The "consistent with the
+margined 1X2 book" test is replaced by a fair-probability consistency test, plus a new
+sweep asserting no market ever publishes a price at or below 1.
 
 **Rho sign correction, found during Task 2 and verified empirically.** With tau
 defined as `tau(0,0) = 1 - lambda*mu*rho` and `tau(1,1) = 1 - rho`, it is NEGATIVE
