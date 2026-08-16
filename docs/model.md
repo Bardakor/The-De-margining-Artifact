@@ -1,8 +1,8 @@
 # The Model
 
-Complete mathematical specification of `@yami/quant-engine`. Every formula here is
+Complete mathematical specification of the `footy` pricing model. Every formula here is
 implemented, tested, and cited. Numbers quoted as "measured" are actual outputs of this
-engine, not illustrations.
+implementation, not illustrations.
 
 ---
 

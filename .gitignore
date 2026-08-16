@@ -7,9 +7,6 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 
-# Node (transitional — removed with the TypeScript engine in wave 2)
-node_modules/
-
 # Study artefacts: regenerable, never committed
 data/
 results/

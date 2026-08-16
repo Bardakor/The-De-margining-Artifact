@@ -1,5 +1,5 @@
 {
-  "_source": "packages/quant-engine/docs/MODEL.md",
+  "_source": "docs/model.md",
   "_note": "Values transcribed from the specification prose. Nothing here was read from the TypeScript implementation.",
 
   "dixon_coles_rho_table": {

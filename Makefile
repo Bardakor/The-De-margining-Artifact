@@ -1,7 +1,10 @@
-.PHONY: install test lint typecheck verify clean
+.PHONY: install compile test lint typecheck verify clean
 
 install:
 	uv sync --extra dev
+
+compile:
+	uv run python -m compileall -q src tests
 
 test:
 	uv run pytest
@@ -13,7 +16,7 @@ lint:
 typecheck:
 	uv run mypy
 
-verify: lint typecheck test
+verify: compile lint typecheck test
 
 clean:
 	rm -rf .pytest_cache .mypy_cache .ruff_cache
