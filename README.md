@@ -1,821 +1,368 @@
-# 🎯 Yami Betting Platform - Enterprise-Grade Sports Betting System
+# Yami — Football Betting Platform
 
-<div align="center">
+A betting platform built around a tested implementation of the **Dixon–Coles bivariate
+Poisson model**. The pricing engine is pure TypeScript, has zero runtime dependencies,
+137 tests, and no randomness anywhere in the pricing path.
 
-[![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-7.0-green.svg)](https://www.mongodb.com/)
-[![Next.js](https://img.shields.io/badge/Next.js-15-black.svg)](https://nextjs.org/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+📐 **[Full mathematical specification → `packages/quant-engine/docs/MODEL.md`](packages/quant-engine/docs/MODEL.md)**
 
-*A production-ready, full-stack sports betting platform with advanced statistical analysis and real-time data processing*
-
-[🚀 Quick Start](#-quick-start) • [📖 Documentation](#-documentation) • [�️ Architecture](#️-architecture) • [🎮 Features](#-features) • [🔧 API Reference](#-api-reference)
-
-</div>
-
----
-
-## 🌟 Project Highlights
-
-**Yami Betting Platform** is an enterprise-grade sports betting application that demonstrates advanced full-stack development practices, sophisticated statistical analysis, and production-ready architecture. Built with modern JavaScript technologies, it showcases real-world applicable solutions for the rapidly growing online gambling industry.
-
-### 🎯 **Why This Project Stands Out**
-- **Advanced Odds Algorithm**: Proprietary statistical engine using Expected Goals (xG), team strength analysis, and market efficiency calculations
-- **Real-Time Data Integration**: Live sports data from API-Football with intelligent caching and fallback strategies
-- **Enterprise Architecture**: 6 microservices with proper separation of concerns and service mesh communication
-- **Production Security**: JWT authentication, rate limiting, input validation, and financial transaction security
-- **Statistical Excellence**: Poisson distribution modeling, Kelly Criterion implementation, and confidence scoring
+> **Status: mid-rebuild.** An earlier version of this README claimed Poisson modelling,
+> Expected Goals and a Kelly Criterion implementation. **None existed.** The pricing path ran
+> on `Math.random()`, the draw probability was a residual (`1 − home − away`) which sent draw
+> odds past 6.0, and the margin was applied backwards so the book paid out ~105% of fair
+> value. Those defects are catalogued with file/line references in the
+> [rebuild spec](docs/superpowers/specs/2026-08-15-quant-rebuild-design.md). Stage 1 of 5 —
+> the engine — is complete and is what this document describes. `backend/*` and `frontend/`
+> are still legacy.
 
 ---
 
-## 🏗️ Architecture & Technology Stack
+# The Model
 
-### 🎨 **Frontend Excellence**
-```typescript
-// Modern React 19 with Next.js 15
-- Next.js 15 (App Router, SSR, Optimizations)
-- React 19 (Concurrent Features, Suspense)
-- TypeScript (Type Safety, Developer Experience)
-- Tailwind CSS (Utility-First, Custom Design System)
-- Framer Motion (Smooth Animations, Micro-interactions)
-- Radix UI (Accessible Primitives, WAI-ARIA Compliant)
-```
+$$
+\text{ratings} \to (\alpha_i, \beta_i, \gamma) \to (\lambda, \mu) \to P(x,y) \to \text{markets} \to \text{prices}
+$$
 
-### ⚙️ **Backend Microservices Architecture**
-```mermaid
-graph TB
-    subgraph "Client Layer"
-        FE[Next.js Frontend<br/>Port 3000]
-    end
-    
-    subgraph "API Layer"
-        GW[API Gateway<br/>Port 8080]
-    end
-    
-    subgraph "Core Services"
-        MS[Main Service<br/>Auth & Users<br/>Port 3001]
-        FS[Fixtures Service<br/>Live Data<br/>Port 3002]
-        OS[Odds Service<br/>Statistical Engine<br/>Port 3003]
-    end
-    
-    subgraph "Business Services"
-        WS[Wallet Service<br/>Transactions<br/>Port 3004]
-        BS[Bet Service<br/>Bet Management<br/>Port 3005]
-        RS[Result Service<br/>Settlement<br/>Port 3006]
-    end
-    
-    subgraph "Data Layer"
-        DB[(MongoDB<br/>Primary Database)]
-        SQLITE[(SQLite<br/>Odds Cache)]
-        CACHE[Node Cache<br/>Performance]
-    end
-    
-    subgraph "External APIs"
-        API1[API-Football<br/>Live Sports Data]
-        API2[FBR API<br/>Advanced Stats]
-    end
-    
-    FE --> GW
-    GW --> MS
-    GW --> FS
-    GW --> OS
-    GW --> WS
-    GW --> BS
-    GW --> RS
-    
-    MS --> DB
-    FS --> API1
-    FS --> CACHE
-    OS --> SQLITE
-    OS --> API2
-    WS --> DB
-    BS --> DB
-    RS --> DB
-    
-    BS --> MS
-    BS --> FS
-    BS --> OS
-    BS --> WS
-    RS --> BS
-    RS --> WS
-```
+## 1. Goals as a Poisson process
 
-| Service | Technology | Responsibility | Key Features |
-|---------|------------|----------------|--------------|
-| **API Gateway** | Express.js + Helmet | Request routing, security | Rate limiting, CORS, documentation |
-| **Main Service** | Express + JWT + bcrypt | Authentication & users | OAuth2, session management, admin panel |
-| **Fixtures Service** | Express + Axios + Cache | Live sports data | API integration, caching, fallback systems |
-| **Odds Service** | Express + SQLite + ML | Statistical calculations | Advanced algorithms, confidence scoring |
-| **Wallet Service** | Express + Mongoose | Financial transactions | Balance management, audit trails |
-| **Bet Service** | Express + MongoDB | Betting operations | Bet placement, tracking, validation |
-| **Result Service** | Express + Aggregation | Match settlement | Automated payouts, result processing |
+Maher (1982) established the working model: goals arrive as a Poisson process, with each
+side's rate factored into attack strength, opponent defence weakness, and home advantage.
 
-### 🗄️ **Multi-Database Architecture**
-- **MongoDB 7.0**: Primary database for users, bets, transactions
-- **SQLite**: High-performance odds calculation cache
-- **Node Cache**: In-memory caching for real-time data
-- **Redis** (Optional): Session storage and distributed caching
+$$
+\lambda = \alpha_{\text{home}}\,\beta_{\text{away}}\,\gamma
+\qquad
+\mu = \alpha_{\text{away}}\,\beta_{\text{home}}
+$$
 
-### 🌐 **External API Integration**
-- **API-Football**: Live match data, team statistics, league information
-- **FBR API**: Advanced statistical data, Expected Goals (xG), player metrics
+Identifiability requires $\overline{\alpha} = 1$ per league, preventing the degeneracy where
+all attacks and defences drift together. Home advantage $\gamma$ is fit **per league** — it
+genuinely differs between competitions.
+
+The mass function is evaluated in log space,
+
+$$
+P(X=k) = \exp\big(k\ln\lambda - \lambda - \ln\Gamma(k{+}1)\big)
+$$
+
+with $\ln\Gamma$ by Lanczos approximation. The naive $\lambda^k/k!$ overflows to
+$\infty/\infty = \mathrm{NaN}$.
+
+## 2. The Dixon–Coles dependence correction
+
+Independent Poisson is wrong in one documented way: it **under-counts low-scoring draws**.
+Dixon and Coles (1997) correct exactly the four affected cells.
+
+$$
+\tau(x,y)=
+\begin{cases}
+1-\lambda\mu\rho & (0,0)\\
+1+\lambda\rho & (0,1)\\
+1+\mu\rho & (1,0)\\
+1-\rho & (1,1)\\
+1 & \text{otherwise}
+\end{cases}
+$$
+
+### 2.1 The sign of ρ
+
+Since $\tau(0,0)=1-\lambda\mu\rho$ and $\tau(1,1)=1-\rho$, both exceed 1 — inflating the low
+draws — **only when $\rho<0$**. Measured on $\lambda{=}1.6,\ \mu{=}1.1$:
+
+| ρ | P(0-0) | P(1-1) | **P(draw)** | fair draw odds |
+|---:|---:|---:|---:|---:|
+| −0.20 | 0.09086 | 0.14194 | 0.29622 | 3.376 |
+| **−0.10** (default) | 0.07903 | 0.13011 | **0.27257** | **3.669** |
+| 0.00 | 0.06721 | 0.11828 | 0.24891 | 4.017 |
+| +0.06 | 0.06011 | 0.11118 | 0.23472 | 4.260 |
+
+A positive ρ *suppresses* the draws the correction exists to raise. Dixon and Coles' fitted
+value is negative, ≈ −0.13. Admissibility requires
+
+$$
+\max\!\left(-\tfrac1\lambda,-\tfrac1\mu\right) \le \rho \le \min\!\left(\tfrac{1}{\lambda\mu},1\right)
+$$
+
+which the engine validates rather than silently emitting a negative probability.
+
+## 3. Estimation
+
+Parameters are fit by maximum likelihood with **exponential time decay**, so recent matches
+dominate — Dixon and Coles' second contribution after $\tau$:
+
+$$
+\mathcal{L} = \prod_m \Big[\tau(x_m,y_m)\,e^{-\lambda_m}\lambda_m^{x_m}\,e^{-\mu_m}\mu_m^{y_m}\Big]^{\varphi(t-t_m)},
+\qquad \varphi(\Delta t)=e^{-\xi\Delta t}
+$$
+
+*Fitting lands in Plan 2. The engine consumes fitted parameters; it does not fit at request
+time.*
+
+## 4. The scoreline matrix
+
+$$
+P(x,y)=\frac{\tau(x,y)\,\mathrm{Pois}(x;\lambda)\,\mathrm{Pois}(y;\mu)}{\sum_{i,j}\tau(i,j)\,\mathrm{Pois}(i;\lambda)\,\mathrm{Pois}(j;\mu)}
+$$
+
+over an $11\times11$ grid. Renormalisation absorbs the truncated tail and the mass shifted
+by $\tau$. **Tested: sums to 1 within $10^{-9}$.**
+
+## 5. Markets as marginals
+
+| Market | Region summed |
+|---|---|
+| Home / Draw / Away | $x>y$ , $x=y$ , $x<y$ |
+| Over/Under $\ell$ | $x+y>\ell$ |
+| Both teams to score | $x>0 \wedge y>0$ |
+| Correct score | the single cell |
+| Asian handicap $h$ | $x+h>y$ (win), $x+h=y$ (push) |
+| Double chance | unions of the 1X2 regions |
+| Supremacy | via Skellam (§6) |
+
+Marginals of one distribution cannot disagree. Asserted directly: correct-score cells over
+the lower triangle equal $P(\text{home win})$; the level-ball handicap equals draw-no-bet.
+
+An Asian handicap can push, so one probability cannot describe it. Each side carries
+$(\text{win},\text{push},\text{lose})$ with
+
+$$
+d_{\text{fair}} = 1+\frac{P(\text{lose})}{P(\text{win})}
+$$
+
+Quarter lines split the stake across the two adjacent lines.
+
+## 6. Skellam — checking the model from outside itself
+
+Deriving everything from one matrix is internally consistent **by construction**, so a
+systematic matrix error would be invisible to every consistency test above.
+
+The goal difference is therefore computed a second, independent way. The difference of two
+Poisson variables is Skellam-distributed (Karlis & Ntzoufras, 2009), with a closed form in
+the modified Bessel function of the first kind:
+
+$$
+P(K=k)=e^{-(\lambda+\mu)}\left(\frac{\lambda}{\mu}\right)^{k/2} I_{|k|}\!\left(2\sqrt{\lambda\mu}\right),
+\qquad
+I_n(z)=\sum_{m\ge0}\frac{(z/2)^{2m+n}}{m!\,(m+n)!}
+$$
+
+evaluated by log-sum-exp. **No matrix involved.** Two assertions, both tested:
+
+1. At $\rho=0$ the Bessel series and the matrix anti-diagonals **must agree** — corroborating
+   the matrix from outside.
+2. At $\rho\neq0$ they **must diverge** on the draw, since Skellam assumes independence and
+   $\tau$ deliberately breaks it. *If they agreed, $\tau$ would be doing nothing.*
+
+## 7. Margin
+
+Fair odds are $1/p$. The margin solves for exponent $k$:
+
+$$
+\sum_i p_i^{\,k}=B,\qquad d_i=p_i^{-k}
+$$
+
+Monotonic in $k$ since $p_i\in(0,1)$, so bisection converges. A constant multiplier takes the
+same proportional margin from every outcome; the exponent does not, reproducing the
+**favourite–longshot bias**. Measured at $B{=}1.08$: fair-to-offered ratio **1.105** for the
+longshot vs **1.055** for the favourite. Book sums land on target to $10^{-16}$; a
+postcondition throws if the target is unreachable rather than returning a plausible-looking
+wrong book.
+
+> The previous implementation computed `p * (1 - margin)`, which **lengthens** prices — the
+> book paid out ~105% of fair value and the bettor held the edge.
+
+**Double chance** is margined independently against $2B$, since each selection covers two of
+three outcomes and a fair DC book sums to 2. Summing the already-margined 1X2 legs looks
+tidier but yields odds **below 1** for heavy favourites (break point $\lambda{=}2.5,\ \mu{=}0.3$).
+Margining independently guarantees validity structurally, as $p^k<1$ for any $p<1,k>0$.
+
+## 8. Shin's method — the inverse
+
+Shin (1993) models bookmaker prices as containing a proportion $z$ of insider money:
+
+$$
+\pi_i=\frac{\sqrt{z^2+4(1-z)p_i^2/B}-z}{2(1-z)}
+$$
+
+with $z$ solved so $\sum\pi_i=1$. **Not used to price our markets** — it runs the other way,
+de-margining *historical closing odds* so the model can be benchmarked against the market on
+equal terms. Measured round trip: implied $[0.5,0.35,0.25]$ recovers
+$[0.46344,0.31699,0.21956]$ at $z=0.0502$, reproducing the inputs to $1.1\times10^{-16}$.
+
+## 9. Staking
+
+Kelly (1956):
+
+$$
+f^{*}=\frac{bp-q}{b},\qquad b=d-1,\ q=1-p
+$$
+
+Note $bp-q = dp-1$, so Kelly, edge and expected value can never disagree about whether a bet
+is worth taking. Negative $f^*$ means *do not bet*, not *bet the other side*. Default is
+**quarter Kelly** — full Kelly is intolerably volatile once the probability estimate itself
+carries error.
+
+## 10. Evaluation
+
+Football outcomes are **ordered**, which Brier (1950) ignores — forecasting a home win scores
+the same whether the match was drawn or lost.
+
+$$
+BS=\sum_j (p_j-o_j)^2
+\qquad
+RPS=\frac{1}{r-1}\sum_{i=1}^{r-1}\left(\sum_{j\le i}(p_j-o_j)\right)^2
+$$
+
+RPS (Epstein, 1969) is distance-sensitive; Constantinou and Fenton (2012) argue it is
+therefore the right metric for football. **This is contested** — Wheatcroft (2021) argues
+distance sensitivity is not desirable here. Both are implemented so the choice stays explicit.
+
+**Murphy's (1973) decomposition** turns *"the model scored 0.58"* into a statement about
+**why**:
+
+$$
+BS=\underbrace{\text{REL}}_{\text{calibration}}-\underbrace{\text{RES}}_{\text{discrimination}}+\underbrace{\text{UNC}}_{\text{irreducible}}+\underbrace{\text{WBV}}_{\text{binning artefact}}
+$$
+
+$$
+\text{REL}=\tfrac1N\textstyle\sum_k n_k(\bar p_k-\bar o_k)^2,\quad
+\text{RES}=\tfrac1N\textstyle\sum_k n_k(\bar o_k-\bar o)^2,\quad
+\text{UNC}=\bar o(1-\bar o)
+$$
+
+The classical three-way identity is exact **only when each bin holds a single distinct
+forecast value**. Binning continuous forecasts leaves a residual equal to the within-bin
+variance $\text{WBV}=\frac1N\sum_k\sum_{i\in k}(p_i-\bar p_k)^2$. Measured: $BS=0.10900$
+against $\text{REL}-\text{RES}+\text{UNC}=0.10875$, a gap of $0.00025$ — exactly the WBV. All
+four terms are reported, the exact identity tested to $10^{-12}$, with a separate test
+asserting the residual **is** the WBV.
+
+## 11. Determinism
+
+No `Math.random`, no wall-clock, no I/O in `src/` — enforced by a test that scans the source
+tree and fails the build. Same inputs, byte-identical output, always. The implementation this
+replaced had `Math.random()` *inside the pricing path*: odds changed on every refresh, so a
+bettor could re-roll a price until it suited them.
 
 ---
 
-## 🎮 Features & Capabilities
+# Verified Output
 
-### 🔥 **Core Features**
-- **Live Sports Betting**: Real-time odds on Premier League, La Liga, Serie A, Bundesliga
-- **Advanced Analytics**: Statistical analysis with confidence ratings and value detection
-- **Multi-Market Betting**: Match winner, over/under, both teams to score, exact score
-- **Live Updates**: Real-time score updates and odds adjustments during matches
-- **Comprehensive Dashboard**: User statistics, betting history, profit/loss tracking
-- **Admin Panel**: User management, financial oversight, system monitoring
+Actual output of `priceFixture({ home: 1.62, away: 1.18 })`. Reproduce with `npm run verify`.
 
-### 🧮 **Advanced Odds Calculation Engine**
+```jsonc
+// 1X2 — book sum exactly 1.05
+{ "key": "1X2:HOME", "probability": 0.4644, "fairOdds": 2.153, "odds": 2.079 }
+{ "key": "1X2:DRAW", "probability": 0.2692, "fairOdds": 3.715, "odds": 3.498 }
+{ "key": "1X2:AWAY", "probability": 0.2664, "fairOdds": 3.754, "odds": 3.533 }
 
-Our proprietary odds calculation system uses sophisticated mathematical models:
+// Over/Under 2.5                            // Both teams to score
+{ "OU:2.5:OVER":  0.5305, "odds": 1.802 }    { "BTTS:YES": 0.5673, "odds": 1.693 }
+{ "OU:2.5:UNDER": 0.4695, "odds": 2.019 }    { "BTTS:NO":  0.4327, "odds": 2.177 }
 
-```javascript
-// Core Algorithm Components
-calculateOverallStrength(teamStats) {
-  const weights = {
-    attack: 0.4,     // Offensive capabilities  
-    defense: 0.3,    // Defensive stability
-    form: 0.2,       // Recent performance
-    efficiency: 0.1  // Goal conversion efficiency
-  };
-  
-  // Statistical analysis using xG, possession, shot accuracy
-  return (
-    attackStrength * weights.attack +
-    defenseStrength * weights.defense +
-    formRating * weights.form +
-    efficiency * weights.efficiency
-  );
-}
+// Double chance — book sum exactly 2.10
+{ "key": "DC:1X", "probability": 0.7336, "fairOdds": 1.363, "odds": 1.312 }
+
+// assessValue(modelProbability: 0.4471, offeredOdds: 2.45)
+{ "edge": 0.04895, "expectedValue": 0.09540, "fullKelly": 0.06579, "stake": 0.01645 }
 ```
 
-#### **Mathematical Models Used:**
-- **Poisson Distribution**: Goal probability calculations
-- **Expected Goals (xG)**: Chance quality assessment  
-- **Kelly Criterion**: Value bet detection
-- **Home Advantage Modeling**: League-specific adjustments
-- **Confidence Scoring**: Data quality and statistical significance
-
-### 🔐 **Enterprise Security**
-
-#### **Multi-Layer Authentication**
-```typescript
-// JWT Implementation with Advanced Security
-interface JWTPayload {
-  sub: string;           // User ID
-  iat: number;          // Issued at
-  exp: number;          // Expiry (24 hours)
-  roles: string[];      // User roles
-  sessionId: string;    // Session tracking
-  ipAddress: string;    // IP binding
-  deviceId: string;     // Device fingerprinting
-}
-```
-
-- **bcrypt**: 12-round salt password hashing
-- **JWT Tokens**: Stateless authentication with 24-hour expiry
-- **Google OAuth2**: Social login integration
-- **Rate Limiting**: IP-based protection (100 req/15min)
-- **CORS Protection**: Configured origins and credentials
-- **Input Validation**: XSS and injection prevention
-
-### 🌐 **API Paradigms & Integration**
-
-#### **1. RESTful Architecture**
-- Resource-based URLs with semantic naming
-- Standard HTTP methods (GET, POST, PUT, DELETE)
-- JSON request/response format
-- Proper status codes and error handling
-
-#### **2. Real-Time Data Processing**
-- Client-side polling every 30 seconds for live matches
-- WebSocket-ready architecture for future enhancements
-- Event-driven updates for match results
-- Intelligent caching with TTL management
-
-#### **3. External API Integration**
-```typescript
-// Circuit Breaker Pattern for API Resilience
-class APICircuitBreaker {
-  async call(apiFunction) {
-    if (this.state === 'OPEN') {
-      if (Date.now() - this.lastFailureTime > this.timeout) {
-        this.state = 'HALF_OPEN';
-      } else {
-        throw new Error('Circuit breaker is OPEN');
-      }
-    }
-    // Execute with fallback strategies
-  }
-}
-```
+Three properties the old implementation violated: the **draw prices at 3.50**, not past 6.0;
+**every offered price is shorter than its fair price**; and **`DC:1X` = 0.7336 = 0.4644 +
+0.2692 exactly**, because the markets are marginals of one distribution.
 
 ---
 
-## 🚀 Quick Start
+# Architecture
 
-### 📋 **Prerequisites**
+```
+packages/quant-engine/     ← the real work. Pure TS, 0 deps, 137 tests
+  math/                    log-gamma, modified Bessel
+  poisson/                 log-space Poisson, Dixon-Coles matrix
+  markets/                 1X2, totals, BTTS, correct score, AH, DC
+  pricing/                 power-method overround, Shin inverse, Kelly
+  skellam/                 goal difference (independent cross-check)
+  calibration/             RPS, Brier, log loss, Murphy decomposition
+
+backend/                   ← LEGACY. Six Express services, being consolidated
+frontend/                  ← LEGACY. Next.js 15, still on the old endpoints
+```
+
+The six backend services share a database, deploy together, and are called in a strict
+request-scoped sequence. That separation bought no independent scaling and produced three
+competing, mutually inconsistent odds implementations. The
+[rebuild spec](docs/superpowers/specs/2026-08-15-quant-rebuild-design.md) §2.2 collapses them
+into one API. Stack: Node 18+, Express, MongoDB, Next.js 15, React 19, Tailwind.
+
+## Quick start
+
 ```bash
-Node.js 18+
-npm or yarn
-MongoDB 7.0+ (optional - uses in-memory fallback)
-Git
-```
-
-### ⚡ **Installation & Setup**
-
-#### **1. Clone Repository**
-```bash
-git clone <repository-url>
-cd Final2
 npm install
 ```
 
-#### **2. Environment Configuration**
+Engine only — no database or API keys needed:
+
 ```bash
-# Copy environment templates
-cp backend/main-service/.env.example backend/main-service/.env
-# Configure your API keys and database URLs
+cd packages/quant-engine && npm run verify
 ```
 
-#### **3. MongoDB Setup with Docker**
+Full stack (starts MongoDB via Docker, then all services):
+
 ```bash
-# The updated setup script now handles MongoDB automatically
-chmod +x bash/clean-and-dev.sh
-./bash/clean-and-dev.sh
-
-# This script will:
-# 1. Stop existing services and free up ports
-# 2. Start MongoDB with Docker Compose
-# 3. Wait for MongoDB to be ready
-# 4. Start all application services
+chmod +x bash/clean-and-dev.sh && ./bash/clean-and-dev.sh
 ```
 
-**MongoDB Services:**
-- **MongoDB**: `mongodb://localhost:27017` (with auth: `admin/password123`)
-- **Mongo Express**: `http://localhost:8081` (Web UI for database management)
-- **Database**: `betting_platform` (auto-created with sample data)
-
-**Test MongoDB Connection:**
-```bash
-# Test if MongoDB is working correctly
-node test-mongodb-setup.js
-```
-
-#### **4. Alternative Setup - Individual Services**
-```bash
-# Manual service management (if needed)
-cd backend/main-service && npm start     # Port 3001
-cd backend/fixtures-service && npm start # Port 3002
-cd backend/odds-service && npm start     # Port 3003
-# ... continue for all services
-```
-
-#### **5. Frontend Launch**
-```bash
-cd frontend
-npm install
-npm run dev                              # Port 3000
-```
-
-#### **6. Access the Application**
-- **Frontend**: http://localhost:3000
-- **API Gateway**: http://localhost:8080
-- **Main API**: http://localhost:3001
-- **MongoDB**: mongodb://localhost:27017 (admin/password123)
-- **MongoDB Express**: http://localhost:8081 (Database Web UI)
-
-### � **Default Credentials**
-```javascript
-// Admin Account (Pre-seeded)
-Email: admin@admin.com
-Password: admin123
-Balance: $100,000
-Role: Administrator
-
-// Demo User Account  
-Email: user@demo.com
-Password: demo123
-Balance: $1,000
-Role: User
-
-### 📊 **Pre-seeded Database Content**
-The MongoDB setup automatically creates:
-- **5 Users** with realistic profiles and statistics
-- **3 Fixtures** (Premier League, Ligue 1) with live odds
-- **6 Bets** (pending, won, lost) with complete bet history
-- **6 Transactions** (deposits, withdrawals, bet settlements)
-- **1 Processed Result** with detailed match statistics
-- **Performance indexes** for optimal query speed
-
-**Test the data with:**
-```bash
-node database-inspector.js     # View all database content
-node check-bets.js            # Check bet collection specifically
-node test-mongodb-setup.js    # Test MongoDB connection
-```
-
-**Sample User Accounts from MongoDB:**
-```javascript
-// All demo users use password: admin123
-Email: john.doe@example.com     (Balance: €1,250.75)
-Email: marie.martin@example.fr  (Balance: €450.30)
-Email: carlos.rodriguez@example.es (Balance: €2,750.00)
-Email: emma.wilson@example.co.uk (Balance: €175.50)
-```
-```
-
-### 🐳 **Docker Deployment**
-```bash
-# Start with Docker Compose
-docker-compose up -d
-
-# View service logs
-docker-compose logs -f
-
-# Stop all services
-docker-compose down
-```
+Frontend `:3000` · Gateway `:8080` · Main API `:3001` · MongoDB `:27017` · Mongo Express `:8081`.
+Seeded accounts: `admin@admin.com` / `admin123`, and `user@demo.com` / `demo123`.
 
 ---
 
-## 🔧 API Reference
+# Limitations
 
-### 🌐 **Base URLs**
-```bash
-Frontend:        http://localhost:3000
-API Gateway:     http://localhost:8080
-Main Service:    http://localhost:3001
-Fixtures:        http://localhost:3002
-Odds Engine:     http://localhost:3003
-Wallet:          http://localhost:3004
-Betting:         http://localhost:3005
-Results:         http://localhost:3006
-```
+Stated plainly, because a model's limits are part of its specification.
 
-### 🔐 **Authentication Workflow**
-
-#### **1. User Registration**
-```bash
-curl -X POST http://localhost:3001/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "john@example.com",
-    "password": "securePassword123",
-    "firstName": "John",
-    "lastName": "Doe"
-  }'
-```
-
-#### **2. Login & Token Retrieval**
-```bash
-curl -X POST http://localhost:3001/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "admin@admin.com",
-    "password": "admin123"
-  }'
-
-# Response includes JWT token for subsequent requests
-{
-  "success": true,
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user": { ... }
-}
-```
-
-#### **3. Protected Endpoint Access**
-```bash
-# Use JWT token in Authorization header
-curl -X GET http://localhost:3001/api/user/stats \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN"
-```
-
-### 🎯 **Betting API Examples**
-
-#### **Get Live Fixtures**
-```bash
-curl -X GET "http://localhost:3002/fixtures/live"
-```
-
-#### **Calculate Match Odds**
-```bash
-curl -X GET "http://localhost:3003/odds/calculate?homeTeam=Arsenal&awayTeam=Chelsea&league=39"
-
-# Response includes advanced statistical analysis
-{
-  "homeTeam": {
-    "odds": 2.15,
-    "probability": 46.5,
-    "strength": 85
-  },
-  "confidence": 92,
-  "analysis": {
-    "expectedGoals": { "home": 1.8, "away": 1.2 },
-    "recommendation": { "type": "value", "outcome": "home" }
-  }
-}
-```
-
-#### **Place a Bet**
-```bash
-curl -X POST http://localhost:3005/api/bets/place \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "fixtureId": 868549,
-    "betType": "match_winner",
-    "selection": "home",
-    "stake": 25,
-    "odds": 2.15
-  }'
-```
-
-#### **Check Betting History**
-```bash
-curl -X GET http://localhost:3005/api/bets/my \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN"
-```
-
-### 📊 **Real-Time Features Demo**
-
-#### **Live Match Updates**
-```bash
-# Get live scores (updates every 30 seconds)
-curl -X GET "http://localhost:3002/fixtures/live"
-
-# Get user's active bets
-curl -X GET "http://localhost:3005/api/bets/my?status=active" \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN"
-```
+- **Pre-match only.** No in-play modelling, no within-match $\lambda$ decay, no red-card or
+  score-state adjustment.
+- **Independence beyond $\tau$.** Correlation is corrected in four cells; real dependence
+  extends further.
+- **No explicit overdispersion.** Real goal counts are slightly overdispersed relative to
+  Poisson; bivariate Weibull counts (Boshnakov et al., 2017) address this, this engine does not.
+- **No player-level data.** Injuries and rotation enter only via fitted team strength, with a lag.
+- **Ratings and fitting are not yet implemented** — Plan 2. The engine consumes $\lambda,\mu$.
+- **No backtest yet**, so no Brier or ROI figure is claimed. Plan 2.
+- **Margined implied probabilities are not consistent across markets.** Fair probabilities
+  agree exactly; margined ones do not, because each book carries its own exponent. This is
+  forced — cross-market implied consistency and valid double-chance prices are mutually
+  exclusive. See [`MODEL.md`](packages/quant-engine/docs/MODEL.md) §8.3.
 
 ---
 
-## 📖 Documentation
+# References
 
-### 📚 **Comprehensive Documentation**
-- **[Complete API Documentation](./COMPLETE_API_DOCUMENTATION.md)** - Full API reference with examples
-- **[Technical Architecture](./TECHNICAL_ARCHITECTURE_DOCUMENTATION.md)** - Deep dive into system design
-- **[Database Schema](./mds/DATABASE_SCHEMA.md)** - MongoDB and SQLite structures
-- **[Docker Setup Guide](./mds/DOCKER-SETUP.md)** - Containerization instructions
-- **[OAuth Configuration](./mds/GOOGLE_OAUTH_FIX.md)** - Google OAuth setup guide
-
-### 🔍 **API Testing with Postman**
-
-#### **Import Collection**
-1. Download Postman collection from `/tests/`
-2. Import into Postman
-3. Set environment variables:
-   - `base_url`: http://localhost:3001
-   - `jwt_token`: (obtained from login)
-
-#### **Test Scenarios**
-```bash
-# 1. Authentication Test
-POST {{base_url}}/auth/login
-Expected: 200 OK with JWT token
-
-# 2. Protected Endpoint Access
-GET {{base_url}}/api/user/stats
-Headers: Authorization: Bearer {{jwt_token}}
-Expected: 200 OK with user statistics
-
-# 3. Access Denied Test
-GET {{base_url}}/api/user/stats
-(No Authorization header)
-Expected: 401 Unauthorized
-
-# 4. Rate Limiting Test
-Multiple rapid requests to any endpoint
-Expected: 429 Too Many Requests
-```
+1. **Brier, G.W.** (1950). Verification of forecasts expressed in terms of probability. *Monthly Weather Review*, 78(1), 1–3.
+2. **Kelly, J.L.** (1956). A new interpretation of information rate. *Bell System Technical Journal*, 35(4), 917–926.
+3. **Epstein, E.S.** (1969). A scoring system for probability forecasts of ranked categories. *Journal of Applied Meteorology*, 8, 985–987.
+4. **Murphy, A.H.** (1973). A new vector partition of the probability score. *Journal of Applied Meteorology*, 12, 595–600.
+5. **Maher, M.J.** (1982). Modelling association football scores. *Statistica Neerlandica*, 36(3), 109–118.
+6. **Shin, H.S.** (1993). Measuring the incidence of insider trading in a market for state-contingent claims. *The Economic Journal*, 103(420), 1141–1153.
+7. **Dixon, M.J. and Coles, S.G.** (1997). Modelling association football scores and inefficiencies in the football betting market. *JRSS Series C*, 46(2), 265–280.
+8. **Rue, H. and Salvesen, Ø.** (2000). Prediction and retrospective analysis of soccer matches in a league. *JRSS Series D*, 49(3), 399–418.
+9. **Karlis, D. and Ntzoufras, I.** (2003). Analysis of sports data by using bivariate Poisson models. *JRSS Series D*, 52(3), 381–393.
+10. **Karlis, D. and Ntzoufras, I.** (2009). Bayesian modelling of football outcomes: using the Skellam's distribution for the goal difference. *IMA Journal of Management Mathematics*, 20(2), 133–145.
+11. **Constantinou, A.C. and Fenton, N.E.** (2012). Solving the problem of inadequate scoring rules for assessing probabilistic football forecast models. *Journal of Quantitative Analysis in Sports*, 8(1).
+12. **Boshnakov, G., Kharrat, T. and McHale, I.G.** (2017). A bivariate Weibull count model for forecasting association football scores. *International Journal of Forecasting*, 33(2), 458–466.
+13. **Ley, C., Van de Wiele, T. and Van Eetvelde, H.** (2019). Ranking soccer teams on the basis of their current strength: a comparison of maximum likelihood approaches. *Statistical Modelling*, 19(1), 55–73.
+14. **Wheatcroft, E.** (2021). Evaluating probabilistic forecasts of football matches: the case against the ranked probability score. *Journal of Quantitative Analysis in Sports*, 17(4), 273–287.
+15. **Abramowitz, M. and Stegun, I.A.** (1964). *Handbook of Mathematical Functions*. Table 9.8 — reference values for the modified Bessel function, used in the test suite.
 
 ---
 
-## � Project Requirements Checklist
+## Documentation
 
-### ✅ **Core Requirements (Exceeded)**
+- **[Mathematical specification](packages/quant-engine/docs/MODEL.md)** — full derivations
+- **[Engine README](packages/quant-engine/README.md)** — API and design notes
+- **[Rebuild spec](docs/superpowers/specs/2026-08-15-quant-rebuild-design.md)** — the 11 catalogued defects and the plan
+- **[Implementation plans](docs/superpowers/plans/)** — stage-by-stage
 
-| Requirement | Implementation | Status |
-|-------------|----------------|--------|
-| **Frontend Application** | Next.js 15 + React 19 with TypeScript | ✅ **Exceeded** |
-| **3+ Backend Services** | **6 Microservices** (Main, Fixtures, Odds, Wallet, Bet, Result) | ✅ **Exceeded** |
-| **2+ Databases** | **MongoDB + SQLite + Node Cache** | ✅ **Exceeded** |
-| **API Communication** | RESTful APIs with service mesh architecture | ✅ **Completed** |
-| **Authentication** | JWT + Google OAuth2 + bcrypt | ✅ **Exceeded** |
-| **Protected Routes** | Token-based access control across all services | ✅ **Completed** |
-| **API as Service** | External API access with JWT authentication | ✅ **Completed** |
-| **Error Handling** | Comprehensive error responses with logging | ✅ **Completed** |
+## Licence
 
-### 🚀 **Advanced Features (Bonus)**
-
-| Feature | Implementation | Status |
-|---------|----------------|--------|
-| **External API Integration** | API-Football + FBR API with fallback strategies | ✅ **Production-Ready** |
-| **Multiple API Paradigms** | REST + Polling + Event-driven architecture | ✅ **Enterprise-Level** |
-| **Production Security** | Rate limiting, CORS, input validation, audit trails | ✅ **Bank-Grade** |
-| **Real-time Data** | Live match updates with intelligent caching | ✅ **High-Performance** |
-| **Statistical Analysis** | Advanced odds calculation with ML principles | ✅ **Industry-Leading** |
-| **Docker Deployment** | Multi-container setup with health checks | ✅ **DevOps-Ready** |
-| **Comprehensive Documentation** | API docs, architecture guides, deployment instructions | ✅ **Enterprise-Standard** |
-| **Performance Optimization** | Multi-layer caching, database indexing, query optimization | ✅ **Scalable** |
-
-### 🎯 **Technical Excellence Demonstrated**
-
-#### **Microservices Architecture**
-```typescript
-// Service Independence & Communication
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Bet Service   │────│  Wallet Service │────│  Main Service   │
-│  (Bet Logic)    │    │  (Transactions) │    │ (Auth & Users)  │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         ▼                       ▼                       ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ Fixtures Service│    │  Odds Service   │    │ Result Service  │
-│ (Live Data API) │    │ (Statistical ML)│    │ (Settlement)    │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-```
-
-#### **Database Design Excellence**
-- **Optimized Schemas**: Proper indexing, relationships, and performance tuning
-- **Multi-Database Strategy**: MongoDB for transactions, SQLite for calculations, Cache for performance
-- **Data Integrity**: Atomic operations, transaction rollbacks, audit trails
-
-#### **Security Implementation**
-- **Zero-Trust Architecture**: Every request validated and authenticated
-- **Financial Security**: Balance validation, transaction logging, duplicate prevention
-- **Rate Limiting**: Intelligent throttling based on user behavior and endpoints
-
----
-
-## 🎮 Application Showcase
-
-### 🌟 **Live Betting Experience**
-
-#### **Real-Time Match Dashboard**
-- **Live Scores**: Auto-updating every 30 seconds from API-Football
-- **Dynamic Odds**: Statistical recalculation based on match events
-- **Interactive Bet Slip**: Multi-bet support with potential winnings calculator
-- **Match Analytics**: Team form, head-to-head records, injury reports
-
-#### **Advanced Betting Markets**
-```typescript
-// Supported Bet Types
-interface BetTypes {
-  match_winner: 'Home' | 'Draw' | 'Away';
-  over_under: 'Over 2.5' | 'Under 2.5' | 'Over 3.5' | 'Under 3.5';
-  both_teams_score: 'Yes' | 'No';
-  double_chance: 'Home or Draw' | 'Away or Draw' | 'Home or Away';
-  exact_score: '1-0' | '2-1' | '0-0' | /* ... more options */;
-}
-```
-
-### 👥 **User Management System**
-
-#### **User Dashboard Features**
-- **Comprehensive Statistics**: Win rate, profit/loss, betting patterns
-- **Transaction History**: Detailed financial tracking with filters
-- **Risk Management**: Daily/weekly/monthly betting limits
-- **Performance Analytics**: Streak tracking, favorite markets, ROI analysis
-
-#### **Admin Control Panel**
-- **User Management**: Balance adjustments, account status, betting limits
-- **Financial Oversight**: Transaction monitoring, payout processing
-- **System Health**: Service status, API performance, error tracking
-- **Match Result Processing**: Automated settlement with manual override
-
-### 📊 **Statistical Analysis Engine**
-
-#### **Odds Calculation Deep Dive**
-```javascript
-// Example: Arsenal vs Chelsea Analysis
-{
-  "homeTeam": {
-    "name": "Arsenal",
-    "odds": 2.15,
-    "probability": 46.5,
-    "strength": 85,
-    "form": "W-W-D-W-L",
-    "attackRating": 88,
-    "defenseRating": 82
-  },
-  "analysis": {
-    "confidence": 92,
-    "expectedGoals": { "home": 1.8, "away": 1.2 },
-    "keyFactors": [
-      "Arsenal strong home record (8W-1D-1L)",
-      "Chelsea away form concerning (3W-3D-4L)",
-      "Head-to-head favors Arsenal (3W-1D-1L last 5)"
-    ],
-    "valueRecommendation": {
-      "type": "strong_value",
-      "market": "home_win",
-      "reason": "True odds suggest 52% probability vs 46.5% implied"
-    }
-  }
-}
-```
-
----
-
-## 🚀 Performance & Scalability
-
-### ⚡ **Performance Metrics**
-
-#### **Response Times**
-- **Authentication**: < 100ms average
-- **Bet Placement**: < 200ms average  
-- **Live Data Retrieval**: < 300ms average
-- **Odds Calculation**: < 500ms average
-
-#### **Caching Strategy**
-```typescript
-// Multi-Layer Caching Implementation
-┌─────────────────┐    TTL: 30s     ┌──────────────────┐
-│   Live Fixtures │ ────────────► │   Node Cache     │
-└─────────────────┘                └──────────────────┘
-┌─────────────────┐    TTL: 5min    ┌──────────────────┐
-│ Calculated Odds │ ────────────► │   Database Cache │
-└─────────────────┘                └──────────────────┘
-┌─────────────────┐    TTL: 10min   ┌──────────────────┐
-│   User Stats    │ ────────────► │   MongoDB Cache  │
-└─────────────────┘                └──────────────────┘
-```
-
-#### **Database Optimization**
-- **Compound Indexes**: Optimized queries for user bets, transactions
-- **Aggregation Pipelines**: Efficient statistical calculations
-- **Connection Pooling**: Managed database connections
-- **Query Performance**: < 50ms average for most operations
-
-### 🔄 **Scalability Design**
-
-#### **Horizontal Scaling Ready**
-- **Stateless Services**: All services can be replicated
-- **Load Balancer Ready**: nginx configuration included
-- **Database Sharding**: MongoDB cluster configuration
-- **Microservice Independence**: Services can scale individually
-
-#### **Production Deployment**
-```yaml
-# Kubernetes Deployment Example
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: betting-main-service
-spec:
-  replicas: 3
-  strategy:
-    type: RollingUpdate
-  containers:
-  - name: main-service
-    image: yami-betting/main-service:latest
-    resources:
-      requests:
-        memory: "256Mi"
-        cpu: "250m"
-      limits:
-        memory: "512Mi"
-        cpu: "500m"
-```
-
----
-
-## � Development & Testing
-
-### 🧪 **Testing Strategy**
-
-#### **API Testing with Postman**
-```bash
-# Import test collection
-tests/Yami_Betting_Platform.postman_collection.json
-
-# Environment variables
-{
-  "base_url": "http://localhost:3001",
-  "jwt_token": "{{auth_token}}",
-  "user_id": "{{current_user_id}}"
-}
-
-# Test scenarios included:
-- Authentication flow (register, login, OAuth)
-- Protected endpoint access
-- Rate limiting validation
-- Bet placement workflow
-- Financial transaction testing
-- Error handling verification
-```
-
-#### **Load Testing Results**
-- **Concurrent Users**: Tested up to 100 simultaneous users
-- **Bet Placement**: 50 bets/second sustained throughput
-- **Database Performance**: 1000+ queries/second capability
-- **Memory Usage**: < 512MB per service under load
-
-### 🐛 **Error Handling Excellence**
-
-#### **Comprehensive Error Responses**
-```typescript
-// Standardized Error Format
-interface APIError {
-  success: false;
-  message: string;           // User-friendly message
-  error: string;            // Technical details
-  code: string;             // Error categorization
-  timestamp: string;        // ISO 8601 timestamp
-  requestId?: string;       // For tracking/debugging
-}
-
-// Example Error Categories
-ErrorCodes = {
-  INVALID_TOKEN: 'Authentication failed',
-  INSUFFICIENT_BALANCE: 'Not enough funds',
-  BET_LIMIT_EXCEEDED: 'Betting limit reached',
-  ODDS_CHANGED: 'Odds have been updated',
-  SERVICE_UNAVAILABLE: 'External service down'
-}
-```
-
-#### **Circuit Breaker Pattern**
-- **External API Failures**: Automatic fallback to cached data
-- **Service Dependencies**: Graceful degradation when services are unavailable
-- **Database Connections**: Retry logic with exponential backoff
-
----
-
-## 🤝 Contributing & Development
-
-### 👨‍💻 **Development Setup**
-
-#### **Local Development**
-```bash
-# 1. Fork and clone repository
-git clone https://github.com/your-username/yami-betting-platform.git
-
-# 2. Install dependencies
-npm run install:all
-
-# 3. Set up environment variables
-cp .env.example .env
-# Edit .env with your configuration
-
-# 4. Start development servers
-npm run dev:all
-
-# 5. Run tests
-npm run test:all
-```
-
-#### **Development Scripts**
-```json
-{
-  "scripts": {
-    "dev:all": "concurrently npm scripts for all services",
-    "build:all": "Build all services for production",
-    "test:all": "Run test suites across all services",
-    "lint:all": "ESLint + Prettier across codebase",
-    "deploy:staging": "Deploy to staging environment",
-    "deploy:production": "Deploy to production environment"
-  }
-}
-```
-
----
-
-
-## � License & Legal
-
-### 📋 **MIT License**
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-### ⚖️ **Legal Disclaimer**
-This application is for educational and demonstration purposes. Real-money gambling may be subject to local laws and regulations. Always comply with applicable laws in your jurisdiction.
-
-### 🏆 **Academic Use**
-This project demonstrates enterprise-level software development practices and is suitable for:
-- **Computer Science Portfolio**: Full-stack development showcase
-- **Software Engineering**: Microservices architecture example  
-- **Database Design**: Multi-database implementation
-- **API Development**: RESTful service design
-- **Security Implementation**: Authentication and authorization
-
----
-
-<div align="center">
-
-## 🌟 **Star this Repository**
-
-If you found this project valuable for learning or development, please consider giving it a star! ⭐
-
-**Built with ❤️ for the developer community**
-
-</div> 
+MIT. Educational project — not licensed gambling software, and no real-money wagering.

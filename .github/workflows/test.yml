@@ -37,6 +37,31 @@ jobs:
       working-directory: backend/${{ matrix.service }}
       run: npm run lint --if-present
 
+  test-quant-engine:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: packages/quant-engine/package-lock.json
+
+    - name: Install dependencies
+      working-directory: packages/quant-engine
+      run: npm ci
+
+    - name: Verify (typecheck + purity guard + tests)
+      working-directory: packages/quant-engine
+      run: npm run verify
+
   test-frontend:
     runs-on: ubuntu-latest
     
