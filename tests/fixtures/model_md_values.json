@@ -1,0 +1,55 @@
+{
+  "_source": "packages/quant-engine/docs/MODEL.md",
+  "_note": "Values transcribed from the specification prose. Nothing here was read from the TypeScript implementation.",
+
+  "dixon_coles_rho_table": {
+    "_source": "MODEL.md §3.1",
+    "lam": 1.6,
+    "mu": 1.1,
+    "tolerance": 5e-5,
+    "rows": [
+      {"rho": -0.20, "p_0_0": 0.09086, "p_1_1": 0.14194, "p_draw": 0.29622, "fair_draw_odds": 3.376},
+      {"rho": -0.10, "p_0_0": 0.07903, "p_1_1": 0.13011, "p_draw": 0.27257, "fair_draw_odds": 3.669},
+      {"rho":  0.00, "p_0_0": 0.06721, "p_1_1": 0.11828, "p_draw": 0.24891, "fair_draw_odds": 4.017},
+      {"rho":  0.06, "p_0_0": 0.06011, "p_1_1": 0.11118, "p_draw": 0.23472, "fair_draw_odds": 4.260}
+    ]
+  },
+
+  "favourite_longshot_bias": {
+    "_source": "MODEL.md §8.2",
+    "lam": 1.6, "mu": 1.1, "book_sum": 1.08,
+    "tolerance": 5e-4,
+    "fair_to_offered_ratio_longshot": 1.105,
+    "fair_to_offered_ratio_favourite": 1.055
+  },
+
+  "double_chance_validity": {
+    "_source": "MODEL.md §8.3",
+    "lam": 3.8, "mu": 0.3, "book_sum": 1.05,
+    "tolerance": 5e-4,
+    "dc_1x_price": 1.0053,
+    "naive_method_breaks_at": {"lam": 2.5, "mu": 0.3}
+  },
+
+  "shin_round_trip": {
+    "_source": "MODEL.md §9",
+    "implied": [0.5, 0.35, 0.25],
+    "book_sum": 1.10,
+    "tolerance": 5e-5,
+    "recovered": [0.46344, 0.31699, 0.21956],
+    "z": 0.0502
+  },
+
+  "murphy_decomposition": {
+    "_source": "MODEL.md §11.1",
+    "forecasts": [0.1, 0.2, 0.25, 0.4, 0.55, 0.6, 0.7, 0.8, 0.85, 0.95],
+    "outcomes": [0, 0, 0, 1, 0, 1, 1, 1, 1, 1],
+    "_outcomes_provenance": "DERIVED, not transcribed. MODEL.md §11.1 omits the outcome vector. This is the assignment that reproduces the printed BS = 0.10900 exactly (squared-error sum 1.09) and the printed WBV = 0.00025.",
+    "n_bins": 10,
+    "tolerance": 5e-6,
+    "brier": 0.10900,
+    "three_way_sum": 0.10875,
+    "wbv": 0.00025,
+    "uncertainty": 0.24
+  }
+}
