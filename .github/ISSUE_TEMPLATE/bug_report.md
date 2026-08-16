@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Create a report to help us improve the betting platform
+about: Report a defect in the pricing core, tests, or documentation
 title: '[BUG] '
 labels: 'bug'
 assignees: ''
@@ -12,33 +12,22 @@ A clear and concise description of what the bug is.
 
 **To Reproduce**
 Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+1. Run `make verify` (or a specific test)
+2. Observe the failure
+3. Include the command and output
 
 **Expected behavior**
 A clear and concise description of what you expected to happen.
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
-
-**Environment (please complete the following information):**
+**Environment**
 - OS: [e.g. macOS, Windows, Linux]
-- Node.js version: [e.g. 18.17.0]
-- Browser [e.g. chrome, safari] (if frontend issue)
-- Service affected: [e.g. fixtures-service, odds-service, main-service, frontend]
+- Python version: [e.g. 3.12.0]
+- uv version (if known):
 
-**Service Logs**
-If applicable, include relevant logs from the affected service:
+**Test output**
 ```
-Paste logs here
+Paste relevant pytest / mypy / ruff output here
 ```
 
 **Additional context**
-Add any other context about the problem here.
-
-**Configuration**
-- Are you using the provided `.env.example` files?
-- Have you set up the required API keys?
-- Is MongoDB running (for main-service)? 
+Add any other context about the problem here (e.g. which module, which Layer-1 fixture).
