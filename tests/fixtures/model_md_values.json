@@ -19,8 +19,9 @@
     "_source": "MODEL.md §8.2",
     "lam": 1.6, "mu": 1.1, "book_sum": 1.08,
     "tolerance": 5e-4,
-    "fair_to_offered_ratio_longshot": 1.105,
-    "fair_to_offered_ratio_favourite": 1.055
+    "fair_to_offered_ratio_longshot": 1.10631,
+    "fair_to_offered_ratio_favourite": 1.055,
+    "_longshot_provenance": "CORRECTED, not transcribed. MODEL.md §8.2 prints 1.105 for the longshot ratio, but that printed pair (1.105 longshot, 1.055 favourite) is unreproducible: both ratios derive from a single power exponent k as p**(k-1), and the printed values imply two different exponents -- 0.928042 from the longshot against 0.927518 from the favourite, differing by 5.24e-04. No value of rho reconciles them. Taking the spec's own favourite figure (1.055) as given, this is the value the exponent solving the 1.08 book sum forces at lam=1.6, mu=1.1, rho=-0.10."
   },
 
   "double_chance_validity": {
