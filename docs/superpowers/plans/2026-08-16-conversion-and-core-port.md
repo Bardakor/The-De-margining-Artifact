@@ -1213,9 +1213,9 @@ def test_agrees_with_the_matrix_when_rho_is_zero() -> None:
     lam, mu = 1.6, 1.1
     m = scoreline_matrix(lam, mu, 0.0)
     for k in range(-5, 6):
-        assert skellam_pmf(k, lam, mu) == pytest.approx(
-            matrix_goal_difference(m, k), abs=1e-6
-        ), f"goal difference {k}"
+        assert skellam_pmf(k, lam, mu) == pytest.approx(matrix_goal_difference(m, k), abs=1e-6), (
+            f"goal difference {k}"
+        )
 
 
 def test_diverges_from_the_matrix_when_rho_is_non_zero() -> None:
@@ -1635,7 +1635,9 @@ _TOLERANCE = 1e-12
 _MAX_ITERATIONS = 200
 
 
-def _shin_probabilities(p: npt.NDArray[np.float64], book_sum: float, z: float) -> npt.NDArray[np.float64]:
+def _shin_probabilities(
+    p: npt.NDArray[np.float64], book_sum: float, z: float
+) -> npt.NDArray[np.float64]:
     if z <= 0.0:
         return p / book_sum
     inner = z**2 + 4.0 * (1.0 - z) * p**2 / book_sum
@@ -1738,7 +1740,9 @@ def test_negative_edge_returns_zero_not_a_reverse_bet() -> None:
 
 def test_quarter_kelly_is_the_default() -> None:
     p, d = 0.55, 2.10
-    assert kelly_fraction(p, d) == pytest.approx(kelly_fraction(p, d, fraction=1.0) / 4.0, abs=1e-12)
+    assert kelly_fraction(p, d) == pytest.approx(
+        kelly_fraction(p, d, fraction=1.0) / 4.0, abs=1e-12
+    )
 
 
 def test_rejects_invalid_inputs() -> None:
@@ -1928,7 +1932,9 @@ _EPSILON = 1e-15
 """Floor for log loss, so a zero-probability realised outcome is finite."""
 
 
-def _prepare(forecast: npt.ArrayLike, outcome: int) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+def _prepare(
+    forecast: npt.ArrayLike, outcome: int
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     p = np.asarray(forecast, dtype=np.float64)
     if abs(float(p.sum()) - 1.0) > 1e-9:
         raise ValueError(f"forecast must sum to 1, got {float(p.sum())}")
@@ -2137,7 +2143,9 @@ def murphy_decomposition(
     o = np.asarray(outcomes, dtype=np.float64)
 
     if p.shape != o.shape:
-        raise ValueError(f"forecasts and outcomes must be the same length, got {p.shape} and {o.shape}")
+        raise ValueError(
+            f"forecasts and outcomes must be the same length, got {p.shape} and {o.shape}"
+        )
     if p.size == 0:
         raise ValueError("need at least one observation")
     if np.any((p < 0.0) | (p > 1.0)):
