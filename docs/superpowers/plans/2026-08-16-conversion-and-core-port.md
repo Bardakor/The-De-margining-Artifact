@@ -1870,8 +1870,14 @@ def test_rps_matches_the_closed_form() -> None:
 
 def test_rps_is_distance_sensitive_where_brier_is_not() -> None:
     """MODEL.md §11: forecasting a home win scores the same under Brier whether
-    the match was drawn or lost. RPS must distinguish them."""
-    forecast = [0.7, 0.2, 0.1]
+    the match was drawn or lost. RPS must distinguish them.
+
+    The forecast gives the draw and the away win equal probability, which is what
+    isolates ordering from likelihood. Brier then cannot tell the two apart at
+    all, because it only sees squared error per category. RPS can, because a draw
+    is the nearer miss when you forecast a home win.
+    """
+    forecast = [0.7, 0.15, 0.15]
     assert brier_score(forecast, 1) == pytest.approx(brier_score(forecast, 2), abs=1e-12)
     assert ranked_probability_score(forecast, 1) < ranked_probability_score(forecast, 2)
 
