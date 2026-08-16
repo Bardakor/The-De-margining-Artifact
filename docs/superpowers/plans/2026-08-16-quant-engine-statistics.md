@@ -879,6 +879,24 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - [ ] Murphy's identity holds to 1e-9
 - [ ] RPS penalises a distant miss more than a near one; Brier does not
 
+## Correction applied during execution
+
+The Murphy identity test as originally written in Task 12 was WRONG, and the implementer
+caught it before the assertion was touched. Murphy's classical three-way identity
+`BS = REL - RES + UNC` is exact only when each bin holds a SINGLE DISTINCT forecast value.
+The plan's test data binned continuous forecasts, two bins holding two distinct values
+each, which leaves a residual equal to the within-bin variance.
+
+Measured: BS = 0.109, REL - RES + UNC = 0.10875, residual = 0.00025 = WBV exactly.
+
+The resolution was to implement the generalised four-way decomposition
+`BS = REL - RES + UNC + WBV`, report all four terms, test the exact identity to 1e-12, and
+add a separate test asserting the residual IS the within-bin variance so the decomposition
+cannot be quietly reduced back to three terms. A third test uses one-distinct-value-per-bin
+data to confirm WBV is exactly 0 there, recovering Murphy's classical form.
+
+This is strictly better maths than the plan specified.
+
 ## References
 
 - Brier, G.W. (1950). Verification of forecasts expressed in terms of probability. *Monthly Weather Review*.
