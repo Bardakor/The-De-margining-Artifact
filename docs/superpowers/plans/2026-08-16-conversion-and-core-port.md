@@ -955,7 +955,7 @@ def totals(m: Matrix, line: float) -> tuple[float, float]:
     Whole lines are rejected: they can push, so two probabilities cannot
     describe the market.
     """
-    if float(line * 2).is_integer() and float(line).is_integer():
+    if float(line).is_integer():
         raise ValueError(f"line must be a half-integer, got {line}")
     x = np.arange(m.shape[0])[:, None]
     y = np.arange(m.shape[1])[None, :]
@@ -1512,12 +1512,16 @@ def margin_double_chance(m: Matrix, target_sum: float) -> npt.NDArray[np.float64
     Summing the already-margined 1X2 legs looks tidier and is wrong: for a
     heavy favourite it yields decimal odds below 1, which is not a payable
     price. Margining independently is structurally safe because p**k < 1 for
-    any p < 1 and k > 0.
+    any p < 1 and k > 0, so d = p**(-k) always exceeds 1.
     """
-    return apply_overround(np.array(double_chance(m)) / 2.0, target_sum) / 2.0
+    return apply_overround(np.array(double_chance(m)), 2.0 * target_sum)
 ```
 
-Note on the final line: double-chance probabilities sum to 2, so they are halved into a simplex, margined, and the resulting odds halved back.
+**Do not normalise the double-chance probabilities into a simplex first.** They already sum to 2, each lies in `(0, 1)`, and the power method is applied to them *as they are* with a target of `2B`. That is what makes every price payable: `p**k < 1` for any `p < 1` and `k > 0`, so `d = p**(-k) > 1` unconditionally. Halving them into a simplex and halving the odds back hits the same book sum but produces a different, and wrong, set of prices.
+
+`solve_power_exponent` needs no change to support this: at `k = 0` the sum is 3 and at `k = 1` it is 2, so a target of `2B ≈ 2.1` is bracketed by the existing `[0, 1]` search.
+
+**If `test_double_chance_is_margined_against_twice_the_book` fails on the `dc_1x_price` assertion, do not widen the tolerance.** Report the value your implementation produced alongside the expected `1.0053`. This is a Layer-1 target and a mismatch is information about the port, not a test-tuning problem.
 
 - [ ] **Step 4: Run and confirm it passes**
 
