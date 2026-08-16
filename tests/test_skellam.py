@@ -3,8 +3,9 @@
 import numpy as np
 import pytest
 
+from footy.core.markets import asian_handicap
 from footy.core.matrix import scoreline_matrix
-from footy.core.skellam import skellam_pmf
+from footy.core.skellam import skellam_pmf, skellam_supremacy
 
 
 def matrix_goal_difference(m: np.ndarray, k: int) -> float:
@@ -49,3 +50,34 @@ def test_stays_finite_for_large_rates() -> None:
 def test_symmetric_rates_give_a_symmetric_distribution() -> None:
     values = skellam_pmf(np.arange(-8, 9), 1.5, 1.5)
     assert values == pytest.approx(values[::-1], abs=1e-12)
+
+
+def test_supremacy_agrees_with_matrix_handicap_at_rho_zero() -> None:
+    """Second external corroboration: Skellam supremacy vs matrix asian_handicap.
+
+    At rho = 0 the two routes must agree, since Skellam assumes independence
+    and the matrix at rho = 0 enforces independence. Covers whole, half, and
+    quarter handicaps.
+    """
+    lam, mu = 1.6, 1.1
+    m = scoreline_matrix(lam, mu, 0.0)
+
+    # Test handicaps spanning whole, half, and quarter lines
+    handicaps = [-1.5, -1.0, -0.75, -0.5, -0.25, 0.0, 0.5, 1.0]
+
+    for h in handicaps:
+        # skellam_supremacy returns (home, push, away) as a flat tuple
+        skellam_home, skellam_push, skellam_away = skellam_supremacy(lam, mu, h)
+
+        # asian_handicap returns (home, away) as AsianOutcome(win, push, lose)
+        matrix_home, matrix_away = asian_handicap(m, h)
+
+        assert skellam_home == pytest.approx(matrix_home.win, abs=1e-6), (
+            f"handicap {h}: home win probability mismatch"
+        )
+        assert skellam_push == pytest.approx(matrix_home.push, abs=1e-6), (
+            f"handicap {h}: push probability mismatch"
+        )
+        assert skellam_away == pytest.approx(matrix_home.lose, abs=1e-6), (
+            f"handicap {h}: away win probability mismatch"
+        )

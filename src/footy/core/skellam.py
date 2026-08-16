@@ -40,11 +40,36 @@ def skellam_supremacy(lam: float, mu: float, handicap: float) -> tuple[float, fl
 
     A second, independent route to the Asian handicap. The handicap is applied
     to the home side, so the home side covers when K + handicap > 0.
+
+    Quarter lines split the stake across the two adjacent whole/half lines,
+    which is how they settle in practice.
     """
     quarters = handicap * 4.0
     if not float(quarters).is_integer():
         raise ValueError(f"handicap must be a multiple of a quarter goal, got {handicap}")
 
+    is_quarter_line = int(quarters) % 2 != 0
+    if not is_quarter_line:
+        return _whole_or_half_supremacy(lam, mu, handicap)
+
+    # For quarter lines, blend the two adjacent whole/half lines.
+    lower_home, lower_push, lower_away = _whole_or_half_supremacy(lam, mu, handicap - 0.25)
+    upper_home, upper_push, upper_away = _whole_or_half_supremacy(lam, mu, handicap + 0.25)
+
+    return (
+        (lower_home + upper_home) / 2.0,
+        (lower_push + upper_push) / 2.0,
+        (lower_away + upper_away) / 2.0,
+    )
+
+
+def _whole_or_half_supremacy(lam: float, mu: float, handicap: float) -> tuple[float, float, float]:
+    """Compute (home, push, away) for a whole or half line.
+
+    Support window: [-60, 61]. This is sufficient because for typical
+    rates (lam, mu ~ 1-2 goals), the tail mass beyond ±60 is negligible
+    and does not affect markets at the 1e-6 level (six decimal places).
+    """
     support = np.arange(-60, 61)
     mass = skellam_pmf(support, lam, mu)
     adjusted = support + handicap
