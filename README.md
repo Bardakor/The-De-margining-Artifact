@@ -8,7 +8,7 @@
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-*A production-ready, full-stack sports betting platform with advanced statistical analysis and real-time data processing*
+*A football betting platform built around a tested Dixon-Coles pricing engine*
 
 [🚀 Quick Start](#-quick-start) • [📖 Documentation](#-documentation) • [�️ Architecture](#️-architecture) • [🎮 Features](#-features) • [🔧 API Reference](#-api-reference)
 
@@ -18,18 +18,48 @@
 
 ## 🌟 Project Highlights
 
-**Yami Betting Platform** is an enterprise-grade sports betting application that demonstrates advanced full-stack development practices, sophisticated statistical analysis, and production-ready architecture. Built with modern JavaScript technologies, it showcases real-world applicable solutions for the rapidly growing online gambling industry.
+**Yami** is a football betting platform whose centre of gravity is `packages/quant-engine` —
+a pure TypeScript pricing library implementing the Dixon-Coles bivariate Poisson model, with
+137 tests and zero runtime dependencies.
 
-### 🎯 **Why This Project Stands Out**
-- **Advanced Odds Algorithm**: Proprietary statistical engine using Expected Goals (xG), team strength analysis, and market efficiency calculations
-- **Real-Time Data Integration**: Live sports data from API-Football with intelligent caching and fallback strategies
-- **Enterprise Architecture**: 6 microservices with proper separation of concerns and service mesh communication
-- **Production Security**: JWT authentication, rate limiting, input validation, and financial transaction security
-- **Statistical Excellence**: Poisson distribution modeling, Kelly Criterion implementation, and confidence scoring
+### 🎯 **What is actually here**
+
+- **[`packages/quant-engine`](packages/quant-engine)** — the real work. Dixon-Coles scoreline
+  matrix, every market derived as a marginal of it, power-method overround, Kelly staking,
+  Skellam cross-check, and proper scoring rules. Fully tested, deterministic, documented in
+  **[`docs/MODEL.md`](packages/quant-engine/docs/MODEL.md)** with 15 cited papers.
+- **`backend/*` (legacy)** — six Express services from the original build. These are being
+  replaced; their pricing code is superseded by the engine above and should not be trusted.
+  See [the rebuild spec](docs/superpowers/specs/2026-08-15-quant-rebuild-design.md).
+- **`frontend/`** — Next.js 15 app. Still consuming the legacy endpoints.
+
+### ⚠️ **Status: mid-rebuild, read this before evaluating**
+
+An earlier version of this README claimed Poisson modelling, Expected Goals and a Kelly
+Criterion implementation. **None of those existed.** The pricing path was built on
+`Math.random()`, the draw probability was computed as a residual (`1 - home - away`) which
+sent draw odds past 6.0, and the bookmaker margin was applied backwards so the book paid out
+roughly 105% of fair value.
+
+Those defects are catalogued with file and line references in
+**[the rebuild spec](docs/superpowers/specs/2026-08-15-quant-rebuild-design.md)**, and the
+first of five planned stages — the pricing engine — is complete. The claims below about the
+engine are now real and tested. The claims about the legacy services are not yet.
 
 ---
 
 ## 🏗️ Architecture & Technology Stack
+
+### 🧮 **Pricing Engine**
+```
+packages/quant-engine — pure TypeScript, zero runtime dependencies, 137 tests
+  math/         log-gamma, modified Bessel function
+  poisson/      log-space Poisson, Dixon-Coles scoreline matrix
+  markets/      1X2, totals, BTTS, correct score, Asian handicap, double chance
+  pricing/      power-method overround, Shin inverse, Kelly staking
+  skellam/      goal-difference distribution (independent cross-check)
+  calibration/  RPS, Brier, log loss, Murphy decomposition
+```
 
 ### 🎨 **Frontend Excellence**
 ```typescript
@@ -42,7 +72,14 @@
 - Radix UI (Accessible Primitives, WAI-ARIA Compliant)
 ```
 
-### ⚙️ **Backend Microservices Architecture**
+### ⚙️ **Backend Services** *(legacy — being consolidated)*
+
+> The six services below are the original build. The rebuild spec collapses them into a
+> single API, because they share a database, deploy together, and are called in a strict
+> request-scoped sequence — the separation bought no independent scaling and produced three
+> competing, mutually inconsistent odds implementations. Documented in
+> [the rebuild spec](docs/superpowers/specs/2026-08-15-quant-rebuild-design.md) §2.2.
+
 ```mermaid
 graph TB
     subgraph "Client Layer"
@@ -135,34 +172,45 @@ graph TB
 
 ### 🧮 **Advanced Odds Calculation Engine**
 
-Our proprietary odds calculation system uses sophisticated mathematical models:
+Implemented in **[`packages/quant-engine`](packages/quant-engine)**. Full derivations and
+citations in **[`docs/MODEL.md`](packages/quant-engine/docs/MODEL.md)**.
 
-```javascript
-// Core Algorithm Components
-calculateOverallStrength(teamStats) {
-  const weights = {
-    attack: 0.4,     // Offensive capabilities  
-    defense: 0.3,    // Defensive stability
-    form: 0.2,       // Recent performance
-    efficiency: 0.1  // Goal conversion efficiency
-  };
-  
-  // Statistical analysis using xG, possession, shot accuracy
-  return (
-    attackStrength * weights.attack +
-    defenseStrength * weights.defense +
-    formRating * weights.form +
-    efficiency * weights.efficiency
-  );
-}
+Goals are modelled as a Poisson process (Maher, 1982), with the Dixon-Coles (1997)
+dependence correction applied to the four low-scoring cells that plain Poisson gets wrong:
+
+```
+tau(0,0) = 1 - lambda*mu*rho     tau(0,1) = 1 + lambda*rho
+tau(1,0) = 1 + mu*rho            tau(1,1) = 1 - rho
 ```
 
-#### **Mathematical Models Used:**
-- **Poisson Distribution**: Goal probability calculations
-- **Expected Goals (xG)**: Chance quality assessment  
-- **Kelly Criterion**: Value bet detection
-- **Home Advantage Modeling**: League-specific adjustments
-- **Confidence Scoring**: Data quality and statistical significance
+Every market is then a sum over regions of one 11x11 scoreline matrix, so no two markets can
+disagree about the same event:
+
+| Market | Region summed |
+|---|---|
+| Home / Draw / Away | `x>y`, `x=y`, `x<y` |
+| Over/Under | `x+y > line` |
+| Both teams to score | `x>0 and y>0` |
+| Correct score | the single cell |
+| Asian handicap | shifted by the handicap, with push |
+| Double chance | unions of the 1X2 regions |
+
+#### **Implemented and tested**
+- **Dixon-Coles bivariate Poisson** — scoreline matrix, log-space Poisson, admissible rho bounds
+- **Power-method overround** — book sums land on target to 1e-16, longshots correctly carry
+  more margin than favourites
+- **Shin's method (1993)** — the *inverse*, for de-margining historical closing odds
+- **Kelly Criterion** — real `f* = (bp - q)/b`, quarter-Kelly default
+- **Skellam distribution** — goal difference via the modified Bessel function, an independent
+  check on the matrix rather than a second feature
+- **Scoring rules** — RPS, Brier, log loss, and Murphy's decomposition into reliability,
+  resolution, uncertainty and within-bin variance
+
+#### **Not yet implemented** (Plan 2)
+- Elo ratings with Bayesian shrinkage, and MLE fitting of attack/defence strengths with
+  exponential time decay. The engine currently consumes expected-goal values; it does not
+  yet fit them from historical results.
+- Walk-forward backtesting against real closing odds.
 
 ### 🔐 **Enterprise Security**
 
@@ -595,34 +643,45 @@ interface BetTypes {
 
 ### 📊 **Statistical Analysis Engine**
 
-#### **Odds Calculation Deep Dive**
-```javascript
-// Example: Arsenal vs Chelsea Analysis
-{
-  "homeTeam": {
-    "name": "Arsenal",
-    "odds": 2.15,
-    "probability": 46.5,
-    "strength": 85,
-    "form": "W-W-D-W-L",
-    "attackRating": 88,
-    "defenseRating": 82
-  },
-  "analysis": {
-    "confidence": 92,
-    "expectedGoals": { "home": 1.8, "away": 1.2 },
-    "keyFactors": [
-      "Arsenal strong home record (8W-1D-1L)",
-      "Chelsea away form concerning (3W-3D-4L)",
-      "Head-to-head favors Arsenal (3W-1D-1L last 5)"
-    ],
-    "valueRecommendation": {
-      "type": "strong_value",
-      "market": "home_win",
-      "reason": "True odds suggest 52% probability vs 46.5% implied"
-    }
-  }
-}
+#### **Real engine output**
+
+Everything below is actual output of `priceFixture({ home: 1.62, away: 1.18 })`, not an
+illustration. Reproduce it with `npm run verify` in `packages/quant-engine`.
+
+```jsonc
+// 1X2 — book sum exactly 1.05
+{ "key": "1X2:HOME", "probability": 0.4644, "fairOdds": 2.153, "odds": 2.079 }
+{ "key": "1X2:DRAW", "probability": 0.2692, "fairOdds": 3.715, "odds": 3.498 }
+{ "key": "1X2:AWAY", "probability": 0.2664, "fairOdds": 3.754, "odds": 3.533 }
+
+// Over/Under 2.5 — book sum exactly 1.05
+{ "key": "OU:2.5:OVER",  "probability": 0.5305, "fairOdds": 1.885, "odds": 1.802 }
+{ "key": "OU:2.5:UNDER", "probability": 0.4695, "fairOdds": 2.130, "odds": 2.019 }
+
+// Both teams to score — book sum exactly 1.05
+{ "key": "BTTS:YES", "probability": 0.5673, "fairOdds": 1.763, "odds": 1.693 }
+{ "key": "BTTS:NO",  "probability": 0.4327, "fairOdds": 2.311, "odds": 2.177 }
+
+// Double chance — book sum exactly 2.10, being twice the target (see below)
+{ "key": "DC:1X", "probability": 0.7336, "fairOdds": 1.363, "odds": 1.312 }
+{ "key": "DC:X2", "probability": 0.5356, "fairOdds": 1.867, "odds": 1.729 }
+```
+
+Three things to notice, each of which the previous implementation got wrong:
+
+1. **The draw prices at 3.50**, not past 6.0. It is summed from the matrix diagonal rather
+   than left over as `1 - home - away`.
+2. **Every offered price is shorter than its fair price.** The old code multiplied
+   probability by `(1 - margin)`, which lengthened prices and handed the edge to the bettor.
+3. **`DC:1X` is 0.7336 = `P(home) + P(draw)` exactly** — 0.4644 + 0.2692. The markets are
+   marginals of one distribution, so they cannot disagree. Its book sum is 2.10 rather than
+   1.05 because each double-chance selection covers two of three outcomes.
+
+Value assessment against an offered price uses real Kelly, not a random number:
+
+```jsonc
+// assessValue(modelProbability: 0.4471, offeredOdds: 2.45)
+{ "edge": 0.04895, "expectedValue": 0.09540, "fullKelly": 0.06579, "stake": 0.01645 }
 ```
 
 ---
@@ -631,11 +690,16 @@ interface BetTypes {
 
 ### ⚡ **Performance Metrics**
 
-#### **Response Times**
-- **Authentication**: < 100ms average
-- **Bet Placement**: < 200ms average  
-- **Live Data Retrieval**: < 300ms average
-- **Odds Calculation**: < 500ms average
+#### **Measured**
+
+Only the engine has reproducible numbers today, from `npm run verify`:
+
+- **Full engine test suite**: 137 tests across 12 files, ~1.0s wall clock
+- **Pricing a fixture**: sub-millisecond — it is an 11x11 matrix and a bisection, no I/O
+- **Determinism**: byte-identical output across 100 repeated calls, asserted in the suite
+
+The legacy service response times previously quoted here were not backed by any benchmark
+and have been removed. They will be reinstated when there is a load test to cite.
 
 #### **Caching Strategy**
 ```typescript
@@ -652,10 +716,11 @@ interface BetTypes {
 ```
 
 #### **Database Optimization**
-- **Compound Indexes**: Optimized queries for user bets, transactions
-- **Aggregation Pipelines**: Efficient statistical calculations
+- **Compound Indexes**: Defined for user bets and transactions
+- **Aggregation Pipelines**: Used for statistical rollups
 - **Connection Pooling**: Managed database connections
-- **Query Performance**: < 50ms average for most operations
+
+(Query timings are not quoted here because none have been benchmarked.)
 
 ### 🔄 **Scalability Design**
 
