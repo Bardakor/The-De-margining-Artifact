@@ -180,16 +180,16 @@ Kelly, edge and expected value can never disagree about whether a bet is worth t
 | Skellam goal-difference distribution | `src/footy/core/skellam.py` | 6 |
 | Power-method overround | `src/footy/market/overround.py` | 8 |
 | Fractional Kelly staking | `src/footy/market/kelly.py` | 5 |
-| Exponential time decay | `src/footy/fit/decay.py` | see below |
-| Weighted log-likelihood + analytic gradient | `src/footy/fit/likelihood.py` | 36 (with `decay`, `mle`) |
-| L-BFGS-B driver, identifiability, admissibility | `src/footy/fit/mle.py` | — |
-| Four de-margining transforms | `src/footy/market/demargin.py` | 47 |
-| Walk-forward protocol and xi selection | `src/footy/study/walkforward.py` | 27 |
+| Time decay, weighted likelihood + analytic gradient, L-BFGS-B driver | `src/footy/fit/` | 40 |
+| Four de-margining transforms (the instrument) | `src/footy/market/demargin.py` | 47 |
+| Walk-forward protocol and xi selection | `src/footy/study/walkforward.py` | 32 |
 | Diebold-Mariano, block bootstrap, Benjamini-Hochberg | `src/footy/eval/inference.py` | 33 |
+| ROI, staking, closing-line value | `src/footy/eval/economic.py` | 23 |
+| Archive acquisition, coverage, per-cell comparison | `src/footy/study/acquire.py`, `run.py` | 22 |
 | RPS, Brier, log loss | `src/footy/eval/scoring.py` | 8 |
 | Murphy REL / RES / UNC / WBV / COV | `src/footy/eval/murphy.py` | 14 |
 | Column registry (267 odds columns) | `src/footy/data/columns.py` | 12 |
-| football-data.co.uk ingest, header discovery | `src/footy/data/football_data.py` | 59 |
+| football-data.co.uk ingest, header discovery | `src/footy/data/football_data.py` | 64 |
 | (league × season × book × market) coverage matrix | `src/footy/data/coverage.py` | 15 |
 
 `src/footy/core/` contains no I/O, no clock, and no randomness — enforced by an AST scan in
@@ -277,7 +277,9 @@ cannot settle it.
 | `src/footy/eval/` | Scoring rules and the Murphy decomposition |
 | `src/footy/data/` | football-data.co.uk ingest and coverage matrix |
 | `src/footy/fit/` | Time decay, likelihood, analytic gradient, MLE driver |
-| `src/footy/study/` | The walk-forward protocol |
+| `src/footy/study/` | Archive acquisition, the walk-forward protocol, the study runner |
+| `paper/` | Pre-registration, manuscript, generated tables |
+| `scripts/` | `study.py` (coverage / calibrate / evaluate), `make_tables.py` |
 | `tests/` | Layer-1 fixtures, Layer-2 properties, purity scan |
 
 ## Limitations
