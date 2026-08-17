@@ -5,13 +5,17 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.hypothesis/
 *.egg-info/
 
-# Study artefacts: regenerable, never committed
-data/
-results/
-paper/figures/*.pdf
-paper/figures/*.png
+# Study artefacts: regenerable, never committed.
+# Leading slash anchors these to the repository root. Unanchored, `data/` also
+# matched `src/footy/data/` and silently kept the entire ingest package out of
+# version control — invisible, because `git status` stays clean for ignored paths.
+/data/
+/results/
+/paper/figures/*.pdf
+/paper/figures/*.png
 
 # OS
 .DS_Store

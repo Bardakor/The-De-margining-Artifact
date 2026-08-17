@@ -19,7 +19,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Mathematics",
 ]
-dependencies = ["numpy>=2.0", "scipy>=1.14"]
+dependencies = ["numpy>=2.0", "scipy>=1.14", "pandas>=2.2"]
 
 [project.urls]
 Homepage = "https://github.com/Bardakor/betting-app-yami"
@@ -27,7 +27,7 @@ Repository = "https://github.com/Bardakor/betting-app-yami"
 Documentation = "https://github.com/Bardakor/betting-app-yami/blob/main/docs/model.md"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "hypothesis>=6.100", "ruff>=0.6", "mypy>=1.11"]
+dev = ["pytest>=8.0", "hypothesis>=6.100", "ruff>=0.6", "mypy>=1.11", "pandas-stubs>=2.2"]
 
 [build-system]
 requires = ["hatchling"]
