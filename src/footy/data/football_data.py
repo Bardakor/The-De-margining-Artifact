@@ -9,6 +9,7 @@ ingest layer therefore matches each header against the registry in
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import re
 import urllib.error
@@ -178,7 +179,7 @@ def _kickoff(frame: pd.DataFrame) -> pd.Series[Any]:
     if "Date" not in frame.columns:
         raise ValueError("missing Date column")
 
-    kickoff = pd.to_datetime(_text(frame["Date"]), dayfirst=True, errors="coerce")
+    kickoff = pd.to_datetime(_text(frame["Date"]), dayfirst=True, format="mixed", errors="coerce")
     if "Time" not in frame.columns:
         return kickoff
 
@@ -189,6 +190,52 @@ def _kickoff(frame: pd.DataFrame) -> pd.Series[Any]:
     return kickoff + offset
 
 
+_PAD_PREFIX = "__pad_"
+
+
+def _source_text(source: str | Path | IO[str]) -> str:
+    """Read the whole file once, so the header can be inspected before parsing."""
+    if hasattr(source, "read"):
+        return str(source.read())
+    return Path(str(source)).read_text(encoding="utf-8", errors="replace")
+
+
+def _read_padded_csv(source: str | Path | IO[str], label: str) -> pd.DataFrame:
+    """Parse a season CSV, tolerating rows padded with trailing empty fields.
+
+    Real archive files carry rows with more commas than the header — E0/0304
+    mixes widths of 57, 62 and 72 against a 57-column header. Every extra field
+    is empty, so this is comma padding, not a schema change, and pandas' default
+    strictness rejects the whole file over it. Losing a league-season to
+    formatting noise would silently shrink the study.
+
+    Tolerating padding must not become tolerating unknown data, so any padded
+    column that actually contains a value raises :class:`UnrecognisedHeaderError`
+    exactly as an unrecognised header would.
+    """
+    text = _source_text(source)
+    lines = text.splitlines()
+    if not lines:
+        raise ValueError(f"{label}: file is empty")
+
+    header = lines[0].split(",")
+    widest = max((len(line.split(",")) for line in lines if line.strip()), default=len(header))
+    if widest <= len(header):
+        return pd.read_csv(io.StringIO(text), encoding_errors="replace")
+
+    names = [*header, *(f"{_PAD_PREFIX}{i}" for i in range(widest - len(header)))]
+    frame = pd.read_csv(io.StringIO(text), names=names, skiprows=1, encoding_errors="replace")
+
+    padded = [c for c in frame.columns if str(c).startswith(_PAD_PREFIX)]
+    populated = [c for c in padded if _text(frame[c]).ne("").any()]
+    if populated:
+        raise UnrecognisedHeaderError(
+            [f"{len(header) + padded.index(c)} (unnamed, populated)" for c in populated],
+            label,
+        )
+    return frame.drop(columns=padded)
+
+
 def read_season_csv(
     source: str | Path | IO[str],
     *,
@@ -197,7 +244,7 @@ def read_season_csv(
 ) -> SeasonTables:
     """Parse one football-data season file into matches and tidy odds."""
     label = str(source) if not hasattr(source, "read") else f"{league}/{season}"
-    frame = pd.read_csv(source, encoding="utf-8", encoding_errors="replace")
+    frame = _read_padded_csv(source, label)
     frame = frame.loc[
         :,
         [c for c in frame.columns if str(c).strip() != "" and not _UNNAMED.match(str(c).strip())],

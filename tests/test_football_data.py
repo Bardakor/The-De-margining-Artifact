@@ -517,3 +517,54 @@ def test_other_http_errors_propagate(tmp_path: Path, code: int) -> None:
     stub = StubOpener(error=http_error(code))
     with pytest.raises(urllib.error.HTTPError):
         fetch_season("2324", "E0", tmp_path / "E0.csv", opener=as_opener(stub))
+
+
+# --------------------------------------------------------------------------
+# Comma-padded rows — real archive files carry them
+# --------------------------------------------------------------------------
+
+
+def test_rows_padded_with_trailing_empty_fields_are_accepted() -> None:
+    """Regression against a real file. E0/0304 mixes row widths of 57, 62 and
+    72 against a 57-column header; every extra field is empty. pandas' default
+    strictness rejects the whole file, which would have silently cost the study
+    an entire league-season over comma padding."""
+    tables = read(HEADER, ROW_A + ",,,,,", ROW_B + ",,,,,,,,,,")
+    assert len(tables.matches) == 2
+    assert list(tables.matches["home"]) == ["Arsenal", "Spurs"]
+
+
+def test_padding_does_not_disturb_the_odds_columns() -> None:
+    tables = read(HEADER + ",B365H,B365D,B365A", ROW_A + ",1.80,3.60,4.50,,,,")
+    assert len(tables.odds) == 3
+    assert set(tables.odds["outcome"]) == {"H", "D", "A"}
+
+
+def test_a_populated_extra_field_still_fails_loudly() -> None:
+    """Tolerating padding must not become tolerating unknown data. An extra
+    field carrying a value is a schema change and must raise exactly as an
+    unrecognised header does."""
+    with pytest.raises(UnrecognisedHeaderError, match="populated"):
+        read(HEADER, ROW_A + ",,,42")
+
+
+def test_an_empty_file_is_rejected_by_name() -> None:
+    with pytest.raises(ValueError, match="file is empty"):
+        read_season_csv(io.StringIO(""), season="2324", league="E0")
+
+
+def test_two_digit_and_four_digit_years_both_parse_day_first() -> None:
+    """The archive uses 14/08/93 in the 1990s and 12/08/2023 today. Both must
+    read day-first: 12/08 is 12 August, never 8 December."""
+    old = read(HEADER, "E0,14/08/93,Arsenal,Chelsea,2,1")
+    new = read(HEADER, "E0,12/08/2023,Arsenal,Chelsea,2,1")
+    assert stamp_at(old.matches, 0, "kickoff").year == 1993
+    assert (stamp_at(old.matches, 0, "kickoff").day, stamp_at(old.matches, 0, "kickoff").month) == (
+        14,
+        8,
+    )
+    assert stamp_at(new.matches, 0, "kickoff").year == 2023
+    assert (stamp_at(new.matches, 0, "kickoff").day, stamp_at(new.matches, 0, "kickoff").month) == (
+        12,
+        8,
+    )
