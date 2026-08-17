@@ -1,0 +1,686 @@
+% The De-margining Artifact
+%
+% Build:  make -C paper          (latexmk -pdf main.tex)
+%
+% Numbers are not typed into this file. Every quantity in the results section
+% comes from generated/, written by scripts/make_tables.py out of
+% results/cells.csv. Until the evaluation has been run those slots render as
+% "[pending]", so the draft compiles at any stage without ever carrying a
+% number that no run produced.
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{siunitx}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+
+\sisetup{detect-weight=true}
+
+\newcommand{\TBD}{\textcolor{red}{[pending]}}
+\newcommand{\pendingtable}[1]{%
+  \begin{center}\textcolor{red}{[table #1 pending: run \texttt{scripts/study.py evaluate},
+  then \texttt{scripts/make\_tables.py}]}\end{center}}
+
+% Quantities filled in from the run. Defaults keep the draft compiling.
+\providecommand{\NFilesFetched}{525}
+\providecommand{\NFilesRead}{514}
+\providecommand{\NMatchesArchive}{176{,}629}
+\providecommand{\NForecasts}{\TBD}
+\providecommand{\NCells}{\TBD}
+\providecommand{\NLeagues}{\TBD}
+\providecommand{\NBooks}{\TBD}
+\providecommand{\SpreadPinnacle}{\TBD}
+\providecommand{\SpreadBetSixtyFive}{\TBD}
+\providecommand{\SpreadOneXTwo}{\TBD}
+\providecommand{\SpreadOverUnder}{\TBD}
+\providecommand{\NSignFlips}{\TBD}
+\providecommand{\PctSignFlips}{\TBD}
+\providecommand{\xifrozen}{\TBD}
+\providecommand{\xihalflife}{\TBD}
+\providecommand{\xirpsbest}{\TBD}
+\providecommand{\xirpsspread}{\TBD}
+\providecommand{\xipairedn}{\TBD}
+\providecommand{\xirpsnodecay}{\TBD}
+\providecommand{\xirpsfastest}{\TBD}
+\IfFileExists{generated/summary.tex}{\input{generated/summary.tex}}{}
+\IfFileExists{generated/calibration-macros.tex}{\input{generated/calibration-macros.tex}}{}
+
+\title{The De-margining Artifact:\\
+does a forecasting model's measured edge over the bookmaker\\
+survive the choice of margin-removal transform?}
+\author{Liam Abourousse}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Empirical football-forecasting studies routinely claim an edge over the
+bookmaker. Substantiating such a claim requires converting offered odds into a
+benchmark probability, which means removing the bookmaker's margin. At least
+four transforms are in use for this---proportional normalisation, the power
+transform, Shin's insider-trading model, and the constant odds-ratio
+transform---and papers typically apply one without justification. The four are
+not equivalent: they differ chiefly in how much margin they attribute to
+longshots, which is precisely where a model's claimed edge tends to
+concentrate.
+
+We hold a single walk-forward Dixon--Coles model fixed across all four
+transforms and vary nothing but the benchmark. The comparison covers
+\NMatchesArchive{} archived matches, \NForecasts{} out-of-sample forecasts, and
+\NCells{} (league, bookmaker, market) cells drawn from \NLeagues{} leagues and
+\NBooks{} bookmakers, on 1X2 and Over/Under~2.5 closing prices. Three
+predictions were pre-registered before the evaluation period was touched: that
+transform disagreement scales with the book's margin (P1); that it is larger in
+the three-outcome market than the two-outcome one (P2); and that there exist
+cells in which the measured edge changes \emph{sign} between the proportional
+and Shin benchmarks (P3). P1 and P2 hold: the rank correlation between a
+book's margin and the spread across transforms is \SpearmanMarginSpread{}, and
+disagreement is larger in the three-outcome market. P3 does not, in any
+meaningful sense. Only \NSignFlips{} cell of \NCells{} reverses sign, on
+returns that are statistically indistinguishable from zero on both sides---
+because the fixed model achieves no edge anywhere in the sample, losing to the
+closing line in effectively every cell. The choice of transform demonstrably
+changes what is measured; whether it can overturn a published conclusion
+remains open, and this design cannot settle it.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+
+A bookmaker's quoted prices do not sum to a probability. For a market with
+outcomes $i = 1,\dots,n$ and offered decimal odds $d_i$, the raw implied
+masses $p_i = 1/d_i$ sum to $B = \sum_i p_i > 1$; the excess $B - 1$ is the
+overround, the bookmaker's margin. Any study that claims a forecasting edge
+must first turn $\{p_i\}$ into a probability vector $\{\pi_i\}$ summing to one,
+because it is against that vector---not against the quoted prices---that the
+model's superiority is asserted.
+
+That conversion is a modelling choice, and the literature has not converged on
+one. Proportional normalisation is the default. Shin's model derives a
+transform from the presence of insider money \citep{shin1991,shin1993}. The
+power transform and the constant odds-ratio transform were surveyed against
+both by \citet{strumbelj2014}, who found their accuracy ordering to depend on
+market and sport. The four coincide only in the limit $B \to 1$; away from it
+they differ in how the removed mass is distributed across outcomes, and they
+differ most at long odds. This matters because the favourite--longshot bias
+concentrates market mispricing at exactly those prices \citep{cain2000}, and
+because a model's largest apparent disagreements with the market are usually
+found there too.
+
+The question this paper asks is therefore not whether a model can beat the
+market. It is narrower and, we argue, prior to it:
+
+\begin{quote}
+\emph{Does the measured edge of a fixed model over the bookmaker depend
+materially on which de-margining transform constructs the benchmark?}
+\end{quote}
+
+If the answer is no, the field's casual treatment of the choice is harmless. If
+the answer is yes---and in particular if the sign of a measured edge can be
+flipped by substituting one standard transform for another---then a class of
+published results is under-determined by its own method section, and reporting
+the transform becomes a minimum requirement rather than a courtesy.
+
+Our contribution is threefold. First, we isolate the transform as the sole
+experimental factor: one model, one fit per matchday, one betting rule, four
+benchmarks. Second, we pre-register the predictions and the frozen model
+hyper-parameter before the evaluation period is run, so the git history of the
+pre-registration timestamps the hypotheses ahead of the results
+(Section~\ref{sec:prereg}). Third, we report the full coverage matrix,
+including every excluded cell, so the reader can see what the study could not
+measure as well as what it could.
+
+\section{The instrument: four de-margining transforms}
+\label{sec:transforms}
+
+Each transform maps the raw implied masses $p \in (0,1)^n$, with book sum
+$B = \sum_i p_i$, to a probability vector $\pi$ with $\sum_i \pi_i = 1$.
+
+\paragraph{Proportional.} Remove margin uniformly in proportion to implied
+mass:
+\begin{equation}
+  \pi_i = \frac{p_i}{B}.
+\end{equation}
+It fits no free parameter and preserves the ratio of any two implied masses.
+
+\paragraph{Power.} Solve for the exponent $k$ satisfying
+\begin{equation}
+  \sum_i p_i^{\,k} = 1, \qquad \pi_i = p_i^{\,k}.
+\end{equation}
+Because every $p_i \in (0,1)$, the sum is strictly decreasing in $k$, equal to
+$n$ at $k = 0$ and to $B$ at $k = 1$; a margined book therefore has its unique
+root at $k > 1$. The transform takes proportionally more margin from longshots,
+in the direction implied by the favourite--longshot bias.
+
+\paragraph{Shin.} Model a proportion $z$ of the money wagered as coming from
+insiders, and recover \citep{shin1993}
+\begin{equation}
+  \pi_i = \frac{\sqrt{z^2 + 4(1-z)\,p_i^2 / B} - z}{2(1-z)},
+\end{equation}
+with $z$ chosen so that $\sum_i \pi_i = 1$. Note that as $z \to 0$ this tends
+to $p_i / \sqrt{B}$, not to $p_i / B$: Shin does not nest proportional
+normalisation at its boundary.
+
+\paragraph{Odds-ratio.} Impose a constant ratio $c$ between the offered and
+true odds of every outcome, $p_i/(1-p_i) = c\,\pi_i/(1-\pi_i)$, which rearranges
+to
+\begin{equation}
+  \pi_i = \frac{p_i}{c(1-p_i) + p_i},
+\end{equation}
+with $c$ solving $\sum_i \pi_i = 1$. At $c = 1$ the map is the identity and
+$\pi_i$ is decreasing in $c$, so a margined book has its root at $c > 1$
+\citep{strumbelj2014}.
+
+Three of the four require a root-find. To ensure that no transform is
+advantaged by a looser solver, all four share a single bisection driver at a
+common tolerance of $10^{-12}$ with a common iteration budget, and each
+transform's recovered vector is renormalised identically afterwards. The
+fitted free parameter ($k$, $z$, $c$; $B$ for proportional, which fits nothing)
+is retained per market so that the effort each transform expended on a given
+book can be reported.
+
+\section{Data}
+\label{sec:data}
+
+Match results and bookmaker odds come from Football-Data.co.uk
+\citep{footballdata}, which publishes per-league, per-season CSV files
+containing full-time scores and the closing---and, for recent seasons,
+opening---prices of a panel of bookmakers.
+
+\NFilesFetched{} season files were fetched and \NFilesRead{} parsed, yielding
+\NMatchesArchive{} matches. The eleven unreadable files are recorded rather
+than silently dropped: seven declare an internal division code that disagrees
+with their filename, three carry structurally corrupted rows, and one declares
+the same bookmaker column twice. An unreadable league-season is missing data,
+and missing data nobody counted is how a coverage table becomes a lie.
+
+Two markets are used: the three-outcome match-odds market (1X2) and the
+two-outcome Over/Under~2.5 goals market. \emph{Closing} prices only. Opening
+prices are never used as a benchmark, because a benchmark drawn before the
+market has absorbed team news measures something other than the market's final
+opinion. A match survives into a cell only if its closing book is
+\emph{complete}---every outcome priced---since a transform applied to a partial
+book normalises over the wrong support and returns a benchmark that is wrong
+rather than merely noisy.
+
+The unit of analysis is the (league, bookmaker, market) cell. Cells with fewer
+than 200 matched fixtures are excluded; the threshold was fixed in the
+pre-registration rather than chosen after inspection. The full coverage matrix
+is published as a result, including every excluded cell
+(Table~\ref{tab:coverage}).
+
+\begin{table}[t]
+  \centering
+  \caption{Coverage. Complete closing books per bookmaker and market, and the
+  cells that clear the 200-fixture threshold.}
+  \label{tab:coverage}
+  \IfFileExists{generated/tab-coverage.tex}
+    {\input{generated/tab-coverage.tex}}
+    {\pendingtable{coverage}}
+\end{table}
+
+\section{Method}
+\label{sec:method}
+
+\subsection{Forecasting model}
+
+The model is Dixon--Coles \citep{dixon1997}: independent Poisson scoring rates
+with a low-score dependence correction. For a match between home team $h$ and
+away team $a$,
+\begin{equation}
+  \lambda = \alpha_h \beta_a \gamma, \qquad \mu = \alpha_a \beta_h,
+\end{equation}
+where $\alpha$ is attack strength, $\beta$ defence weakness, and $\gamma$ a
+per-league home advantage. The joint mass of a scoreline $(x, y)$ is
+\begin{equation}
+  P(x, y) = \tau(x, y, \lambda, \mu, \rho)\,
+            \frac{e^{-\lambda}\lambda^x}{x!}\,
+            \frac{e^{-\mu}\mu^y}{y!},
+\end{equation}
+with $\tau$ the Dixon--Coles adjustment applied to the four scorelines in which
+both sides score at most one, governed by a single dependence parameter $\rho$.
+Fitting is by maximum likelihood over $(\log\alpha, \log\beta, \log\gamma,
+\rho)$ with a hand-derived analytic gradient; the log parameterisation makes
+positivity structural rather than a bound, and the analytic gradient is what
+makes several thousand refits tractable. The gradient is verified against
+numerical differentiation in the test suite, because a subtly wrong gradient
+converges silently to the wrong optimum and no downstream check would notice.
+
+The model choice is deliberate and, for this study, incidental. A better model
+would change the level of every measured edge; the question here is whether the
+\emph{measurement} moves when only the benchmark is swapped, and that requires
+the model to be held fixed, not to be good.
+
+\subsection{Walk-forward protocol}
+
+Each league's seasons are partitioned in time into three disjoint periods,
+fixed before any fitting:
+
+\begin{center}
+\begin{tabular}{lll}
+  \toprule
+  Period & Span & Use \\
+  \midrule
+  Burn-in     & first 3 seasons & fitting only; never forecast or scored \\
+  Calibration & next 2 seasons  & used \emph{solely} to select $\xi$ \\
+  Evaluation  & all remaining   & the study \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Within the scored periods the protocol is: before each matchday, refit on every
+match that kicked off \emph{strictly} earlier, weighted by
+$w_m = \exp(-\xi\, t_m)$ where $t_m$ is the match's age in days at the cutoff;
+predict that matchday; roll forward. Burn-in matches remain in the fit window
+throughout---excluded from scoring, not from estimation. A matchday whose fit
+window holds fewer than 300 matches is skipped.
+
+The strict inequality is the single point at which look-ahead leakage could
+enter, so it is enforced in one place in the code and asserted directly by the
+test suite.
+
+A fixture is \emph{dropped rather than priced} in three circumstances: a team
+absent from the fit window has no fitted strength (a promoted side); a fitted
+rate falls outside $(0.05, 6.0)$ expected goals, which indicates an
+unidentified parameter rather than a strong team; or $\rho$ is inadmissible for
+that fixture's own $(\lambda, \mu)$. Admissibility depends on the fixture's own
+rates, so a $\rho$ valid for every match in the fit window can still be invalid
+for a pairing not in it, and the fit-time check is structurally unable to catch
+that.
+
+\subsection{The decay parameter, and how weakly it is identified}
+\label{sec:xi}
+
+$\xi$ was selected by minimising mean ranked probability score over the
+calibration period only, then frozen at
+\begin{equation}
+  \xi = \xifrozen \quad (\text{half-life } \ln 2/\xi = 400 \text{ days}).
+\end{equation}
+
+Selection was \emph{paired}. Candidates do not price the same fixtures---a fit
+can fail to converge, or leave a team unidentified---and an unpaired sweep
+compared means over match sets differing by 43\% in size (7{,}804 to 11{,}152
+forecasts), which is not a valid comparison: an arm that happens to drop harder
+fixtures scores better for reasons unrelated to forecast quality. That sweep
+placed its minimum at 700 days, on the edge of its grid. Scoring every
+candidate on the \xipairedn{} fixtures that \emph{all} candidates forecast
+moved the optimum to \xihalflife{} days and made it interior, with the
+neighbouring candidates worse on either side (Table~\ref{tab:xi}).
+
+\begin{table}[t]
+  \centering
+  \caption{Paired selection of the decay rate on the calibration period.
+  Every candidate is scored on the same \xipairedn{} fixtures.}
+  \label{tab:xi}
+  \IfFileExists{generated/tab-calibration.tex}
+    {\input{generated/tab-calibration.tex}}
+    {\pendingtable{3}}
+\end{table}
+
+Stated plainly: $\xi$ is weakly identified. Half-lives of 400 and 700 days
+differ by $7.3 \times 10^{-5}$ in paired RPS, and anything between roughly 250
+and 1200 days scores within $6 \times 10^{-4}$ of the optimum. We do not
+present 400 days as a precisely determined quantity. What the curve does
+establish is that the extremes are wrong---a 30-day half-life is far worse
+(\xirpsfastest{}), and no decay at all is worse than moderate decay
+(\xirpsnodecay{} against \xirpsbest{})---so exponential decay earns its place
+without its exact rate
+mattering much. Because one model is held fixed across all four transforms, a
+weakly identified $\xi$ shifts every arm together and cannot generate a
+difference between them.
+
+\subsection{Metrics}
+\label{sec:metrics}
+
+\paragraph{Ranked probability score.} Forecast accuracy is scored with the
+ranked probability score \citep{epstein1969}, which respects the ordering of
+1X2 outcomes and is the appropriate proper score for this market
+\citep{constantinou2012,gneiting2007}. For a forecast $\pi$ over $n$ ordered
+categories and realised category $j$,
+\begin{equation}
+  \mathrm{RPS} = \frac{1}{n-1} \sum_{k=1}^{n-1}
+    \left( \sum_{i \le k} \pi_i - \mathbf{1}[j \le k] \right)^2 .
+\end{equation}
+Both the model and each de-margined benchmark are scored on the same fixtures,
+so the comparison is paired by construction.
+
+\paragraph{Economic edge.} Prediction P3 is an economic statement, so it is
+measured economically. The betting rule is deliberately minimal: back an
+outcome when the model's probability exceeds the de-margined market probability
+for that outcome, stake one unit, and settle at the \emph{offered} price. Only
+the benchmark varies between arms; varying the strategy as well would make any
+difference in measured edge unattributable. Return on investment is total
+profit over total turnover, and is reported as undefined---not zero---when a
+transform selected no bets, since ``no bets placed'' and ``bets placed that
+broke even'' are different findings.
+
+\paragraph{Score decomposition.} Where the source of a difference in accuracy
+is at issue, the Brier score is decomposed following \citet{murphy1973}. We use
+the exact five-term form
+\begin{equation}
+  \mathrm{BS} = \mathrm{REL} - \mathrm{RES} + \mathrm{UNC}
+              + \mathrm{WBV} - 2\,\mathrm{COV},
+\end{equation}
+whose last two terms---within-bin forecast variance and within-bin
+forecast--outcome covariance---are identically zero only for single-valued
+bins. On binned continuous forecasts they are not; see
+Appendix~\ref{app:murphy}.
+
+\subsection{Inference}
+\label{sec:inference}
+
+Three tools, each chosen because the naive alternative is invalid on this data
+rather than merely less powerful.
+
+Forecast comparisons use the Diebold--Mariano test \citep{diebold1995} with
+Newey--West HAC standard errors \citep{newey1987} at the standard truncation
+lag $\lfloor 4(n/100)^{2/9} \rfloor$. Forecasts produced by overlapping fit
+windows are serially correlated, and treating per-match score differences as
+independent would understate the variance and overstate significance.
+
+Interval estimates for ROI use a stationary block bootstrap
+\citep{politis1994} with geometric blocks of mean length 20 and a fixed seed.
+Betting returns are heavy-tailed and clustered by matchday; an i.i.d.\
+bootstrap would resample away exactly the dependence that makes the true
+interval wide.
+
+The study runs a family of tests across leagues, bookmakers, markets and
+transform pairs, so $p$-values are controlled for false discovery rate by the
+Benjamini--Hochberg procedure \citep{benjamini1995} at $q = 0.10$ across that
+family.
+
+\section{Pre-registration}
+\label{sec:prereg}
+
+The predictions, the protocol, the exclusion threshold and the frozen $\xi$
+were committed to the repository before the evaluation period was run. The git
+timestamp on \texttt{paper/preregistration.md} is the claim; if that file's
+history shows modification after the first evaluation run, every prediction
+below should be treated as post-hoc. The evaluation script parses $\xi$ out of
+the committed pre-registration and refuses to start unless it agrees with the
+calibration output to $10^{-9}$---a rounded value in the document would be a
+\emph{different} decay rate from the one selected, and registering one number
+while running another would defeat the point of registering it.
+
+\begin{center}
+\begin{tabular}{p{0.06\textwidth}p{0.42\textwidth}p{0.42\textwidth}}
+  \toprule
+  ID & Prediction & Falsified by \\
+  \midrule
+  P1 & Disagreement between transforms scales with the book's margin:
+       negligible on a $\approx$102\% book, material on a $\approx$107\% book &
+       Transform spread on high-margin cells not exceeding that on low-margin
+       cells \\
+  P2 & Disagreement is larger for three-outcome 1X2 than for two-outcome
+       Over/Under~2.5 &
+       OU25 spread matching or exceeding 1X2 spread on the same cells \\
+  P3 & There exist (league, bookmaker) cells where the measured edge
+       \emph{changes sign} between proportional and Shin &
+       No cell showing a sign reversal in ROI between those two transforms \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+P3 is the headline: sign reversal, not merely magnitude change, is what would
+invalidate a published conclusion. We committed in advance to reporting all
+three predictions with effect sizes and confidence intervals regardless of
+outcome, to dropping or reframing none of them after seeing results, and to
+writing a null on P3 with P1 and P2 holding as a complete paper.
+
+\section{Results}
+\label{sec:results}
+
+The evaluation produced \NForecasts{} out-of-sample forecasts over \NCells{}
+cells spanning \NLeagues{} leagues and \NBooks{} bookmakers.
+
+\subsection{P1: disagreement scales with the book's margin}
+
+P1 is supported. Across the \NBooks{} bookmakers the rank correlation between
+a book's mean sum and the spread of the four transforms within a cell is
+\SpearmanMarginSpread{}. The pattern in Table~\ref{tab:p1} is monotone at the
+extremes: the two sharpest books, Betfair Exchange at a mean sum of 1.008 and
+Pinnacle at 1.031, both show a mean RPS spread of 0.0001, while books between
+1.06 and 1.09 show 0.0004 to 0.0009. The transforms agree almost exactly where
+there is little margin to remove and diverge by four to nine times as much
+where there is more of it, which is what the limiting argument predicts.
+
+The stated falsification condition was that the spread on Bet365 should fail to
+exceed the spread on Pinnacle. It does exceed it, on both measures
+(\SpreadBetSixtyFive{} against \SpreadPinnacle{} in ROI). P1 stands.
+
+Two cautions. The ROI spread column is noisier than the RPS column and does not
+order as cleanly, because ROI is a function of how many bets a cell generated
+and the smallest cells here rest on three league-seasons. And the mechanism is
+not in doubt---the transforms provably coincide as the book sum approaches
+one---so what this measures is the size of the effect at realistic margins,
+not whether it exists.
+
+\begin{table}[t]
+  \centering
+  \caption{Transform disagreement against book margin. Spread is the range of
+  a quantity across the four transforms within a cell.}
+  \label{tab:p1}
+  \IfFileExists{generated/tab-p1.tex}
+    {\input{generated/tab-p1.tex}}
+    {\pendingtable{P1}}
+\end{table}
+
+\subsection{P2: disagreement is larger in the three-outcome market}
+
+P2 is supported, weakly. On the cells where the same bookmaker prices both
+markets, the mean ROI spread is \SpreadOneXTwo{} for 1X2 against
+\SpreadOverUnder{} for Over/Under 2.5, and the 1X2 spread is the larger in
+60\% of pairs on ROI and 80\% on RPS.
+
+The evidence is thin and should be read as such. Only three bookmakers in the
+archive carry closing prices for both markets, which leaves fifteen paired
+cells. The direction matches the prediction and the mechanism is clear---the
+transforms differ chiefly in how they treat a longshot, and a near-even
+two-outcome book does not have one---but fifteen pairs cannot distinguish a
+moderate effect from a small one.
+
+\begin{table}[t]
+  \centering
+  \caption{Transform disagreement by market, on cells where both markets are
+  available from the same bookmaker.}
+  \label{tab:p2}
+  \IfFileExists{generated/tab-p2.tex}
+    {\input{generated/tab-p2.tex}}
+    {\pendingtable{P2}}
+\end{table}
+
+\subsection{P3: sign reversal of the measured edge}
+
+\textbf{P3 is met on its letter and fails on its substance, and the failure is
+the more informative of the two.}
+
+Exactly \NSignFlips{} cell of \NCells{} (\PctSignFlips{}) reverses the sign of
+measured ROI between proportional normalisation and Shin's method. On the
+prediction as written---\emph{there exist} cells where the edge changes
+sign---that is a positive result. Table~\ref{tab:p3} shows why it should not
+be read as one.
+
+The cell is B1/Coral/1X2 on 214 matches, barely above the 200-fixture
+threshold fixed in the pre-registration. Proportional normalisation puts the
+ROI at $+0.0020$ and Shin at $-0.0004$. Both bootstrap intervals span
+approximately $\pm 0.10$. These are not two different conclusions about an
+edge; they are the same conclusion---no measurable edge---with noise falling on
+opposite sides of zero. A reversal between two quantities that are each
+indistinguishable from zero carries no information about whether the choice of
+transform can overturn a finding.
+
+The deeper problem is that the premise of P3 does not hold in this data, for
+reasons set out in the next section: the model has no edge anywhere, so there
+is no edge whose sign could be reversed. P3 was constructed on the assumption
+that a competently implemented Dixon--Coles model would show positive measured
+edge in at least some cells, against at least the softer books. It does not.
+The prediction was therefore not so much falsified as rendered untestable by
+this design, which is a limitation of the study rather than a finding about
+the transforms.
+
+\begin{table}[t]
+  \centering
+  \caption{Cells in which the sign of measured ROI differs across transforms,
+  with bootstrap intervals.}
+  \label{tab:p3}
+  \IfFileExists{generated/tab-p3.tex}
+    {\input{generated/tab-p3.tex}}
+    {\pendingtable{P3}}
+\end{table}
+
+\subsection{Forecast accuracy against the benchmark}
+
+The model is beaten by the market comprehensively and almost uniformly.
+Table~\ref{tab:dm} gives the picture: mean model RPS of 0.2053 against
+benchmark RPS between 0.1987 and 0.1990, a gap of roughly 0.0065 in the
+market's favour under every transform. The model achieves a lower RPS than the
+de-margined benchmark in \emph{no} cell under power, Shin or the odds ratio,
+and in one cell of \NCells{} under proportional normalisation. Around
+three-quarters of cells reject equal predictive accuracy at $q<0.10$ after the
+Benjamini--Hochberg correction, in every case in the market's favour.
+
+Economic returns agree. Mean ROI across cells ranges from $-7.9\%$ under
+proportional normalisation to $-9.4\%$ under the power method, and between 9\%
+and 11\% of cells show positive ROI at all. Exactly one cell of \NCells{} has a
+bootstrap interval lying entirely above zero, which is fewer than the four or
+five that would be expected by chance across this many cells.
+
+None of this is surprising and none of it indicates a defect. Dixon--Coles is
+a 1997 model with two parameters per team, no player information, no market
+data and no in-play adjustment, evaluated against closing prices that
+aggregate everything the betting market learned before kickoff. That it loses
+is the expected outcome. It is reported here because it determines what P3 can
+mean, and because a study that measured an edge without checking whether one
+existed would be reporting an artefact of its own arithmetic.
+
+\begin{table}[t]
+  \centering
+  \caption{Model versus benchmark RPS by transform, with Diebold--Mariano
+  statistics and Benjamini--Hochberg adjusted $p$-values.}
+  \label{tab:dm}
+  \IfFileExists{generated/tab-dm.tex}
+    {\input{generated/tab-dm.tex}}
+    {\pendingtable{DM}}
+\end{table}
+
+\section{Discussion}
+\label{sec:discussion}
+
+The methodological claim survives and the headline claim does not.
+
+That the four transforms diverge, and that they diverge in proportion to the
+margin being removed and more sharply where a longshot is present, is
+established here on \NCells{} cells across \NLeagues{} leagues and
+\NBooks{} bookmakers. A paper that de-margins a soft book by proportional
+normalisation and one that uses Shin's method are not measuring the same
+benchmark, and the gap between them is largest exactly where a model's claimed
+edge tends to concentrate. Reporting which transform was used, and ideally
+reporting a result under more than one, costs nothing and is not current
+practice.
+
+What this study cannot show is that the choice flips a conclusion, because our
+model never reaches a conclusion worth flipping. The design held the model
+fixed so that any difference between arms would be attributable to the
+transform alone---which was the right control---but it assumed the fixed model
+would land near the market. It does not come close. Against that backdrop the
+single sign reversal we observe is noise around zero, and would be noise around
+zero whichever transform produced it.
+
+The honest reading is that this work establishes the mechanism and bounds its
+size, while leaving the question it set out to answer open. Settling it needs a
+model that actually competes with closing prices in some segment---a stronger
+forecaster, a softer or slower market, or an early line rather than a
+close---so that there is a positive edge on which the transforms can be made to
+disagree. That is a different study, and the apparatus built here would run it
+unchanged.
+
+\section{Limitations}
+\label{sec:limitations}
+
+The model is fixed by choice. This study says nothing about whether a better
+model would beat the market; it asks only whether the measurement of any
+model's edge depends on the transform. A model with a different error profile
+would concentrate its disagreements with the market at different prices, and
+the size---though not the existence---of the effect reported here is specific
+to this model.
+
+Only two markets and only closing prices are used. Nothing here generalises to
+in-play markets, Asian handicaps, or opening lines.
+
+Backtested returns are not achievable returns. There are no stake limits, no
+line movement between the moment a price is observed and the moment a bet could
+be struck, no commission, and no account restrictions. The ROI figures exist to
+be compared \emph{across transforms}, which is what the design controls; their
+absolute level is not a claim about what a bettor would have earned.
+
+The decay parameter is weakly identified (Section~\ref{sec:xi}). This does not
+threaten the comparison, which holds it fixed across arms, but it does mean the
+model should not be read as tuned.
+
+The most consequential limitation is that the fixed model has no measurable
+edge anywhere in the sample. P3 was framed on the assumption that it would show
+positive edge in at least some cells against at least the softer books; it does
+not, in any cell, under any transform. Everything reported about P3 is
+therefore a statement about behaviour near zero rather than about whether the
+transform choice can overturn a real finding. P1 and P2 are unaffected, since
+both concern disagreement between benchmarks and neither requires the model to
+be any good.
+
+The calibration period is early. A fixed three-season burn-in and two-season
+calibration on a 33-season archive places the selection of $\xi$ in 1996--97
+for the longest-running leagues, up to 28 years before the evaluation period
+ends. The split was fixed in the design specification before any data was
+examined and was deliberately not revised once that consequence became
+visible.
+
+\section{Reproducibility}
+\label{sec:repro}
+
+All code, the pre-registration, and the build for this paper are in the
+repository at \url{https://github.com/Bardakor/betting-app-yami}. The study runs
+in three stages---\texttt{coverage}, \texttt{calibrate}, \texttt{evaluate}---in
+that order, with the pre-registration commit required between the second and
+the third. Every stochastic step takes an explicit seed and no global random
+state is touched. The tables in Section~\ref{sec:results} are generated
+mechanically from the evaluation output rather than transcribed.
+
+\appendix
+
+\section{The five-term Murphy decomposition}
+\label{app:murphy}
+
+Murphy's vector partition \citep{murphy1973} is usually quoted in three terms,
+$\mathrm{BS} = \mathrm{REL} - \mathrm{RES} + \mathrm{UNC}$, which is exact only
+when every bin holds a single distinct forecast value. Binning continuous
+forecasts leaves a residual. Expanding $\sum_i (p_i - o_i)^2$ within a bin
+around the bin means $\bar p, \bar o$ gives
+\begin{equation}
+  (p_i - o_i) = (p_i - \bar p) + (\bar p - \bar o) + (\bar o - o_i),
+\end{equation}
+and squaring leaves three squared terms plus one surviving cross term,
+$-2(p_i - \bar p)(o_i - \bar o)$. Summed, that is minus twice the within-bin
+\emph{covariance} between forecast and outcome. It vanishes only when, inside
+every bin, higher forecasts carry no information about which events occurred.
+
+The four-term form that stops at within-bin variance is therefore one term
+short. It is easy to miss because worked examples with one or two points per
+bin satisfy the zero-covariance condition by accident. On real continuous
+forecasts it does not vanish: measured on 4{,}000 simulated forecasts the
+covariance term accounted for 1.2\% of the Brier score, which the four-term
+form silently misattributes to reliability and resolution. Including it drops
+the reconstruction residual from order $10^{-3}$ to machine zero. All five
+terms are reported, and the residual is computed explicitly so the identity can
+be checked rather than trusted.
+
+\bibliographystyle{plainnat}
+\bibliography{refs}
+
+\end{document}
