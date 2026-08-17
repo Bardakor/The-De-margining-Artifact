@@ -32,7 +32,30 @@ from footy.eval.inference import diebold_mariano, stationary_bootstrap
 from footy.eval.scoring import ranked_probability_score
 from footy.market.demargin import METHODS, demargin
 
+MATCH_KEYS = ["league", "season", "kickoff", "home", "away"]
+
 MARKET_OUTCOMES: dict[str, tuple[str, ...]] = {"1X2": ("H", "D", "A"), "OU25": ("O", "U")}
+
+
+def normalise_keys(frame: pd.DataFrame) -> pd.DataFrame:
+    """Coerce the match key to canonical dtypes before any merge.
+
+    Forecasts reach this module through a CSV round trip and odds do not, so
+    the two sides arrive with whatever dtypes pandas happened to infer. Three
+    separate runs died on that: season read back as int64, then kickoff as a
+    string against datetime64, and `parse_dates` silently doing nothing once an
+    explicit `dtype` map was also passed.
+
+    Rather than fix each call site and hope, the merge keys are normalised here
+    — at the one place that actually depends on them agreeing.
+    """
+    out = frame.copy()
+    out["kickoff"] = pd.to_datetime(out["kickoff"], errors="coerce")
+    for column in ("league", "season", "home", "away"):
+        out[column] = out[column].astype(str).str.strip()
+    return out
+
+
 MODEL_COLUMNS: dict[str, tuple[str, ...]] = {
     "1X2": ("p_home", "p_draw", "p_away"),
     "OU25": ("p_over25", "p_under25"),
@@ -151,8 +174,9 @@ def evaluate_cell(
     if wide.empty:
         return None
 
-    keys = ["league", "season", "kickoff", "home", "away"]
-    merged = forecasts.merge(wide, on=keys, how="inner", suffixes=("", "_odds"))
+    merged = normalise_keys(forecasts).merge(
+        normalise_keys(wide), on=MATCH_KEYS, how="inner", suffixes=("", "_odds")
+    )
     if merged.empty:
         return None
 

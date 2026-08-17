@@ -247,3 +247,31 @@ def test_the_cell_evaluation_is_deterministic() -> None:
     second = evaluate_cell(forecast_frame(), odds_frame(), league="E0", book="Bet365", market="1X2")
     assert first is not None and second is not None
     assert first.per_method.equals(second.per_method)
+
+
+def test_merge_survives_a_csv_round_trip(tmp_path: Path) -> None:
+    """Regression, three times over. Forecasts reach evaluate_cell through a
+    CSV round trip while odds do not, so the two sides arrive with whatever
+    dtypes pandas inferred. Season came back as int64 once, kickoff as a string
+    against datetime64 another time, and parse_dates silently did nothing once
+    an explicit dtype map was passed alongside it. Each killed a full run."""
+    forecasts = forecast_frame()
+    path = tmp_path / "E0.csv"
+    forecasts.to_csv(path, index=False)
+
+    # Deliberately the worst case: no parse_dates, no dtype hints at all.
+    reloaded = pd.read_csv(path)
+    assert not pd.api.types.is_datetime64_any_dtype(reloaded["kickoff"])
+
+    cell = evaluate_cell(reloaded, odds_frame(), league="E0", book="Bet365", market="1X2")
+    assert cell is not None
+    assert cell.n_matches == 60
+
+
+def test_merge_is_unaffected_by_key_whitespace() -> None:
+    forecasts = forecast_frame()
+    forecasts["home"] = forecasts["home"] + " "
+    odds = odds_frame()
+    cell = evaluate_cell(forecasts, odds, league="E0", book="Bet365", market="1X2")
+    assert cell is not None
+    assert cell.n_matches == 60
