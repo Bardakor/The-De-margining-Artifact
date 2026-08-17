@@ -455,3 +455,87 @@ def test_non_convergence_raises_under_strict() -> None:
     except ConvergenceError:  # pragma: no cover - acceptable either way
         return
     assert result.n_matches == 1
+
+
+# --------------------------------------------------------------------------
+# Identifiability: teams the data cannot determine must leave the model
+# --------------------------------------------------------------------------
+
+
+def test_teams_below_the_weight_floor_are_excluded() -> None:
+    """Regression from the real study. A long archive accumulates teams that
+    stopped playing years ago; under decay they carry almost no weight, their
+    attack and defence parameters are unidentifiable, and L-BFGS-B walks those
+    flat directions until it exhausts its iteration budget. Every E0 fit from
+    1998 onward failed this way and the evaluation priced 7 fixtures out of
+    760 before it was found."""
+    from footy.fit.mle import identifiable_teams
+
+    matches = pd.DataFrame(
+        {
+            "home": ["A", "B", "A", "Ghost"],
+            "away": ["B", "A", "B", "A"],
+            "home_goals": [1, 2, 0, 1],
+            "away_goals": [0, 1, 0, 1],
+        }
+    )
+    weights = np.array([1.0, 1.0, 1.0, 0.001])
+    assert identifiable_teams(matches, weights, minimum=1.0) == {"A", "B"}
+
+
+def test_a_long_dead_team_does_not_break_the_fit() -> None:
+    """The end-to-end property: a side with negligible weight must not stop the
+    remaining teams from being fit."""
+    rng = np.random.default_rng(21)
+    rows = []
+    start = pd.Timestamp("2015-01-01")
+    for i in range(600):
+        h, a = f"T{i % 8:02d}", f"T{(i + 3) % 8:02d}"
+        if h == a:
+            continue
+        rows.append(
+            (start + pd.Timedelta(days=i), h, a, int(rng.poisson(1.4)), int(rng.poisson(1.1)))
+        )
+    # A team that played twice at the very beginning and never again. At a
+    # 400-day half-life, 700 days on, each of those carries 0.297 — so its
+    # total of 0.59 sits below the one-unit floor while the active sides carry
+    # roughly 78 each.
+    for i in range(2):
+        rows.append((start + pd.Timedelta(days=i), "Ghost", "T01", 1, 1))
+
+    matches = pd.DataFrame(rows, columns=["kickoff", "home", "away", "home_goals", "away_goals"])
+    as_of = start + pd.Timedelta(days=700)
+    fitted = fit(matches, xi=half_life_to_xi(400.0), as_of=as_of, strict=True)
+
+    assert fitted.converged
+    assert "Ghost" not in fitted.teams
+    assert len(fitted.teams) >= 7
+
+
+def test_excluding_unidentifiable_teams_barely_moves_the_likelihood() -> None:
+    """The exclusion must be numerically negligible, or it is a modelling
+    change rather than a conditioning fix."""
+    rng = np.random.default_rng(22)
+    rows = []
+    start = pd.Timestamp("2015-01-01")
+    for i in range(400):
+        h, a = f"T{i % 6:02d}", f"T{(i + 2) % 6:02d}"
+        if h == a:
+            continue
+        rows.append(
+            (start + pd.Timedelta(days=i), h, a, int(rng.poisson(1.4)), int(rng.poisson(1.1)))
+        )
+    matches = pd.DataFrame(rows, columns=["kickoff", "home", "away", "home_goals", "away_goals"])
+    as_of = start + pd.Timedelta(days=500)
+
+    strictly = fit(matches, xi=half_life_to_xi(400.0), as_of=as_of, min_team_weight=1.0)
+    permissive = fit(matches, xi=half_life_to_xi(400.0), as_of=as_of, min_team_weight=0.0)
+    # Every team here is active, so the floor should change nothing at all.
+    assert strictly.teams == permissive.teams
+    assert strictly.log_likelihood == pytest.approx(permissive.log_likelihood, rel=1e-9)
+
+
+def test_a_window_with_no_identifiable_teams_is_rejected() -> None:
+    matches = pd.DataFrame({"home": ["A"], "away": ["B"], "home_goals": [1], "away_goals": [0]})
+    with pytest.raises(ValueError, match="too thin"):
+        encode(matches, np.array([0.001]), min_team_weight=1.0)

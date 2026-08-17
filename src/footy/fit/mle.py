@@ -76,13 +76,50 @@ class FittedParameters:
         return pd.DataFrame({"team": self.teams, "attack": self.attack, "defence": self.defence})
 
 
+MIN_TEAM_WEIGHT = 1.0
+"""Total decayed weight a team needs before its parameters are identifiable.
+
+One unit is the weight of a single match played today. A side whose entire
+history sums to less than that cannot determine an attack and a defence
+parameter from it — the likelihood is flat in those directions, and L-BFGS-B
+walks the flat directions until it exhausts its iteration budget.
+
+This is not a shortcut. On the full archive every E0 fit from 1998 onward hit
+the iteration limit and was rejected, because 33 seasons accumulate around 51
+distinct teams while only about 20 are active in any season. At a 400-day
+half-life a side that last played a decade ago carries roughly 0.002 per
+match, so dropping it changes the likelihood by less than a thousandth of one
+match while removing two parameters the data cannot pin down.
+"""
+
+
+def identifiable_teams(
+    matches: pd.DataFrame, weights: FloatArray, minimum: float = MIN_TEAM_WEIGHT
+) -> set[str]:
+    """Teams carrying enough decayed weight for their parameters to be determined."""
+    totals: dict[str, float] = {}
+    for home, away, weight in zip(
+        matches["home"].to_numpy(), matches["away"].to_numpy(), weights, strict=True
+    ):
+        totals[home] = totals.get(home, 0.0) + float(weight)
+        totals[away] = totals.get(away, 0.0) + float(weight)
+    return {team for team, total in totals.items() if total >= minimum}
+
+
 def encode(
-    matches: pd.DataFrame, weights: FloatArray | None = None
+    matches: pd.DataFrame,
+    weights: FloatArray | None = None,
+    *,
+    min_team_weight: float = MIN_TEAM_WEIGHT,
 ) -> tuple[MatchData, tuple[str, ...]]:
     """Encode a match frame into integer indices, returning the team ordering.
 
     Teams are sorted so the encoding — and therefore the fit — does not depend
     on the order matches happened to arrive in.
+
+    Teams below ``min_team_weight`` are dropped along with their matches. See
+    :data:`MIN_TEAM_WEIGHT` — their parameters are unidentifiable and their
+    matches contribute negligibly to the likelihood.
     """
     missing = [c for c in REQUIRED_COLUMNS if c not in matches.columns]
     if missing:
@@ -90,10 +127,26 @@ def encode(
     if matches.empty:
         raise ValueError("no matches to fit")
 
-    teams = tuple(sorted(set(matches["home"]) | set(matches["away"])))
-    lookup = {team: i for i, team in enumerate(teams)}
     if weights is None:
         weights = np.ones(len(matches), dtype=np.float64)
+    weights = np.asarray(weights, dtype=np.float64)
+
+    keep_teams = identifiable_teams(matches, weights, min_team_weight)
+    if len(keep_teams) < 2:
+        raise ValueError(
+            f"only {len(keep_teams)} team(s) carry at least {min_team_weight} weight; "
+            "the fit window is too thin to identify a model"
+        )
+    usable = (
+        matches["home"].isin(keep_teams).to_numpy() & matches["away"].isin(keep_teams).to_numpy()
+    )
+    matches = matches.loc[usable]
+    weights = weights[usable]
+    if matches.empty:
+        raise ValueError("no matches remain between identifiable teams")
+
+    teams = tuple(sorted(set(matches["home"]) | set(matches["away"])))
+    lookup = {team: i for i, team in enumerate(teams)}
 
     data = MatchData(
         home_idx=matches["home"].map(lookup).to_numpy(dtype=np.int_),
@@ -178,6 +231,7 @@ def fit(
     as_of: pd.Timestamp | None = None,
     rho_box: tuple[float, float] = DEFAULT_RHO_BOX,
     strict: bool = True,
+    min_team_weight: float = MIN_TEAM_WEIGHT,
 ) -> FittedParameters:
     """Fit Dixon-Coles to a match frame.
 
@@ -199,7 +253,7 @@ def fit(
     else:
         weights = None
 
-    data, teams = encode(matches, weights)
+    data, teams = encode(matches, weights, min_team_weight=min_team_weight)
     return fit_encoded(data, teams, rho_box=rho_box, strict=strict)
 
 
