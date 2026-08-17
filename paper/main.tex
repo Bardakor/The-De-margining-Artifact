@@ -23,6 +23,9 @@
 
 \sisetup{detect-weight=true}
 
+% Sections and subsections only, so the contents stay on one page.
+\setcounter{tocdepth}{2}
+
 \newcommand{\TBD}{\textcolor{red}{[pending]}}
 \newcommand{\pendingtable}[1]{%
   \begin{center}\textcolor{red}{[table #1 pending: run \texttt{scripts/study.py evaluate},
@@ -59,8 +62,17 @@ survive the choice of margin-removal transform?}
 \date{\today}
 
 \begin{document}
-\maketitle
 
+% Title alone on the opening page.
+\maketitle
+\thispagestyle{empty}
+\clearpage
+
+% Contents on their own page.
+\tableofcontents
+\clearpage
+
+% Abstract on its own page.
 \begin{abstract}
 Empirical football-forecasting studies routinely claim an edge over the
 bookmaker. Substantiating such a claim requires converting offered odds into a
@@ -91,6 +103,8 @@ closing line in effectively every cell. The choice of transform demonstrably
 changes what is measured; whether it can overturn a published conclusion
 remains open, and this design cannot settle it.
 \end{abstract}
+
+\clearpage
 
 \section{Introduction}
 \label{sec:intro}
@@ -652,6 +666,8 @@ the third. Every stochastic step takes an explicit seed and no global random
 state is touched. The tables in Section~\ref{sec:results} are generated
 mechanically from the evaluation output rather than transcribed.
 
+\clearpage
+
 \appendix
 
 \section{The five-term Murphy decomposition}
@@ -679,6 +695,8 @@ form silently misattributes to reliability and resolution. Including it drops
 the reconstruction residual from order $10^{-3}$ to machine zero. All five
 terms are reported, and the residual is computed explicitly so the identity can
 be checked rather than trusted.
+
+\clearpage
 
 \bibliographystyle{plainnat}
 \bibliography{refs}
