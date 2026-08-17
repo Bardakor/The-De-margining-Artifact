@@ -275,3 +275,37 @@ def test_merge_is_unaffected_by_key_whitespace() -> None:
     cell = evaluate_cell(forecasts, odds, league="E0", book="Bet365", market="1X2")
     assert cell is not None
     assert cell.n_matches == 60
+
+
+def test_composite_books_are_excluded_from_the_study() -> None:
+    """ "Market maximum" is the best price across every bookmaker, so 39.3% of
+    its closing books sum below 1 — it is an arbitrage by construction that
+    often. Keeping only its positive-margin rows would bias exactly the
+    quantity P1 measures, so the aggregate is excluded outright."""
+    odds = odds_frame(book="Market maximum")
+    assert (
+        evaluate_cell(forecast_frame(), odds, league="E0", book="Market maximum", market="1X2")
+        is None
+    )
+
+
+def test_books_with_no_margin_are_dropped_and_counted() -> None:
+    """A book summing to 1 or less has nothing to de-margin and every transform
+    is undefined on it. Dropping is right; dropping silently is not."""
+    odds = odds_frame(n=20)
+    # Turn three fixtures into arbitrages by lengthening every price.
+    arb = odds["home"].isin({"H0", "H1", "H2"})
+    odds.loc[arb, "decimal"] = odds.loc[arb, "decimal"] * 1.25
+
+    cell = evaluate_cell(forecast_frame(n=20), odds, league="E0", book="Bet365", market="1X2")
+    assert cell is not None
+    assert cell.n_arbitrage == 3
+    assert cell.n_matches == 17
+
+
+def test_a_cell_that_is_entirely_arbitrage_returns_none() -> None:
+    odds = odds_frame(n=10)
+    odds["decimal"] = odds["decimal"] * 1.3
+    assert (
+        evaluate_cell(forecast_frame(n=10), odds, league="E0", book="Bet365", market="1X2") is None
+    )

@@ -34,6 +34,23 @@ from footy.market.demargin import METHODS, demargin
 
 MATCH_KEYS = ["league", "season", "kickoff", "home", "away"]
 
+COMPOSITE_BOOKS: frozenset[str] = frozenset(
+    {"Market maximum", "Market average", "Betbrain maximum", "Betbrain average"}
+)
+"""Aggregates across bookmakers, excluded from the study.
+
+These are not books anyone offers. "Market maximum" is the best price
+available anywhere, and 39.3% of its closing books sum below 1 — it is an
+arbitrage by construction that often enough. Dropping those rows would retain
+only the cases where best-of-market still carried positive margin, which
+biases precisely the quantity P1 measures. The averages are excluded with them
+for consistency: the study is about a bookmaker's margin, and a constructed
+aggregate does not have one.
+
+Real bookmakers sit at or below 0.06% sub-unit books, where dropping the
+individual fixtures is negligible and unbiased.
+"""
+
 MARKET_OUTCOMES: dict[str, tuple[str, ...]] = {"1X2": ("H", "D", "A"), "OU25": ("O", "U")}
 
 
@@ -146,6 +163,7 @@ class CellResult:
     n_matches: int
     model_rps: float
     per_method: pd.DataFrame
+    n_arbitrage: int = 0
 
     @property
     def roi_spread(self) -> float:
@@ -174,6 +192,9 @@ def evaluate_cell(
     if wide.empty:
         return None
 
+    if book in COMPOSITE_BOOKS:
+        return None
+
     merged = normalise_keys(forecasts).merge(
         normalise_keys(wide), on=MATCH_KEYS, how="inner", suffixes=("", "_odds")
     )
@@ -181,6 +202,17 @@ def evaluate_cell(
         return None
 
     outcomes = MARKET_OUTCOMES[market]
+    # A book summing to 1 or less carries no margin to remove — it is an
+    # arbitrage, and every transform is undefined on it. Rare for a real
+    # bookmaker (at most 0.06% of closing books); the count is carried on the
+    # result so the loss is reported rather than silent.
+    offered_all = merged[list(outcomes)].to_numpy(dtype=float)
+    has_margin = (1.0 / offered_all).sum(axis=1) > 1.0
+    n_arbitrage = int((~has_margin).sum())
+    merged = merged.loc[has_margin].reset_index(drop=True)
+    if merged.empty:
+        return None
+
     model = merged[list(MODEL_COLUMNS[market])].to_numpy(dtype=float)
     offered = merged[list(outcomes)].to_numpy(dtype=float)
     if market == "1X2":
@@ -236,6 +268,7 @@ def evaluate_cell(
         market=market,
         n_matches=len(merged),
         model_rps=model_rps,
+        n_arbitrage=n_arbitrage,
         per_method=pd.DataFrame(records),
     )
 

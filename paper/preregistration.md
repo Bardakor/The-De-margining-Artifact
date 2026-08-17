@@ -140,6 +140,18 @@ one tolerance, so none is advantaged by a sloppier solver.
 **Markets.** 1X2 and Over/Under 2.5, closing odds only. Opening odds are never
 used as a benchmark.
 
+**Books.** Real bookmakers only. The archive's constructed aggregates — market
+maximum, market average, and the Betbrain equivalents — are excluded, because
+they are not books anyone offers and do not have a margin in the sense P1 is
+about. Market maximum is the best price available anywhere, and 39.3% of its
+closing books sum below 1: it is an arbitrage by construction that often.
+Retaining only its positive-margin rows would bias precisely the quantity P1
+measures. Real bookmakers carry at most 0.06% sub-unit books.
+
+**Arbitrage fixtures.** A book summing to 1 or less has no margin to remove and
+every transform is undefined on it. Those fixtures are dropped and the count is
+reported per cell.
+
 **Inference.** Diebold–Mariano with Newey–West HAC standard errors; stationary
 block bootstrap (seeded) for ROI intervals; Benjamini–Hochberg at q = 0.10
 across the (league × book × market × transform-pair) family.
@@ -191,6 +203,13 @@ the likelihood unchanged when every team is active.
 rather than 52%, with near-constant coverage across candidates (10,573 to
 10,933 versus 7,804 to 11,152). The agreement is reassuring but incidental —
 the procedure, not the answer, is what was broken.
+
+**Defect 3 — the transforms are undefined on a book that carries no margin.**
+Sub-unit closing books exist in the archive. For real bookmakers they are
+vanishingly rare, but the constructed market-maximum aggregate is sub-unit
+39.3% of the time, being the best price across every book. The handling is
+recorded under "Books" and "Arbitrage fixtures" in §5. This too was settled
+before any result existed.
 
 **Why this is a revision and not a retrofit.** A pre-registration that changes
 silently is worthless. One that documents its own correction, keeps the
