@@ -183,6 +183,10 @@ def _escape(text: str) -> str:
     return text
 
 
+def _macro_block(macros: dict[str, str]) -> str:
+    return "".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in sorted(macros.items()))
+
+
 def write(name: str, body: str) -> None:
     GENERATED.mkdir(parents=True, exist_ok=True)
     (GENERATED / name).write_text(body)
@@ -192,6 +196,39 @@ def write(name: str, body: str) -> None:
 # --------------------------------------------------------------------------
 # the tables
 # --------------------------------------------------------------------------
+
+
+def table_calibration() -> tuple[str, dict[str, str]]:
+    """The xi sweep, written out of results/calibration.json.
+
+    This table was hand-typed in main.tex and went stale the moment the
+    calibration was re-run — which happened twice. Anything that can go stale
+    should be generated, so it is generated.
+    """
+    import json
+
+    path = RESULTS / "calibration.json"
+    if not path.exists():
+        return "", {}
+    payload = json.loads(path.read_text())
+    frame = pd.DataFrame(payload["candidates"]).sort_values("half_life_days")
+    body = tabular(
+        frame[["half_life_days", "xi", "mean_rps_paired"]],
+        "S[table-format=5.0]S[table-format=1.6]S[table-format=1.6]",
+        ["{Half-life (days)}", "{$\\xi$}", "{Paired mean RPS}"],
+    )
+    best = frame.loc[frame["mean_rps_paired"].idxmin()]
+    spread = float(frame["mean_rps_paired"].max() - frame["mean_rps_paired"].min())
+    macros = {
+        "xifrozen": f"{float(best['xi']):.16f}",
+        "xihalflife": f"{float(best['half_life_days']):.0f}",
+        "xirpsbest": f"{float(best['mean_rps_paired']):.6f}",
+        "xirpsspread": f"{spread:.6f}",
+        "xipairedn": f"{int(payload['n_paired']):,}",
+        "xirpsnodecay": f"{float(frame['mean_rps_paired'].iloc[-1]):.6f}",
+        "xirpsfastest": f"{float(frame['mean_rps_paired'].iloc[0]):.6f}",
+    }
+    return body, macros
 
 
 def table_coverage(cells: pd.DataFrame) -> str:
@@ -386,6 +423,17 @@ def summary_macros(cells: pd.DataFrame, cell_frame: pd.DataFrame, extra: dict[st
 
 def main() -> None:
     refresh = "--refresh" in sys.argv[1:]
+
+    # The calibration table depends only on the xi sweep, not on the
+    # evaluation, so it is written first and independently. That way the
+    # paper's method section is never stale even before results exist.
+    calib_body, calib_macros = table_calibration()
+    if calib_body:
+        write("tab-calibration.tex", calib_body)
+        write("calibration-macros.tex", _macro_block(calib_macros))
+    else:
+        print("results/calibration.json absent — calibration table left pending")
+
     if not CELLS.exists():
         raise SystemExit(
             f"{CELLS} does not exist. Run `python scripts/study.py evaluate` first; "

@@ -42,9 +42,15 @@
 \providecommand{\SpreadOverUnder}{\TBD}
 \providecommand{\NSignFlips}{\TBD}
 \providecommand{\PctSignFlips}{\TBD}
+\providecommand{\xifrozen}{\TBD}
+\providecommand{\xihalflife}{\TBD}
+\providecommand{\xirpsbest}{\TBD}
+\providecommand{\xirpsspread}{\TBD}
+\providecommand{\xipairedn}{\TBD}
+\providecommand{\xirpsnodecay}{\TBD}
+\providecommand{\xirpsfastest}{\TBD}
 \IfFileExists{generated/summary.tex}{\input{generated/summary.tex}}{}
-
-\newcommand{\xifrozen}{0.0017328679513998633}
+\IfFileExists{generated/calibration-macros.tex}{\input{generated/calibration-macros.tex}}{}
 
 \title{The De-margining Artifact:\\
 does a forecasting model's measured edge over the bookmaker\\
@@ -297,31 +303,18 @@ compared means over match sets differing by 43\% in size (7{,}804 to 11{,}152
 forecasts), which is not a valid comparison: an arm that happens to drop harder
 fixtures scores better for reasons unrelated to forecast quality. That sweep
 placed its minimum at 700 days, on the edge of its grid. Scoring every
-candidate on the 5{,}683 fixtures that \emph{all} candidates forecast moved the
-optimum to 400 days and made it interior, with 250 and 700 days worse on either
-side (Table~\ref{tab:xi}).
+candidate on the \xipairedn{} fixtures that \emph{all} candidates forecast
+moved the optimum to \xihalflife{} days and made it interior, with the
+neighbouring candidates worse on either side (Table~\ref{tab:xi}).
 
 \begin{table}[t]
   \centering
   \caption{Paired selection of the decay rate on the calibration period.
-  Every candidate is scored on the same 5{,}683 fixtures.}
+  Every candidate is scored on the same \xipairedn{} fixtures.}
   \label{tab:xi}
-  \begin{tabular}{S[table-format=5.0] S[table-format=1.6] S[table-format=1.6]}
-    \toprule
-    {Half-life (days)} & {$\xi$} & {Paired mean RPS} \\
-    \midrule
-    30    & 0.023105 & 0.219786 \\
-    60    & 0.011552 & 0.210578 \\
-    90    & 0.007702 & 0.207535 \\
-    150   & 0.004621 & 0.205260 \\
-    250   & 0.002773 & 0.203972 \\
-    \bfseries 400 & \bfseries 0.001733 & \bfseries 0.203460 \\
-    700   & 0.000990 & 0.203533 \\
-    1200  & 0.000578 & 0.203996 \\
-    2000  & 0.000347 & 0.204491 \\
-    40000 & 0.000017 & 0.205561 \\
-    \bottomrule
-  \end{tabular}
+  \IfFileExists{generated/tab-calibration.tex}
+    {\input{generated/tab-calibration.tex}}
+    {\pendingtable{3}}
 \end{table}
 
 Stated plainly: $\xi$ is weakly identified. Half-lives of 400 and 700 days
@@ -329,8 +322,9 @@ differ by $7.3 \times 10^{-5}$ in paired RPS, and anything between roughly 250
 and 1200 days scores within $6 \times 10^{-4}$ of the optimum. We do not
 present 400 days as a precisely determined quantity. What the curve does
 establish is that the extremes are wrong---a 30-day half-life is far worse
-(0.2198), and no decay at all is worse than moderate decay (0.2056 against
-0.2035)---so exponential decay earns its place without its exact rate
+(\xirpsfastest{}), and no decay at all is worse than moderate decay
+(\xirpsnodecay{} against \xirpsbest{})---so exponential decay earns its place
+without its exact rate
 mattering much. Because one model is held fixed across all four transforms, a
 weakly identified $\xi$ shifts every arm together and cannot generate a
 difference between them.
