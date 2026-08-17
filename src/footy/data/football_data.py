@@ -49,7 +49,7 @@ LEAGUES: tuple[str, ...] = (
 )
 
 ARCHIVE_ROOT = "https://www.football-data.co.uk/mmz4281"
-USER_AGENT = "footy-research/0.1 (+https://github.com/Bardakor/betting-app-yami)"
+USER_AGENT = "footy-research/0.1 (+https://github.com/Bardakor/The-De-margining-Artifact)"
 _UNNAMED = re.compile(r"^Unnamed:\s*\d+$")
 
 

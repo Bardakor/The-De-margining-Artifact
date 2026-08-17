@@ -1,6 +1,6 @@
 # The De-margining Artifact
 
-[![verify](https://github.com/Bardakor/betting-app-yami/actions/workflows/verify.yml/badge.svg)](https://github.com/Bardakor/betting-app-yami/actions/workflows/verify.yml)
+[![verify](https://github.com/Bardakor/The-De-margining-Artifact/actions/workflows/verify.yml/badge.svg)](https://github.com/Bardakor/The-De-margining-Artifact/actions/workflows/verify.yml)
 
 **[Read the paper (PDF)](The-Demargining-Artifact.pdf)** — compiled from [`paper/main.tex`](paper/main.tex). `make paper` rebuilds it and copies it to the repository root.
 
