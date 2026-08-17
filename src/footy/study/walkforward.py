@@ -25,6 +25,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from footy.core.dixon_coles import rho_bounds
 from footy.core.markets import match_odds, totals
 from footy.core.matrix import scoreline_matrix
 from footy.fit.mle import ConvergenceError, FittedParameters, fit
@@ -174,19 +175,50 @@ def walk_forward(
     return pd.DataFrame(rows, columns=list(FORECAST_COLUMNS))
 
 
-def _forecast_row(params: FittedParameters, match: Any, n_fit: int) -> dict[str, object] | None:
-    """One forecast, or None when a team was absent from the fit window.
+MAX_EXPECTED_GOALS = 6.0
+"""Above this a fitted rate is degenerate, not a strong team.
 
-    A promoted side has no fitted strength. Predicting it from a league prior
-    is a modelling decision this study does not need — the transform
-    comparison holds the model fixed — so those fixtures are dropped and the
-    loss is visible in the coverage numbers.
+The highest per-side expected goals in senior league football sits near 4. A
+fit reporting 8.8 has produced an unidentified parameter for a side with too
+little effective weight in the decayed window to determine one, which happens
+at aggressive half-lives where a team has only two or three matches carrying
+any weight at all.
+"""
+
+MIN_EXPECTED_GOALS = 0.05
+
+
+def _forecast_row(params: FittedParameters, match: Any, n_fit: int) -> dict[str, object] | None:
+    """One forecast, or None when this fixture cannot be priced from this fit.
+
+    Three ways that happens, all recorded as a dropped fixture rather than a
+    fabricated price:
+
+    A team absent from the fit window has no fitted strength — a promoted side.
+    Predicting it from a league prior is a modelling decision this study does
+    not need, since the transform comparison holds the model fixed.
+
+    A degenerate rate (see :data:`MAX_EXPECTED_GOALS`) means the fit failed to
+    identify that team even though it converged.
+
+    An inadmissible rho for THIS fixture. Admissibility depends on the
+    fixture's own (lam, mu), so a rho valid for every match in the fit window
+    can still be invalid for a pairing that was not in it — the fit-time check
+    is structurally unable to catch that, and this is where it surfaces.
     """
     home = str(match.home)
     away = str(match.away)
     try:
         lam, mu = params.expected_goals(home, away)
     except KeyError:
+        return None
+
+    if not (MIN_EXPECTED_GOALS < lam < MAX_EXPECTED_GOALS):
+        return None
+    if not (MIN_EXPECTED_GOALS < mu < MAX_EXPECTED_GOALS):
+        return None
+    low, high = rho_bounds(lam, mu)
+    if not low <= params.rho <= high:
         return None
 
     matrix = scoreline_matrix(lam, mu, params.rho)

@@ -8,7 +8,7 @@ and is the standard way a backtest lies.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -243,8 +243,13 @@ def test_decay_changes_the_forecasts() -> None:
     decayed = walk_forward(
         matches, xi=half_life_to_xi(120.0), scored_seasons=scored, min_fit_matches=50
     )
-    assert len(flat) == len(decayed)
-    assert not np.allclose(flat["p_home"].to_numpy(), decayed["p_home"].to_numpy())
+    # Counts need not match: a decayed fit can leave a team with too little
+    # effective weight to identify, and those fixtures are dropped rather than
+    # priced. Compare on the fixtures both arms produced.
+    keys = ["kickoff", "home", "away"]
+    shared = flat.merge(decayed, on=keys, suffixes=("_flat", "_decayed"))
+    assert not shared.empty
+    assert not np.allclose(shared["p_home_flat"].to_numpy(), shared["p_home_decayed"].to_numpy())
 
 
 def test_missing_columns_are_reported() -> None:
@@ -316,3 +321,109 @@ def test_select_xi_never_scores_the_evaluation_period() -> None:
 def test_select_xi_requires_candidates() -> None:
     with pytest.raises(ValueError, match="at least one candidate"):
         select_xi(league(), calibration_seasons=("2223",), candidates=())
+
+
+# --------------------------------------------------------------------------
+# Degenerate fits must drop the fixture, never crash or fabricate a price
+# --------------------------------------------------------------------------
+
+
+def test_a_fixture_whose_rho_is_inadmissible_is_dropped_not_crashed() -> None:
+    """Regression from the real study run. Admissibility depends on the
+    fixture's own (lam, mu), so a rho valid for every match in the fit window
+    can still be invalid for a pairing that was not in it. The fit-time check
+    is structurally unable to catch that. Crashing there killed a 16-league
+    calibration sweep two hours in."""
+    from footy.core.dixon_coles import rho_bounds
+    from footy.fit.mle import FittedParameters
+    from footy.study.walkforward import _forecast_row
+
+    lam, mu = 8.77, 0.174
+    low, _ = rho_bounds(lam, mu)
+    params = FittedParameters(
+        teams=("A", "B"),
+        attack=np.array([lam, mu]),
+        defence=np.array([1.0, 1.0]),
+        home_advantage=1.0,
+        rho=low - 0.05,  # inadmissible for this fixture
+        log_likelihood=-1.0,
+        n_matches=10,
+        n_iterations=1,
+        converged=True,
+    )
+    match = pd.Series(
+        {
+            "league": "E0",
+            "season": "2324",
+            "kickoff": pd.Timestamp("2024-01-01"),
+            "home": "A",
+            "away": "B",
+            "home_goals": 1,
+            "away_goals": 0,
+        }
+    )
+    assert _forecast_row(params, match, n_fit=10) is None
+
+
+def test_a_degenerate_expected_goals_rate_is_dropped() -> None:
+    """A fit reporting 8.8 expected goals has failed to identify that team,
+    not found a very strong one. Pricing from it would be fabrication."""
+    from footy.fit.mle import FittedParameters
+    from footy.study.walkforward import MAX_EXPECTED_GOALS, _forecast_row
+
+    params = FittedParameters(
+        teams=("A", "B"),
+        attack=np.array([MAX_EXPECTED_GOALS + 2.0, 1.0]),
+        defence=np.array([1.0, 1.0]),
+        home_advantage=1.0,
+        rho=-0.05,
+        log_likelihood=-1.0,
+        n_matches=10,
+        n_iterations=1,
+        converged=True,
+    )
+    match = pd.Series(
+        {
+            "league": "E0",
+            "season": "2324",
+            "kickoff": pd.Timestamp("2024-01-01"),
+            "home": "A",
+            "away": "B",
+            "home_goals": 1,
+            "away_goals": 0,
+        }
+    )
+    assert _forecast_row(params, match, n_fit=10) is None
+
+
+def test_a_plausible_fit_still_produces_a_forecast() -> None:
+    """The complement: the guards must not reject ordinary fixtures."""
+    from footy.fit.mle import FittedParameters
+    from footy.study.walkforward import _forecast_row
+
+    params = FittedParameters(
+        teams=("A", "B"),
+        attack=np.array([1.4, 1.0]),
+        defence=np.array([1.0, 0.9]),
+        home_advantage=1.3,
+        rho=-0.05,
+        log_likelihood=-1.0,
+        n_matches=400,
+        n_iterations=12,
+        converged=True,
+    )
+    match = pd.Series(
+        {
+            "league": "E0",
+            "season": "2324",
+            "kickoff": pd.Timestamp("2024-01-01"),
+            "home": "A",
+            "away": "B",
+            "home_goals": 1,
+            "away_goals": 0,
+        }
+    )
+    row = _forecast_row(params, match, n_fit=400)
+    assert row is not None
+    total = sum(float(cast(float, row[k])) for k in ("p_home", "p_draw", "p_away"))
+    assert abs(total - 1.0) < 1e-9
