@@ -6,7 +6,7 @@ fixtures, which is what catches the boundary cases a fixed example misses.
 
 import numpy as np
 import pytest
-from hypothesis import given, settings
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
 from footy.core.dixon_coles import rho_bounds
@@ -107,6 +107,9 @@ def test_overround_hits_its_target_and_shortens_prices(
 @settings(max_examples=200, deadline=None)
 def test_shin_recovers_a_simplex(raw: list[float], margin: float) -> None:
     implied = np.array(raw) / sum(raw) * margin
+    # A real book never offers decimal odds at or below 1, so no single implied
+    # probability reaches 1. Generated books that breach this are not books.
+    assume(np.all(implied < 1.0))
     recovered, z = shin(implied)
     assert recovered.sum() == pytest.approx(1.0, abs=1e-9)
     assert np.all(recovered > 0.0)
@@ -118,5 +121,6 @@ def test_shin_recovers_a_simplex(raw: list[float], margin: float) -> None:
 def test_shin_approaches_the_identity_as_margin_vanishes(raw: list[float]) -> None:
     """Spec §4: all transforms must converge to p as B -> 1."""
     fair = np.array(raw) / sum(raw)
+    assume(np.all(fair * 1.0000001 < 1.0))
     recovered, _ = shin(fair * 1.0000001)
     assert recovered == pytest.approx(fair, abs=1e-5)
