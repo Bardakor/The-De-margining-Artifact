@@ -63,10 +63,22 @@ survive the choice of margin-removal transform?}
 
 \begin{document}
 
-% Title alone on the opening page.
-\maketitle
-\thispagestyle{empty}
-\clearpage
+% Title alone and vertically centred on the opening page. Written out rather
+% than \maketitle: the article class sets the title block at the top of the
+% page, and padding it with \vfill produces a stray page instead of centring it.
+\begin{titlepage}
+  \centering
+  \vspace*{\fill}
+  {\LARGE\bfseries The De-margining Artifact\par}
+  \vspace{1.2em}
+  {\large\itshape does a forecasting model's measured edge over the bookmaker\\
+   survive the choice of margin-removal transform?\par}
+  \vspace{3em}
+  {\large Liam Abourousse\par}
+  \vspace{0.8em}
+  {\large\today\par}
+  \vspace*{\fill}
+\end{titlepage}
 
 % Contents on their own page.
 \tableofcontents
