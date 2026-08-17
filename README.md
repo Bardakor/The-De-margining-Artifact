@@ -138,15 +138,19 @@ both are implemented and the choice stays explicit.
 
 **Murphy's decomposition** turns a score into a statement about *why*:
 
-$$BS = \underbrace{\text{REL}}_{\text{calibration}} - \underbrace{\text{RES}}_{\text{discrimination}} + \underbrace{\text{UNC}}_{\text{irreducible}} + \underbrace{\text{WBV}}_{\text{binning artefact}}$$
+$$BS = \underbrace{\text{REL}}_{\text{calibration}} - \underbrace{\text{RES}}_{\text{discrimination}} + \underbrace{\text{UNC}}_{\text{irreducible}} + \underbrace{\text{WBV}}_{\text{binning artefact}} - 2\,\underbrace{\text{COV}}_{\text{within-bin signal}}$$
 
-The classical three-way identity is exact only when each bin holds a single distinct
-forecast. Binning continuous forecasts leaves a residual equal to the within-bin variance,
+The classical three-term identity is exact only when each bin holds a single distinct
+forecast. Binning continuous forecasts leaves a residual, and that residual has **two**
+parts, not one. Expanding $(p_i-o_i)^2$ about the bin means leaves three squared terms plus
+one surviving cross term:
 
-$$\text{WBV} = \frac{1}{N}\sum_k \sum_{i \in k} (p_i - \bar{p}_k)^2$$
+$$\text{WBV} = \frac{1}{N}\sum_k \sum_{i \in k} (p_i - \bar{p}_k)^2, \qquad \text{COV} = \frac{1}{N}\sum_k \sum_{i \in k} (p_i - \bar{p}_k)(o_i - \bar{o}_k)$$
 
-so all four terms are reported, the exact identity is tested to $10^{-12}$, and a separate
-test asserts the residual **is** the WBV — so nobody can quietly simplify it back to three.
+`docs/model.md` §11.1 identifies WBV and stops there. That is one term short: COV vanishes
+only when, inside every bin, higher forecasts carry no information about which events
+occurred. Including it drops the reconstruction residual from order $10^{-3}$ to exactly
+zero. All five terms are reported and the exact identity is tested to $10^{-12}$.
 
 Staking uses fractional Kelly, $f^{*} = (bp-q)/b$ with $b = d-1$. Note $bp - q = dp - 1$, so
 Kelly, edge and expected value can never disagree about whether a bet is worth taking.
@@ -158,9 +162,9 @@ Kelly, edge and expected value can never disagree about whether a bet is worth t
 | Plan | Scope | State |
 |---|---|---|
 | **1 — Conversion + core** | Scaffolding, clean-room port of the pricing core | **Complete** |
-| **2 — Fitting** | Weighted log-likelihood, analytic gradient, `check_grad`, L-BFGS-B | Not started |
-| **3 — Data** | Ingest, header discovery, coverage matrix, remaining three transforms | **Partial** — ingest and coverage complete and tested; the three remaining transforms outstanding |
-| **4 — Study** | Walk-forward protocol, leakage test, scoring, inference | Not started |
+| **2 — Fitting** | Weighted log-likelihood, analytic gradient, `check_grad`, L-BFGS-B | **Complete** |
+| **3 — Data** | Ingest, header discovery, coverage matrix, all four transforms | **Complete** |
+| **4 — Study** | Walk-forward protocol, leakage test, scoring, inference | **Machinery complete** — the study has not been run on real data |
 | **5 — Paper** | Figures, tables, manuscript against the frozen pre-registration | Not started |
 
 ## Implemented components
@@ -173,10 +177,15 @@ Kelly, edge and expected value can never disagree about whether a bet is worth t
 | Market marginals (1X2, totals, BTTS, CS, AH, DC) | `src/footy/core/markets.py` | 18 |
 | Skellam goal-difference distribution | `src/footy/core/skellam.py` | 6 |
 | Power-method overround | `src/footy/market/overround.py` | 8 |
-| Shin de-margining inverse | `src/footy/market/demargin.py` | 5 |
 | Fractional Kelly staking | `src/footy/market/kelly.py` | 5 |
+| Exponential time decay | `src/footy/fit/decay.py` | see below |
+| Weighted log-likelihood + analytic gradient | `src/footy/fit/likelihood.py` | 36 (with `decay`, `mle`) |
+| L-BFGS-B driver, identifiability, admissibility | `src/footy/fit/mle.py` | — |
+| Four de-margining transforms | `src/footy/market/demargin.py` | 47 |
+| Walk-forward protocol and xi selection | `src/footy/study/walkforward.py` | 27 |
+| Diebold-Mariano, block bootstrap, Benjamini-Hochberg | `src/footy/eval/inference.py` | 33 |
 | RPS, Brier, log loss | `src/footy/eval/scoring.py` | 8 |
-| Murphy REL / RES / UNC / WBV | `src/footy/eval/murphy.py` | 8 |
+| Murphy REL / RES / UNC / WBV / COV | `src/footy/eval/murphy.py` | 14 |
 | Column registry (267 odds columns) | `src/footy/data/columns.py` | 12 |
 | football-data.co.uk ingest, header discovery | `src/footy/data/football_data.py` | 59 |
 | (league × season × book × market) coverage matrix | `src/footy/data/coverage.py` | 15 |
@@ -197,7 +206,12 @@ Layer 1 carries one **corrected** and one **derived** value, each with an explic
 provenance note in the fixture. The correction records an inconsistency the clean-room port
 found in the source specification: §8.2's printed favourite–longshot pair implies two
 different power exponents ($0.928042$ against $0.927518$) and is unreproducible under any
-$\rho$. Details in [`docs/model.md`](docs/model.md) and the fixture's `_longshot_provenance`.
+$\rho$. Details in the fixture's `_longshot_provenance`.
+
+A **second** specification error surfaced in Plan 4: §11.1's four-term Murphy identity is
+one term short, as described under Evaluation above. Its own worked example cannot detect
+the omission, because every bin there has zero within-bin covariance. Recorded in the
+fixture's `_identity_provenance`.
 
 > A third validation layer — differential comparison against the original TypeScript
 > implementation — was specified but **cannot now be run**: that implementation has been
@@ -214,7 +228,7 @@ make verify    # compile, ruff, mypy --strict, pytest
 ```
 
 `make verify` runs, in order: byte-compilation, `ruff check` and `ruff format --check`,
-`mypy --strict`, then `pytest` — **195 tests** at the latest green run, reproduced from a
+`mypy --strict`, then `pytest` — **339 tests** at the latest green run, reproduced from a
 clean clone.
 
 `make data` and `make study` are specified in the design doc and arrive with Plans 3 and 4.
@@ -230,18 +244,20 @@ clean clone.
 | `src/footy/market/` | Overround, de-margining, Kelly staking |
 | `src/footy/eval/` | Scoring rules and the Murphy decomposition |
 | `src/footy/data/` | football-data.co.uk ingest and coverage matrix |
+| `src/footy/fit/` | Time decay, likelihood, analytic gradient, MLE driver |
+| `src/footy/study/` | The walk-forward protocol |
 | `tests/` | Layer-1 fixtures, Layer-2 properties, purity scan |
 
 ## Limitations
 
-- Only the **Shin** inverse is implemented; proportional, power and odds-ratio arrive with
-  Plan 3, alongside the harness that compares all four.
-- No MLE fitting, walk-forward backtest, or empirical study code exists yet. **No result of
-  any kind has been measured.**
+- **The study has not been run on real data. No result of any kind has been measured.**
+  Every component is implemented and tested, but nothing has touched a downloaded CSV.
+- ROI, closing-line value and the economic side of prediction P3 are not yet implemented;
+  the current evaluation is forecast-accuracy only (RPS, Brier, log loss, Murphy).
+- `paper/preregistration.md` with the frozen decay parameter $\xi$ does not exist yet. It
+  must be committed before the evaluation stage is ever run.
 - Correlation is corrected in four cells only; no explicit overdispersion (cf. Boshnakov,
   Kharrat & McHale, 2017); no player-level data; pre-match only.
-- A dedicated `paper/preregistration.md` with the frozen decay parameter $\xi$ is planned
-  for Plan 4, before the evaluation stage runs.
 
 ## References
 
