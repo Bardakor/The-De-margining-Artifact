@@ -376,10 +376,27 @@ matrix sums to 1; all probabilities in [0,1]; `P(Over 2.5) + P(Under 2.5) = 1`;
 Asian handicap equals draw-no-bet; `Σ1/dᵢ` equals the target book sum exactly; all four
 de-margin transforms round-trip and converge to `p` as `B → 1`.
 
-**Layer 3 — post-hoc corroboration.** Only after layers 1 and 2 pass: dump TypeScript engine
-outputs over a grid of `(λ, μ, ρ, lines, handicaps)` and diff against Python at `1e-12`. Any
-divergence is investigated on its merits — the Python is not assumed wrong — and the
-resolution is recorded. TypeScript is deleted only after this step is green.
+**Layer 3 — post-hoc corroboration. VOID, not performed.** The plan was: after layers 1 and 2
+pass, dump TypeScript engine outputs over a grid of `(λ, μ, ρ, lines, handicaps)` and diff
+against Python at `1e-12`, investigating any divergence on its merits before deleting the
+TypeScript.
+
+**This did not happen.** The TypeScript engine was removed from the working tree before the
+comparison was run, so the corroboration is no longer available. It remains recoverable from
+git history under the `v1-betting-app` tag if the comparison is wanted later.
+
+Consequence, stated plainly: the port's correctness now rests on Layer 1 and Layer 2 alone.
+That is weaker than designed. Layer 1 pins exact values against the specification, and Layer 2
+pins invariants across the admissible parameter region, but neither is an independent
+reimplementation of the same formulas — which was the point of Layer 3.
+
+Two things partially compensate, and both were achieved. The Skellam module reaches the goal
+difference by a closed form in the modified Bessel function with no matrix involved, and
+agrees with the matrix anti-diagonals to `2.6e-7` at ρ = 0 and with the Asian handicap to
+`7.6e-7` across whole, half and quarter lines — both at the grid-truncation floor. That
+corroborates the matrix from outside itself. Separately, the clean-room port found a genuine
+inconsistency in §8.2 of the specification (see §8 Layer 1), which is evidence the port was
+reasoning independently rather than transcribing.
 
 **Gradient verification.** The analytic gradient is checked against
 `scipy.optimize.check_grad` on randomised parameter vectors. A hand-derived gradient that is
@@ -481,8 +498,9 @@ Both are written early so subsequent sessions inherit them.
 1. `make verify` passes: ruff clean, `mypy --strict` clean, all tests green.
 2. Every value in `tests/fixtures/model_md_values.json` reproduced.
 3. Analytic gradient agrees with numerical differentiation to `1e-6`.
-4. Layer 3 corroboration against TypeScript green at `1e-12`, or every divergence explained
-   in writing.
+4. ~~Layer 3 corroboration against TypeScript green at `1e-12`.~~ **Void** — the TypeScript
+   was removed before the comparison ran. See §8. Recoverable from the `v1-betting-app` tag
+   if reinstated.
 5. A leakage test proves no forecast uses a match at or after its own kickoff.
 6. Full walk-forward across all eligible leagues completes in under one hour on this machine.
 7. `paper/preregistration.md` is committed strictly before the first full study run, with the
