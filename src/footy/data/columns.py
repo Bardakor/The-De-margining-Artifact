@@ -173,3 +173,17 @@ KNOWN_COLUMNS: frozenset[str] = RESULT_COLUMNS | COUNT_COLUMNS | ASIAN_COLUMNS |
 
 PREFERRED_PINNACLE_OPEN = ("PSH", "PSD", "PSA")
 ALIAS_PINNACLE_OPEN = ("PH", "PD", "PA")
+
+# Pinnacle is published under a canonical stem (PS) and a one-letter alias (P).
+# Where a file carries both, the alias is dropped so the same price does not
+# enter the odds table twice under one (book, market, outcome, period) key — a
+# duplicate would silently corrupt any book sum built from it, which is the
+# quantity this whole study measures.
+#
+# Each entry is (preferred, alias): the alias is dropped only when EVERY
+# preferred column is present, so a file carrying the alias alone keeps it.
+PINNACLE_ALIASES: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
+    (PREFERRED_PINNACLE_OPEN, ALIAS_PINNACLE_OPEN),
+    (("PS>2.5", "PS<2.5"), ("P>2.5", "P<2.5")),
+    (("PSC>2.5", "PSC<2.5"), ("PC>2.5", "PC<2.5")),
+)

@@ -159,7 +159,7 @@ Kelly, edge and expected value can never disagree about whether a bet is worth t
 |---|---|---|
 | **1 — Conversion + core** | Scaffolding, clean-room port of the pricing core | **Complete** |
 | **2 — Fitting** | Weighted log-likelihood, analytic gradient, `check_grad`, L-BFGS-B | Not started |
-| **3 — Data** | Ingest, header discovery, coverage matrix, remaining three transforms | **Partial — untested** |
+| **3 — Data** | Ingest, header discovery, coverage matrix, remaining three transforms | **Partial** — ingest and coverage complete and tested; the three remaining transforms outstanding |
 | **4 — Study** | Walk-forward protocol, leakage test, scoring, inference | Not started |
 | **5 — Paper** | Figures, tables, manuscript against the frozen pre-registration | Not started |
 
@@ -177,7 +177,9 @@ Kelly, edge and expected value can never disagree about whether a bet is worth t
 | Fractional Kelly staking | `src/footy/market/kelly.py` | 5 |
 | RPS, Brier, log loss | `src/footy/eval/scoring.py` | 8 |
 | Murphy REL / RES / UNC / WBV | `src/footy/eval/murphy.py` | 8 |
-| football-data.co.uk ingest, coverage matrix | `src/footy/data/` | **0 — see Limitations** |
+| Column registry (267 odds columns) | `src/footy/data/columns.py` | 12 |
+| football-data.co.uk ingest, header discovery | `src/footy/data/football_data.py` | 59 |
+| (league × season × book × market) coverage matrix | `src/footy/data/coverage.py` | 15 |
 
 `src/footy/core/` contains no I/O, no clock, and no randomness — enforced by an AST scan in
 `tests/test_purity.py` that also catches randomness reached *through* a permitted module
@@ -212,7 +214,7 @@ make verify    # compile, ruff, mypy --strict, pytest
 ```
 
 `make verify` runs, in order: byte-compilation, `ruff check` and `ruff format --check`,
-`mypy --strict`, then `pytest` — **109 tests** at the latest green run, reproduced from a
+`mypy --strict`, then `pytest` — **195 tests** at the latest green run, reproduced from a
 clean clone.
 
 `make data` and `make study` are specified in the design doc and arrive with Plans 3 and 4.
@@ -232,8 +234,6 @@ clean clone.
 
 ## Limitations
 
-- **`src/footy/data/` has no test coverage.** 579 lines of ingest and coverage logic are
-  unverified. Until they are tested, no result depending on them should be trusted.
 - Only the **Shin** inverse is implemented; proportional, power and odds-ratio arrive with
   Plan 3, alongside the harness that compares all four.
 - No MLE fitting, walk-forward backtest, or empirical study code exists yet. **No result of

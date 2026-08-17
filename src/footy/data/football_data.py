@@ -21,10 +21,9 @@ import numpy as np
 import pandas as pd
 
 from footy.data.columns import (
-    ALIAS_PINNACLE_OPEN,
     KNOWN_COLUMNS,
     ODDS_MAP,
-    PREFERRED_PINNACLE_OPEN,
+    PINNACLE_ALIASES,
     RESULT_COLUMNS,
     OddsColumn,
 )
@@ -123,11 +122,21 @@ def discover_header(headers: list[str], source: str | None = None) -> dict[str, 
 def _drop_pinnacle_aliases(
     present: dict[str, OddsColumn], names: list[str]
 ) -> dict[str, OddsColumn]:
-    """Prefer PSH/PSD/PSA when both the canonical and PH/PD/PA aliases exist."""
+    """Prefer Pinnacle's canonical PS* columns over its one-letter P* aliases.
+
+    Applies to the 1X2 triple and to both over/under pairs. Dropping only the
+    1X2 triple left `P>2.5` alongside `PS>2.5`, which put the same Pinnacle
+    price into the odds table twice under one (book, market, outcome, period)
+    key and would have double-counted it in any book sum.
+    """
     name_set = set(names)
-    if all(col in name_set for col in PREFERRED_PINNACLE_OPEN):
-        return {k: v for k, v in present.items() if k not in ALIAS_PINNACLE_OPEN}
-    return present
+    drop: set[str] = set()
+    for preferred, aliases in PINNACLE_ALIASES:
+        if all(col in name_set for col in preferred):
+            drop.update(aliases)
+    if not drop:
+        return present
+    return {k: v for k, v in present.items() if k not in drop}
 
 
 def _goal_column(frame: pd.DataFrame, primary: str, alias: str) -> pd.Series[Any]:
@@ -138,17 +147,46 @@ def _goal_column(frame: pd.DataFrame, primary: str, alias: str) -> pd.Series[Any
     raise ValueError(f"missing goal column {primary} (or alias {alias})")
 
 
+_MISSING_TOKENS = frozenset({"nan", "NaN", "NAN", "None", "NaT", "<NA>", "null", "NULL"})
+
+
+def _text(series: pd.Series[Any]) -> pd.Series[Any]:
+    """Coerce a column to stripped strings, with every missing form as "".
+
+    Missing values must be normalised BEFORE `astype(str)`. Under pandas 3 that
+    call preserves NA rather than rendering it as the literal "nan" earlier
+    versions produced, so a post-hoc replace of "nan" silently does nothing and
+    NA survives into comparisons — where `!= ""` is true and the value passes
+    validation. Both known defects in this module came from that.
+    """
+    filled = series.where(series.notna(), "")
+    text = filled.astype(str).str.strip()
+    return text.where(~text.isin(_MISSING_TOKENS), "")
+
+
 def _kickoff(frame: pd.DataFrame) -> pd.Series[Any]:
+    """Kickoff timestamps, with the Time column folded in where present.
+
+    Dates are parsed on their own and the time added as an offset, rather than
+    concatenating the two into one string. Concatenation produced a column of
+    mixed shapes whenever a file carried times for some fixtures and not others
+    — "12/08/2023 15:00" beside "13/08/2023" — and pandas infers a single format
+    from the first element, coercing every row that does not match to NaT. Those
+    rows then failed the validity filter, so the archive's blank-time fixtures
+    were silently and selectively dropped while their neighbours survived.
+    """
     if "Date" not in frame.columns:
         raise ValueError("missing Date column")
-    dates = frame["Date"].astype(str).str.strip()
-    if "Time" in frame.columns:
-        times = frame["Time"].astype(str).str.strip().replace({"nan": "", "NaN": "", "None": ""})
-        combined = dates.where(times.eq(""), dates + " " + times)
-        kickoff = pd.to_datetime(combined, dayfirst=True, errors="coerce")
-    else:
-        kickoff = pd.to_datetime(dates, dayfirst=True, errors="coerce")
-    return kickoff
+
+    kickoff = pd.to_datetime(_text(frame["Date"]), dayfirst=True, errors="coerce")
+    if "Time" not in frame.columns:
+        return kickoff
+
+    times = _text(frame["Time"])
+    # to_timedelta needs HH:MM:SS; the archive publishes HH:MM.
+    padded = times.where(times.eq("") | times.str.count(":").ge(2), times + ":00")
+    offset = pd.to_timedelta(padded, errors="coerce").fillna(pd.Timedelta(0))
+    return kickoff + offset
 
 
 def read_season_csv(
@@ -174,7 +212,7 @@ def read_season_csv(
     home_goals = _goal_column(frame, "FTHG", "HG")
     away_goals = _goal_column(frame, "FTAG", "AG")
     if "Div" in frame.columns:
-        file_league = frame["Div"].astype(str).str.strip()
+        file_league = _text(frame["Div"])
         if league is None:
             unique = [v for v in file_league.unique() if v not in ("", "nan")]
             if len(unique) != 1:
@@ -191,8 +229,8 @@ def read_season_csv(
             "league": league,
             "season": season,
             "kickoff": kickoff,
-            "home": frame["HomeTeam"].astype(str).str.strip(),
-            "away": frame["AwayTeam"].astype(str).str.strip(),
+            "home": _text(frame["HomeTeam"]),
+            "away": _text(frame["AwayTeam"]),
             "home_goals": home_goals,
             "away_goals": away_goals,
         }
