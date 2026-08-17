@@ -100,7 +100,7 @@ def spread_as_share_of_gap(spread: float, model_gap: float) -> float:
         model_gap: The reference gap (e.g., model-market RPS gap).
 
     Returns:
-        spread / model_gap, or 0 if model_gap is zero.
+        spread / model_gap.
 
     Raises:
         ValueError: If model_gap is zero.
