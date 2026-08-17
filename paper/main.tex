@@ -81,7 +81,15 @@ predictions were pre-registered before the evaluation period was touched: that
 transform disagreement scales with the book's margin (P1); that it is larger in
 the three-outcome market than the two-outcome one (P2); and that there exist
 cells in which the measured edge changes \emph{sign} between the proportional
-and Shin benchmarks (P3). \TBD{} states the outcome.
+and Shin benchmarks (P3). P1 and P2 hold: the rank correlation between a
+book's margin and the spread across transforms is \SpearmanMarginSpread{}, and
+disagreement is larger in the three-outcome market. P3 does not, in any
+meaningful sense. Only \NSignFlips{} cell of \NCells{} reverses sign, on
+returns that are statistically indistinguishable from zero on both sides---
+because the fixed model achieves no edge anywhere in the sample, losing to the
+closing line in effectively every cell. The choice of transform demonstrably
+changes what is measured; whether it can overturn a published conclusion
+remains open, and this design cannot settle it.
 \end{abstract}
 
 \section{Introduction}
@@ -435,7 +443,25 @@ cells spanning \NLeagues{} leagues and \NBooks{} bookmakers.
 
 \subsection{P1: disagreement scales with the book's margin}
 
-\TBD
+P1 is supported. Across the \NBooks{} bookmakers the rank correlation between
+a book's mean sum and the spread of the four transforms within a cell is
+\SpearmanMarginSpread{}. The pattern in Table~\ref{tab:p1} is monotone at the
+extremes: the two sharpest books, Betfair Exchange at a mean sum of 1.008 and
+Pinnacle at 1.031, both show a mean RPS spread of 0.0001, while books between
+1.06 and 1.09 show 0.0004 to 0.0009. The transforms agree almost exactly where
+there is little margin to remove and diverge by four to nine times as much
+where there is more of it, which is what the limiting argument predicts.
+
+The stated falsification condition was that the spread on Bet365 should fail to
+exceed the spread on Pinnacle. It does exceed it, on both measures
+(\SpreadBetSixtyFive{} against \SpreadPinnacle{} in ROI). P1 stands.
+
+Two cautions. The ROI spread column is noisier than the RPS column and does not
+order as cleanly, because ROI is a function of how many bets a cell generated
+and the smallest cells here rest on three league-seasons. And the mechanism is
+not in doubt---the transforms provably coincide as the book sum approaches
+one---so what this measures is the size of the effect at realistic margins,
+not whether it exists.
 
 \begin{table}[t]
   \centering
@@ -449,7 +475,17 @@ cells spanning \NLeagues{} leagues and \NBooks{} bookmakers.
 
 \subsection{P2: disagreement is larger in the three-outcome market}
 
-\TBD
+P2 is supported, weakly. On the cells where the same bookmaker prices both
+markets, the mean ROI spread is \SpreadOneXTwo{} for 1X2 against
+\SpreadOverUnder{} for Over/Under 2.5, and the 1X2 spread is the larger in
+60\% of pairs on ROI and 80\% on RPS.
+
+The evidence is thin and should be read as such. Only three bookmakers in the
+archive carry closing prices for both markets, which leaves fifteen paired
+cells. The direction matches the prediction and the mechanism is clear---the
+transforms differ chiefly in how they treat a longshot, and a near-even
+two-outcome book does not have one---but fifteen pairs cannot distinguish a
+moderate effect from a small one.
 
 \begin{table}[t]
   \centering
@@ -463,7 +499,32 @@ cells spanning \NLeagues{} leagues and \NBooks{} bookmakers.
 
 \subsection{P3: sign reversal of the measured edge}
 
-\TBD
+\textbf{P3 is met on its letter and fails on its substance, and the failure is
+the more informative of the two.}
+
+Exactly \NSignFlips{} cell of \NCells{} (\PctSignFlips{}) reverses the sign of
+measured ROI between proportional normalisation and Shin's method. On the
+prediction as written---\emph{there exist} cells where the edge changes
+sign---that is a positive result. Table~\ref{tab:p3} shows why it should not
+be read as one.
+
+The cell is B1/Coral/1X2 on 214 matches, barely above the 200-fixture
+threshold fixed in the pre-registration. Proportional normalisation puts the
+ROI at $+0.0020$ and Shin at $-0.0004$. Both bootstrap intervals span
+approximately $\pm 0.10$. These are not two different conclusions about an
+edge; they are the same conclusion---no measurable edge---with noise falling on
+opposite sides of zero. A reversal between two quantities that are each
+indistinguishable from zero carries no information about whether the choice of
+transform can overturn a finding.
+
+The deeper problem is that the premise of P3 does not hold in this data, for
+reasons set out in the next section: the model has no edge anywhere, so there
+is no edge whose sign could be reversed. P3 was constructed on the assumption
+that a competently implemented Dixon--Coles model would show positive measured
+edge in at least some cells, against at least the softer books. It does not.
+The prediction was therefore not so much falsified as rendered untestable by
+this design, which is a limitation of the study rather than a finding about
+the transforms.
 
 \begin{table}[t]
   \centering
@@ -477,7 +538,28 @@ cells spanning \NLeagues{} leagues and \NBooks{} bookmakers.
 
 \subsection{Forecast accuracy against the benchmark}
 
-\TBD
+The model is beaten by the market comprehensively and almost uniformly.
+Table~\ref{tab:dm} gives the picture: mean model RPS of 0.2053 against
+benchmark RPS between 0.1987 and 0.1990, a gap of roughly 0.0065 in the
+market's favour under every transform. The model achieves a lower RPS than the
+de-margined benchmark in \emph{no} cell under power, Shin or the odds ratio,
+and in one cell of \NCells{} under proportional normalisation. Around
+three-quarters of cells reject equal predictive accuracy at $q<0.10$ after the
+Benjamini--Hochberg correction, in every case in the market's favour.
+
+Economic returns agree. Mean ROI across cells ranges from $-7.9\%$ under
+proportional normalisation to $-9.4\%$ under the power method, and between 9\%
+and 11\% of cells show positive ROI at all. Exactly one cell of \NCells{} has a
+bootstrap interval lying entirely above zero, which is fewer than the four or
+five that would be expected by chance across this many cells.
+
+None of this is surprising and none of it indicates a defect. Dixon--Coles is
+a 1997 model with two parameters per team, no player information, no market
+data and no in-play adjustment, evaluated against closing prices that
+aggregate everything the betting market learned before kickoff. That it loses
+is the expected outcome. It is reported here because it determines what P3 can
+mean, and because a study that measured an edge without checking whether one
+existed would be reporting an artefact of its own arithmetic.
 
 \begin{table}[t]
   \centering
@@ -492,7 +574,33 @@ cells spanning \NLeagues{} leagues and \NBooks{} bookmakers.
 \section{Discussion}
 \label{sec:discussion}
 
-\TBD
+The methodological claim survives and the headline claim does not.
+
+That the four transforms diverge, and that they diverge in proportion to the
+margin being removed and more sharply where a longshot is present, is
+established here on \NCells{} cells across \NLeagues{} leagues and
+\NBooks{} bookmakers. A paper that de-margins a soft book by proportional
+normalisation and one that uses Shin's method are not measuring the same
+benchmark, and the gap between them is largest exactly where a model's claimed
+edge tends to concentrate. Reporting which transform was used, and ideally
+reporting a result under more than one, costs nothing and is not current
+practice.
+
+What this study cannot show is that the choice flips a conclusion, because our
+model never reaches a conclusion worth flipping. The design held the model
+fixed so that any difference between arms would be attributable to the
+transform alone---which was the right control---but it assumed the fixed model
+would land near the market. It does not come close. Against that backdrop the
+single sign reversal we observe is noise around zero, and would be noise around
+zero whichever transform produced it.
+
+The honest reading is that this work establishes the mechanism and bounds its
+size, while leaving the question it set out to answer open. Settling it needs a
+model that actually competes with closing prices in some segment---a stronger
+forecaster, a softer or slower market, or an early line rather than a
+close---so that there is a positive edge on which the transforms can be made to
+disagree. That is a different study, and the apparatus built here would run it
+unchanged.
 
 \section{Limitations}
 \label{sec:limitations}
@@ -516,6 +624,22 @@ absolute level is not a claim about what a bettor would have earned.
 The decay parameter is weakly identified (Section~\ref{sec:xi}). This does not
 threaten the comparison, which holds it fixed across arms, but it does mean the
 model should not be read as tuned.
+
+The most consequential limitation is that the fixed model has no measurable
+edge anywhere in the sample. P3 was framed on the assumption that it would show
+positive edge in at least some cells against at least the softer books; it does
+not, in any cell, under any transform. Everything reported about P3 is
+therefore a statement about behaviour near zero rather than about whether the
+transform choice can overturn a real finding. P1 and P2 are unaffected, since
+both concern disagreement between benchmarks and neither requires the model to
+be any good.
+
+The calibration period is early. A fixed three-season burn-in and two-season
+calibration on a 33-season archive places the selection of $\xi$ in 1996--97
+for the longest-running leagues, up to 28 years before the evaluation period
+ends. The split was fixed in the design specification before any data was
+examined and was deliberately not revised once that consequence became
+visible.
 
 \section{Reproducibility}
 \label{sec:repro}
