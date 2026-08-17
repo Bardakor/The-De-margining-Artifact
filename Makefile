@@ -1,4 +1,4 @@
-.PHONY: install compile test lint typecheck verify clean tables paper
+.PHONY: install compile test lint typecheck verify clean tables figures paper
 
 install:
 	uv sync --extra dev
@@ -22,9 +22,15 @@ verify: compile lint typecheck test
 tables:
 	uv run python scripts/make_tables.py
 
-# Compiles at any stage: result slots render as "[pending]" until `tables` runs.
+# Figures are written out of results/cells.csv, results/book_margin.csv and
+# results/calibration.json, never typed into the paper.
+figures:
+	uv run python scripts/make_figures.py
+
+# Compiles at any stage: result slots render as "[pending]" until `tables` runs,
+# and figure slots render as "[pending]" until `figures` runs.
 # The finished PDF is copied to the repository root so it is visible on GitHub.
-paper:
+paper: figures
 	latexmk -pdf -outdir=build -cd paper/main.tex
 	cp paper/build/main.pdf The-Demargining-Artifact.pdf
 

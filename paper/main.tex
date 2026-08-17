@@ -30,6 +30,9 @@
 \newcommand{\pendingtable}[1]{%
   \begin{center}\textcolor{red}{[table #1 pending: run \texttt{scripts/study.py evaluate},
   then \texttt{scripts/make\_tables.py}]}\end{center}}
+\newcommand{\pendingfigure}[1]{%
+  \begin{center}\textcolor{red}{[figure #1 pending: run \texttt{scripts/study.py evaluate},
+  then \texttt{scripts/make\_figures.py}]}\end{center}}
 
 % Quantities filled in from the run. Defaults keep the draft compiling.
 \providecommand{\NFilesFetched}{525}
@@ -351,6 +354,20 @@ neighbouring candidates worse on either side (Table~\ref{tab:xi}).
     {\pendingtable{3}}
 \end{table}
 
+\begin{figure}[t]
+  \centering
+  \IfFileExists{generated/fig-calibration.pdf}
+    {\includegraphics[width=0.85\textwidth]{generated/fig-calibration.pdf}}
+    {\pendingfigure{calibration}}
+  \caption{Paired mean RPS against the decay half-life, log scale, for every
+  candidate in the calibration sweep. The marked optimum sits at an interior
+  half-life rather than at either edge of the grid, and the curve stays
+  within a narrow band of the no-decay baseline over a wide neighbourhood
+  around it: $\xi$ is chosen, but only weakly identified, exactly as
+  Table~\ref{tab:xi} states in numbers.}
+  \label{fig:calibration}
+\end{figure}
+
 Stated plainly: $\xi$ is weakly identified. Half-lives of 400 and 700 days
 differ by $7.3 \times 10^{-5}$ in paired RPS, and anything between roughly 250
 and 1200 days scores within $6 \times 10^{-4}$ of the optimum. We do not
@@ -499,6 +516,41 @@ not whether it exists.
     {\pendingtable{P1}}
 \end{table}
 
+Figure~\ref{fig:margin-spread} draws the same relationship at the bookmaker
+level, and Figure~\ref{fig:divergence} shows the mechanism behind it on one
+worked book.
+
+\begin{figure}[t]
+  \centering
+  \IfFileExists{generated/fig-margin-spread.pdf}
+    {\includegraphics[width=0.85\textwidth]{generated/fig-margin-spread.pdf}}
+    {\pendingfigure{margin-spread}}
+  \caption{Mean bookmaker margin (book sum) against the mean ROI spread across
+  the four transforms, one point per bookmaker, with a least-squares trend.
+  $\rho$ and its 95\% bootstrap confidence interval are computed on these
+  fourteen bookmaker-level points; because that is a coarser aggregation than
+  the cell-level correlation quoted as \SpearmanMarginSpread{} above, the two
+  numbers need not agree exactly, but both are positive and both put the
+  higher-margin books toward the higher-spread end.}
+  \label{fig:margin-spread}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \IfFileExists{generated/fig-divergence.pdf}
+    {\includegraphics[width=0.85\textwidth]{generated/fig-divergence.pdf}}
+    {\pendingfigure{divergence}}
+  \caption{The four transforms' recovered probabilities against the raw
+  implied probability, for the single closing book with the highest measured
+  margin in the archive --- chosen by margin alone, before any transform was
+  run, so the example is not cherry-picked for a dramatic-looking spread. The
+  longshot outcome (smallest raw implied probability) is annotated with each
+  transform's recovered value: this is where the transforms are expected, and
+  shown, to disagree most, which is what no table of summary statistics can
+  make visible.}
+  \label{fig:divergence}
+\end{figure}
+
 \subsection{P2: disagreement is larger in the three-outcome market}
 
 P2 is supported, weakly. On the cells where the same bookmaker prices both
@@ -596,6 +648,33 @@ existed would be reporting an artefact of its own arithmetic.
     {\input{generated/tab-dm.tex}}
     {\pendingtable{DM}}
 \end{table}
+
+\begin{figure}[t]
+  \centering
+  \IfFileExists{generated/fig-cell-scatter.pdf}
+    {\includegraphics[width=0.7\textwidth]{generated/fig-cell-scatter.pdf}}
+    {\pendingfigure{cell-scatter}}
+  \caption{Per-cell model RPS against benchmark (de-margined market) RPS, one
+  point per (cell, transform) pair, with the model-equals-benchmark diagonal
+  drawn. Almost every point lies above the diagonal, where the model's RPS is
+  the worse of the two --- the near-universal loss to the market that
+  Table~\ref{tab:dm} reports in numbers, visible here at a glance.}
+  \label{fig:cell-scatter}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \IfFileExists{generated/fig-roi.pdf}
+    {\includegraphics[width=\textwidth]{generated/fig-roi.pdf}}
+    {\pendingfigure{roi}}
+  \caption{Distribution of per-cell ROI across every cell, one panel per
+  transform, with a zero line drawn on each. Under every transform the mass
+  sits on both sides of zero with no consistent lean toward positive
+  returns --- the model has no measurable edge, whichever benchmark it is
+  compared against, which is the finding that governs how P3 should be
+  read.}
+  \label{fig:roi}
+\end{figure}
 
 \section{Discussion}
 \label{sec:discussion}

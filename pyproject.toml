@@ -19,7 +19,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Mathematics",
 ]
-dependencies = ["numpy>=2.0", "scipy>=1.14", "pandas>=2.2"]
+dependencies = ["numpy>=2.0", "scipy>=1.14", "pandas>=2.2", "matplotlib>=3.9"]
 
 [project.urls]
 Homepage = "https://github.com/Bardakor/betting-app-yami"
@@ -49,6 +49,15 @@ files = ["src", "tests"]
 
 [[tool.mypy.overrides]]
 module = "scipy.*"
+ignore_missing_imports = true
+
+# make_figures.py lives in scripts/, not src/, so it is not itself under
+# strict mypy (matching make_tables.py and study.py, neither of which is
+# either) --- but tests/test_make_figures.py imports it off sys.path to test
+# its data-prep functions, and mypy needs to be told that import is expected
+# to be unresolvable rather than a real error.
+[[tool.mypy.overrides]]
+module = "make_figures"
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
