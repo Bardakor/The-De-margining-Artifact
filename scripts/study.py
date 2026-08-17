@@ -40,7 +40,12 @@ PREREG = Path("paper/preregistration.md")
 BURN_IN_SEASONS = 3
 CALIBRATION_SEASONS = 2
 MIN_FIT_MATCHES = 300
-HALF_LIFE_CANDIDATES = (30.0, 60.0, 90.0, 150.0, 250.0, 400.0, 700.0)
+# Extended past 700 days because the first sweep put its minimum on the
+# boundary, which means the grid was drawn too narrow to contain the optimum.
+# The last entry is effectively "no decay": a half-life far longer than the
+# archive weights every match almost equally, and is the honest baseline for
+# whether decay earns its place at all.
+HALF_LIFE_CANDIDATES = (30.0, 60.0, 90.0, 150.0, 250.0, 400.0, 700.0, 1200.0, 2000.0, 40000.0)
 
 
 def _archive() -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -84,15 +89,28 @@ def cmd_coverage() -> None:
 
 
 def cmd_calibrate() -> None:
+    """Select xi by mean RPS on the fixtures EVERY candidate forecast.
+
+    Candidates do not all price the same fixtures: a fit can fail to converge,
+    or leave a team unidentified, and those fixtures are dropped. The first
+    sweep varied from 7,804 to 11,152 forecasts across candidates, so its means
+    were computed over different match sets — an arm that happens to drop
+    harder fixtures scores better for a reason unrelated to forecast quality.
+
+    Scoring on the intersection makes the comparison paired, which is the only
+    way the ranking can be attributed to the decay rate itself.
+    """
+    from footy.eval.scoring import ranked_probability_score
+
     matches, _ = _archive()
     RESULTS.mkdir(parents=True, exist_ok=True)
     leagues = _eligible_leagues(matches)
     print(f"calibrating on {len(leagues)} leagues: {leagues}")
 
-    records: list[dict[str, object]] = []
+    per_candidate: dict[float, dict[tuple[object, ...], float]] = {}
     for half_life in HALF_LIFE_CANDIDATES:
         xi = half_life_to_xi(half_life)
-        scores: list[float] = []
+        scored: dict[tuple[object, ...], float] = {}
         t0 = time.time()
         for league in leagues:
             block = matches[matches["league"] == league]
@@ -103,41 +121,64 @@ def cmd_calibrate() -> None:
                 seasons, burn_in=BURN_IN_SEASONS, calibration=CALIBRATION_SEASONS
             )
             forecasts = walk_forward(
-                block,
-                xi=xi,
-                scored_seasons=periods.calibration,
-                min_fit_matches=MIN_FIT_MATCHES,
+                block, xi=xi, scored_seasons=periods.calibration, min_fit_matches=MIN_FIT_MATCHES
             )
             if forecasts.empty:
                 continue
-            from footy.eval.scoring import ranked_probability_score
-
             probs = forecasts[["p_home", "p_draw", "p_away"]].to_numpy(float)
             outs = forecasts["outcome"].to_numpy(int)
-            scores.extend(
-                ranked_probability_score(p, int(o)) for p, o in zip(probs, outs, strict=True)
+            keys = list(
+                zip(
+                    forecasts["league"],
+                    forecasts["kickoff"],
+                    forecasts["home"],
+                    forecasts["away"],
+                    strict=True,
+                )
             )
-        mean_rps = float(np.mean(scores)) if scores else float("nan")
+            for key, prob, out in zip(keys, probs, outs, strict=True):
+                scored[key] = ranked_probability_score(prob, int(out))
+        per_candidate[half_life] = scored
+        print(f"  half-life {half_life:>7.0f}d  n={len(scored):,}  ({time.time() - t0:.0f}s)")
+
+    common: set[tuple[object, ...]] = set.intersection(*(set(v) for v in per_candidate.values()))
+    print(f"\ncommon fixtures across all {len(per_candidate)} candidates: {len(common):,}")
+    if not common:
+        raise SystemExit("no fixture was forecast by every candidate")
+
+    records: list[dict[str, object]] = []
+    for half_life, scored in per_candidate.items():
+        paired = float(np.mean([scored[k] for k in common]))
         records.append(
-            {"half_life_days": half_life, "xi": xi, "mean_rps": mean_rps, "n": len(scores)}
-        )
-        print(
-            f"  half-life {half_life:>6.0f}d  xi={xi:.6f}  "
-            f"mean RPS={mean_rps:.6f}  n={len(scores):,}  ({time.time() - t0:.0f}s)"
+            {
+                "half_life_days": half_life,
+                "xi": half_life_to_xi(half_life),
+                "mean_rps_paired": paired,
+                "mean_rps_all": float(np.mean(list(scored.values()))),
+                "n_all": len(scored),
+                "n_paired": len(common),
+            }
         )
 
-    table = pd.DataFrame(records)
+    table = pd.DataFrame(records).sort_values("mean_rps_paired").reset_index(drop=True)
     table.to_csv(RESULTS / "calibration.csv", index=False)
-    usable = table.dropna(subset=["mean_rps"])
-    if usable.empty:
-        raise SystemExit("no candidate produced calibration forecasts")
+    print("\npaired comparison (all candidates scored on the same fixtures):")
+    print(table.to_string(index=False))
 
-    best_row = usable.iloc[int(np.argmin(usable["mean_rps"].to_numpy(float)))]
+    best = table.iloc[0]
+    at_boundary = best["half_life_days"] in (
+        min(HALF_LIFE_CANDIDATES),
+        max(HALF_LIFE_CANDIDATES),
+    )
+    spread = float(table["mean_rps_paired"].max() - table["mean_rps_paired"].min())
+
     payload = {
-        "xi": float(best_row["xi"]),
-        "half_life_days": float(best_row["half_life_days"]),
-        "mean_rps": float(best_row["mean_rps"]),
-        "n_forecasts": int(best_row["n"]),
+        "xi": float(best["xi"]),
+        "half_life_days": float(best["half_life_days"]),
+        "mean_rps_paired": float(best["mean_rps_paired"]),
+        "n_paired": int(best["n_paired"]),
+        "selected_at_grid_boundary": bool(at_boundary),
+        "paired_rps_spread": spread,
         "candidates": records,
         "burn_in_seasons": BURN_IN_SEASONS,
         "calibration_seasons": CALIBRATION_SEASONS,
@@ -147,8 +188,12 @@ def cmd_calibrate() -> None:
     (RESULTS / "calibration.json").write_text(json.dumps(payload, indent=2) + "\n")
     print(
         f"\nSELECTED xi = {payload['xi']:.6f} "
-        f"(half-life {payload['half_life_days']:.0f} days), mean RPS {payload['mean_rps']:.6f}"
+        f"(half-life {payload['half_life_days']:.0f} days), "
+        f"paired mean RPS {payload['mean_rps_paired']:.6f} on {len(common):,} fixtures"
     )
+    if at_boundary:
+        print("  WARNING: the minimum sits on the grid boundary; the grid is too narrow.")
+    print(f"  RPS spread across the whole grid: {spread:.6f}")
     print("\nNEXT: commit paper/preregistration.md naming this xi, THEN run evaluate.")
 
 
