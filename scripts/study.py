@@ -20,9 +20,11 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 import time
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -224,6 +226,22 @@ def _frozen_xi() -> float:
     return xi
 
 
+def _league_evaluation(job: tuple[str, pd.DataFrame, float]) -> tuple[str, pd.DataFrame]:
+    """One league's evaluation forecasts. Module-level so it can be pickled.
+
+    Leagues are independent and every fit is deterministic, so running these in
+    parallel produces bit-identical output to running them in sequence. This
+    changes no part of the registered protocol — only how many cores it uses.
+    """
+    league, block, xi = job
+    seasons = sorted(set(block["season"]))
+    periods = split_periods(seasons, burn_in=BURN_IN_SEASONS, calibration=CALIBRATION_SEASONS)
+    forecasts = walk_forward(
+        block, xi=xi, scored_seasons=periods.evaluation, min_fit_matches=MIN_FIT_MATCHES
+    )
+    return league, forecasts
+
+
 def cmd_evaluate() -> None:
     xi = _frozen_xi()
     print(f"frozen xi = {xi:.6f}  (half-life {xi_to_half_life(xi):.0f} days)")
@@ -232,23 +250,38 @@ def cmd_evaluate() -> None:
     RESULTS.mkdir(parents=True, exist_ok=True)
     leagues = _eligible_leagues(matches)
 
-    all_forecasts: list[pd.DataFrame] = []
-    for league in leagues:
-        block = matches[matches["league"] == league]
-        seasons = sorted(set(block["season"]))
-        periods = split_periods(seasons, burn_in=BURN_IN_SEASONS, calibration=CALIBRATION_SEASONS)
-        t0 = time.time()
-        forecasts = walk_forward(
-            block, xi=xi, scored_seasons=periods.evaluation, min_fit_matches=MIN_FIT_MATCHES
-        )
-        print(f"  {league}: {len(forecasts):,} forecasts ({time.time() - t0:.0f}s)")
-        if not forecasts.empty:
-            all_forecasts.append(forecasts)
+    # Per-league forecasts are written as each league finishes, so a failure
+    # anywhere downstream costs no recomputation. The first run of this stage
+    # completed all sixteen leagues and then died on the final write, losing
+    # half an hour of fits that were already correct.
+    forecast_dir = RESULTS / "forecasts"
+    forecast_dir.mkdir(parents=True, exist_ok=True)
 
-    if not all_forecasts:
+    pending = [lg for lg in leagues if not (forecast_dir / f"{lg}.csv").exists()]
+    done = [lg for lg in leagues if lg not in pending]
+    if done:
+        print(f"reusing cached forecasts for {len(done)} leagues: {done}")
+
+    jobs = [(league, matches[matches["league"] == league].copy(), xi) for league in pending]
+    workers = max(1, min(max(len(jobs), 1), (os.cpu_count() or 2) - 2))
+    print(f"running {len(jobs)} leagues across {workers} workers")
+
+    t0 = time.time()
+    if jobs:
+        with ProcessPoolExecutor(max_workers=workers) as pool:
+            for league, block in pool.map(_league_evaluation, jobs):
+                block.to_csv(forecast_dir / f"{league}.csv", index=False)
+                print(f"  {league}: {len(block):,} forecasts  ({time.time() - t0:.0f}s elapsed)")
+
+    loaded = [
+        pd.read_csv(forecast_dir / f"{lg}.csv", parse_dates=["kickoff"], dtype={"season": str})
+        for lg in leagues
+        if (forecast_dir / f"{lg}.csv").exists()
+    ]
+    loaded = [f for f in loaded if not f.empty]
+    if not loaded:
         raise SystemExit("no evaluation forecasts produced")
-    forecasts = pd.concat(all_forecasts, ignore_index=True)
-    forecasts.to_parquet(RESULTS / "forecasts.parquet")
+    forecasts = pd.concat(loaded, ignore_index=True)
     print(f"\ntotal evaluation forecasts: {len(forecasts):,}")
 
     books = sorted(set(odds["book"]))

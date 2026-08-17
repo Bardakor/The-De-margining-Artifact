@@ -28,6 +28,7 @@ import pandas as pd
 from footy.core.dixon_coles import rho_bounds
 from footy.core.markets import match_odds, totals
 from footy.core.matrix import scoreline_matrix
+from footy.data.football_data import season_start_year
 from footy.fit.mle import ConvergenceError, FittedParameters, fit
 
 REQUIRED_COLUMNS = ("league", "season", "kickoff", "home", "away", "home_goals", "away_goals")
@@ -88,7 +89,13 @@ def split_periods(
             period. Silently returning an empty evaluation would produce a
             study with no results and no error.
     """
-    ordered = tuple(sorted(seasons))
+    # Sort CHRONOLOGICALLY, not lexicographically. Season codes wrap the
+    # century — "9394" sorts after "0001" as a string — so plain sorted()
+    # scrambles the partition: it once assigned burn-in to 2000-2002,
+    # calibration to 2023-2024 and evaluation to 1993-1999, which both leaked
+    # the newest seasons into parameter selection and left the study measuring
+    # years that predate closing odds entirely.
+    ordered = tuple(sorted(seasons, key=season_start_year))
     if burn_in < 0 or calibration < 0:
         raise ValueError("period lengths must be non-negative")
     if len(ordered) <= burn_in + calibration:

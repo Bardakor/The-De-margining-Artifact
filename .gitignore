@@ -17,5 +17,9 @@ __pycache__/
 /paper/figures/*.pdf
 /paper/figures/*.png
 
+# LaTeX build products and the tables written out of results/.
+/paper/generated/
+/paper/build/
+
 # OS
 .DS_Store

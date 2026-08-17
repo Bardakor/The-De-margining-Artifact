@@ -427,3 +427,36 @@ def test_a_plausible_fit_still_produces_a_forecast() -> None:
     assert row is not None
     total = sum(float(cast(float, row[k])) for k in ("p_home", "p_draw", "p_away"))
     assert abs(total - 1.0) < 1e-9
+
+
+def test_periods_are_ordered_chronologically_not_lexicographically() -> None:
+    """Regression, and a severe one. Season codes wrap the century: "9394"
+    sorts AFTER "0001" as a string. Plain sorted() therefore assigned burn-in
+    to 2000-2002, calibration to 2023-2024 and evaluation to 1993-1999 — it
+    tuned the decay parameter on the newest seasons the study is supposed to
+    evaluate, and left the evaluation period on years that predate closing odds.
+
+    The original tests could not catch this: their fixtures were all post-2000
+    season codes, which happen to sort correctly either way.
+    """
+    seasons = ["9394", "9495", "9596", "9697", "9798", "9899", "9900", "0001", "0102", "2324"]
+    periods = split_periods(seasons, burn_in=3, calibration=2)
+
+    assert periods.burn_in == ("9394", "9495", "9596")
+    assert periods.calibration == ("9697", "9798")
+    assert periods.evaluation == ("9899", "9900", "0001", "0102", "2324")
+
+
+def test_every_period_precedes_the_next_in_real_time() -> None:
+    """The property the partition exists to guarantee, stated directly."""
+    from footy.data.football_data import season_start_year
+
+    seasons = ["9394", "9899", "9900", "0001", "0506", "1213", "1920", "2324", "2425"]
+    periods = split_periods(seasons, burn_in=2, calibration=2)
+
+    burn_in = [season_start_year(s) for s in periods.burn_in]
+    calibration = [season_start_year(s) for s in periods.calibration]
+    evaluation = [season_start_year(s) for s in periods.evaluation]
+
+    assert max(burn_in) < min(calibration)
+    assert max(calibration) < min(evaluation)
