@@ -192,6 +192,10 @@ Kelly, edge and expected value can never disagree about whether a bet is worth t
 | football-data.co.uk ingest, header discovery | `src/footy/data/football_data.py` | 64 |
 | (league × season × book × market) coverage matrix | `src/footy/data/coverage.py` | 15 |
 
+The counts above total 363. The remaining 35 of the 398 are cross-cutting rather than
+per-module: 7 Hypothesis property tests, 27 purity-scan tests, and 1 import smoke test —
+all listed under Validation strategy below.
+
 `src/footy/core/` contains no I/O, no clock, and no randomness — enforced by an AST scan in
 `tests/test_purity.py` that also catches randomness reached *through* a permitted module
 (`np.random.*`), which is what makes the invariants above assertable.
