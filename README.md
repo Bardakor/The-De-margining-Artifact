@@ -2,6 +2,8 @@
 
 [![verify](https://github.com/Bardakor/betting-app-yami/actions/workflows/verify.yml/badge.svg)](https://github.com/Bardakor/betting-app-yami/actions/workflows/verify.yml)
 
+**[Read the paper (PDF)](The-Demargining-Artifact.pdf)** — compiled from [`paper/main.tex`](paper/main.tex). `make paper` rebuilds it and copies it to the repository root.
+
 Reproducible research code testing whether a claimed football-forecasting edge over
 bookmakers survives the choice of de-margining transform, or is substantially an artifact
 of it.
@@ -164,8 +166,8 @@ Kelly, edge and expected value can never disagree about whether a bet is worth t
 | **1 — Conversion + core** | Scaffolding, clean-room port of the pricing core | **Complete** |
 | **2 — Fitting** | Weighted log-likelihood, analytic gradient, `check_grad`, L-BFGS-B | **Complete** |
 | **3 — Data** | Ingest, header discovery, coverage matrix, all four transforms | **Complete** |
-| **4 — Study** | Walk-forward protocol, leakage test, scoring, inference | **Machinery complete** — the study has not been run on real data |
-| **5 — Paper** | Figures, tables, manuscript against the frozen pre-registration | Not started |
+| **4 — Study** | Walk-forward protocol, leakage test, scoring, inference | **Complete — run** |
+| **5 — Paper** | Tables, manuscript against the frozen pre-registration | **Complete — 11pp draft** |
 
 ## Implemented components
 
@@ -228,15 +230,45 @@ make verify    # compile, ruff, mypy --strict, pytest
 ```
 
 `make verify` runs, in order: byte-compilation, `ruff check` and `ruff format --check`,
-`mypy --strict`, then `pytest` — **339 tests** at the latest green run, reproduced from a
+`mypy --strict`, then `pytest` — **398 tests** at the latest green run, reproduced from a
 clean clone.
 
-`make data` and `make study` are specified in the design doc and arrive with Plans 3 and 4.
+`make paper` compiles [`paper/main.tex`](paper/main.tex) and writes [`The-Demargining-Artifact.pdf`](The-Demargining-Artifact.pdf) at the repository root. `make tables` fills the result slots from `results/cells.csv` first; without that file the draft still compiles, with `[pending]` placeholders.
+
+## Results
+
+Pre-registered at [`paper/preregistration.md`](paper/preregistration.md), committed with the
+frozen $\xi$ **before** the evaluation period was touched. `scripts/study.py evaluate` reads
+$\xi$ from that document and refuses to run if it disagrees with the calibration output.
+
+**Scope:** 147,177 out-of-sample forecasts · 91 (league, book, market) cells · 15 leagues ·
+14 bookmakers · 103,289 matched fixtures · 176,629 archived matches.
+
+| | Outcome |
+|---|---|
+| **P1** — disagreement scales with the book's margin | **Supported.** Rank correlation 0.594. RPS spread 0.0001 at the sharpest books (sum ≈ 1.01–1.03), 0.0004–0.0009 at 1.06–1.09 |
+| **P2** — disagreement larger in 1X2 than Over/Under 2.5 | **Weakly supported.** Larger in 60% (ROI) and 80% (RPS) of pairs — but only 15 pairs exist |
+| **P3** — measured edge changes sign between proportional and Shin | **Met on its letter, empty in substance.** 1 cell of 91, on returns indistinguishable from zero either side |
+
+**The unpredicted finding that governs P3:** the model has no edge to reverse. It beats the
+de-margined benchmark on RPS in **zero** cells under power, Shin and odds-ratio, and one of
+91 under proportional. Mean ROI runs −7.9% to −9.4%. Roughly three-quarters of cells reject
+equal predictive accuracy at *q* < 0.10, every one **in the market's favour**.
+
+P3 assumed a competent Dixon–Coles would show positive edge somewhere against the softer
+books. It does not, anywhere. The prediction was therefore not falsified so much as rendered
+untestable by this design — which is a limitation of the study, not a finding about the
+transforms.
+
+**In one line:** the choice of transform demonstrably changes what is measured and scales
+with margin; whether it can overturn a published conclusion remains open, and this design
+cannot settle it.
 
 ## Repository layout
 
 | Path | Responsibility |
 |---|---|
+| [`The-Demargining-Artifact.pdf`](The-Demargining-Artifact.pdf) | Compiled paper, at the repository root |
 | `docs/model.md` | Canonical mathematical specification (the clean-room contract) |
 | `docs/superpowers/specs/` | Study design and pre-registered predictions |
 | `docs/superpowers/plans/` | Implementation plans — research provenance |
@@ -250,12 +282,24 @@ clean clone.
 
 ## Limitations
 
-- **The study has not been run on real data. No result of any kind has been measured.**
-  Every component is implemented and tested, but nothing has touched a downloaded CSV.
-- ROI, closing-line value and the economic side of prediction P3 are not yet implemented;
-  the current evaluation is forecast-accuracy only (RPS, Brier, log loss, Murphy).
-- `paper/preregistration.md` with the frozen decay parameter $\xi$ does not exist yet. It
-  must be committed before the evaluation stage is ever run.
+- **The fixed model has no measurable edge anywhere in the sample.** This is the most
+  consequential limitation: everything reported about P3 describes behaviour near zero
+  rather than whether the transform choice can overturn a real finding. P1 and P2 are
+  unaffected — both concern disagreement between benchmarks and neither requires the model
+  to be any good.
+- The decay parameter is weakly identified. Half-lives from 250 to 1200 days score within
+  0.0006 of the optimum. It is held fixed across all four arms, so it shifts them together
+  and cannot generate a difference between them.
+- The calibration period is early. A fixed 3-season burn-in and 2-season calibration on a
+  33-season archive puts $\xi$ selection in 1996–97 for the longest-running leagues. The
+  split was fixed in the design spec before any data was seen and deliberately not revised.
+- Backtested returns are not achievable returns: no stake limits, no line movement between
+  observation and placement, no commission, no account restrictions. The ROI figures exist
+  to be compared *across transforms*, which is what the design controls.
+- 11 of 525 archive files are excluded and recorded: seven whose internal `Div` disagrees
+  with the filename, three with corrupted rows, one declaring a bookmaker column twice.
+- Constructed aggregates (market maximum/average) are excluded — 39.3% of market-maximum
+  closing books sum below 1, so they are arbitrages by construction and have no margin.
 - Correlation is corrected in four cells only; no explicit overdispersion (cf. Boshnakov,
   Kharrat & McHale, 2017); no player-level data; pre-match only.
 
