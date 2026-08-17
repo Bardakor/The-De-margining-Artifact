@@ -140,6 +140,14 @@ def _drop_pinnacle_aliases(
     return {k: v for k, v in present.items() if k not in drop}
 
 
+def _first_present(frame: pd.DataFrame, *candidates: str) -> str | None:
+    """First of ``candidates`` present as a column. Greek files use HT/AT."""
+    for name in candidates:
+        if name in frame.columns:
+            return name
+    return None
+
+
 def _goal_column(frame: pd.DataFrame, primary: str, alias: str) -> pd.Series[Any]:
     if primary in frame.columns:
         return pd.to_numeric(frame[primary], errors="coerce")
@@ -195,9 +203,14 @@ _PAD_PREFIX = "__pad_"
 
 def _source_text(source: str | Path | IO[str]) -> str:
     """Read the whole file once, so the header can be inspected before parsing."""
-    if hasattr(source, "read"):
-        return str(source.read())
-    return Path(str(source)).read_text(encoding="utf-8", errors="replace")
+    text = (
+        str(source.read())
+        if hasattr(source, "read")
+        else Path(str(source)).read_text(encoding="utf-8", errors="replace")
+    )
+    # Some archive files are UTF-8 with a BOM, which otherwise attaches to the
+    # first header name and turns "Div" into "\ufeffDiv".
+    return text.lstrip("\ufeff")
 
 
 def _read_padded_csv(source: str | Path | IO[str], label: str) -> pd.DataFrame:
@@ -218,11 +231,18 @@ def _read_padded_csv(source: str | Path | IO[str], label: str) -> pd.DataFrame:
     if not lines:
         raise ValueError(f"{label}: file is empty")
 
-    header = lines[0].split(",")
-    widest = max((len(line.split(",")) for line in lines if line.strip()), default=len(header))
-    if widest <= len(header):
+    raw_header = lines[0].split(",")
+    widest = max((len(line.split(",")) for line in lines if line.strip()), default=len(raw_header))
+    if widest <= len(raw_header):
         return pd.read_csv(io.StringIO(text), encoding_errors="replace")
 
+    # Blank header fields are unnamed columns. Left as "" they collide with each
+    # other and pandas rejects the file for duplicate names, which cost 24 real
+    # league-seasons before this was handled.
+    header = [
+        name.strip() if name.strip() else f"{_PAD_PREFIX}blank{i}"
+        for i, name in enumerate(raw_header)
+    ]
     names = [*header, *(f"{_PAD_PREFIX}{i}" for i in range(widest - len(header)))]
     frame = pd.read_csv(io.StringIO(text), names=names, skiprows=1, encoding_errors="replace")
 
@@ -252,7 +272,9 @@ def read_season_csv(
     frame.columns = [str(c).strip() for c in frame.columns]
     odds_cols = discover_header(list(frame.columns), source=label)
 
-    if "HomeTeam" not in frame.columns or "AwayTeam" not in frame.columns:
+    home_column = _first_present(frame, "HomeTeam", "HT")
+    away_column = _first_present(frame, "AwayTeam", "AT")
+    if home_column is None or away_column is None:
         raise ValueError(f"{label}: HomeTeam and AwayTeam are required")
 
     kickoff = _kickoff(frame)
@@ -276,8 +298,8 @@ def read_season_csv(
             "league": league,
             "season": season,
             "kickoff": kickoff,
-            "home": _text(frame["HomeTeam"]),
-            "away": _text(frame["AwayTeam"]),
+            "home": _text(frame[home_column]),
+            "away": _text(frame[away_column]),
             "home_goals": home_goals,
             "away_goals": away_goals,
         }
@@ -295,44 +317,56 @@ def read_season_csv(
     matches["home_goals"] = matches["home_goals"].astype(np.int64)
     matches["away_goals"] = matches["away_goals"].astype(np.int64)
 
-    odds_rows: list[dict[str, object]] = []
-    usable = frame.loc[valid].reset_index(drop=True)
-    for column, spec in odds_cols.items():
-        values = pd.to_numeric(usable[column], errors="coerce")
-        for i, price in enumerate(values):
-            if not np.isfinite(price) or float(price) <= 1.0:
-                continue
-            row = matches.iloc[i]
-            odds_rows.append(
-                {
-                    "league": row["league"],
-                    "season": row["season"],
-                    "kickoff": row["kickoff"],
-                    "home": row["home"],
-                    "away": row["away"],
-                    "book": spec.book,
-                    "market": spec.market,
-                    "period": spec.period,
-                    "outcome": spec.outcome,
-                    "decimal": float(price),
-                }
-            )
-    odds = pd.DataFrame(
-        odds_rows,
-        columns=[
-            "league",
-            "season",
-            "kickoff",
-            "home",
-            "away",
-            "book",
-            "market",
-            "period",
-            "outcome",
-            "decimal",
-        ],
-    )
+    odds = _tidy_odds(frame.loc[valid].reset_index(drop=True), matches, odds_cols)
     return SeasonTables(matches=matches, odds=odds, source=label)
+
+
+ODDS_COLUMNS: tuple[str, ...] = (
+    "league",
+    "season",
+    "kickoff",
+    "home",
+    "away",
+    "book",
+    "market",
+    "period",
+    "outcome",
+    "decimal",
+)
+
+
+def _tidy_odds(
+    usable: pd.DataFrame, matches: pd.DataFrame, odds_cols: dict[str, OddsColumn]
+) -> pd.DataFrame:
+    """Melt the wide odds columns into one tidy row per priced outcome.
+
+    One block per odds column, concatenated once. The obvious loop — over
+    columns, then over rows, taking ``matches.iloc[i]`` for each — costs a
+    pandas row lookup per (column, row) pair. At roughly a hundred odds columns
+    across five hundred season files that is tens of millions of lookups, and
+    it made simply reading the archive take longer than fitting the model to it.
+    """
+    if not odds_cols:
+        return pd.DataFrame(columns=list(ODDS_COLUMNS))
+
+    key_columns = ["league", "season", "kickoff", "home", "away"]
+    blocks: list[pd.DataFrame] = []
+    for column, spec in odds_cols.items():
+        prices = pd.to_numeric(usable[column], errors="coerce").to_numpy(dtype=np.float64)
+        payable = np.isfinite(prices) & (prices > 1.0)
+        if not payable.any():
+            continue
+        block = matches.loc[payable, key_columns].copy()
+        block["book"] = spec.book
+        block["market"] = spec.market
+        block["period"] = spec.period
+        block["outcome"] = spec.outcome
+        block["decimal"] = prices[payable]
+        blocks.append(block)
+
+    if not blocks:
+        return pd.DataFrame(columns=list(ODDS_COLUMNS))
+    return pd.concat(blocks, ignore_index=True)[list(ODDS_COLUMNS)]
 
 
 def concat_seasons(tables: list[SeasonTables]) -> SeasonTables:
