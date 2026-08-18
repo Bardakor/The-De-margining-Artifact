@@ -20,9 +20,9 @@ A clear and concise description of any alternative solutions or features you've 
 - [ ] `src/footy/core/` (pricing mathematics)
 - [ ] `src/footy/market/` (overround, de-margining, Kelly)
 - [ ] `src/footy/eval/` (scoring rules)
+- [ ] `src/footy/study/` (walk-forward, coverage, evaluation)
 - [ ] `tests/` (fixtures, properties)
 - [ ] `docs/` (model spec, study design)
-- [ ] Study pipeline (Plans 2–5)
 
 **Additional context**
 Add any other context about the feature request here.

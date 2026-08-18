@@ -26,6 +26,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from footy.eval.effect import (
+    bootstrap_correlation,
+    bootstrap_mean_difference,
+    cluster_bootstrap_correlation,
+)
 from footy.market.demargin import METHODS
 from footy.study.run import MARKET_OUTCOMES, closing_books, load_archive
 
@@ -44,6 +49,14 @@ METHOD_LABEL = {
     "shin": "Shin",
     "odds_ratio": "Odds-ratio",
 }
+
+# Seeded so the paper's intervals are regenerable. Book-level uses the same
+# seed as fig-margin-spread, so the figure title and the macros agree.
+P1_CELL_BOOTSTRAP_SEED = 1
+P1_BOOK_BOOTSTRAP_SEED = 0
+P1_CLUSTER_BOOTSTRAP_SEED = 2
+P2_BOOTSTRAP_SEED = 3
+BOOTSTRAP_RESAMPLES = 10_000
 
 
 # --------------------------------------------------------------------------
@@ -148,6 +161,119 @@ def _sign_differs(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return np.asarray(both & (np.sign(a) != np.sign(b)), dtype=bool)
 
 
+def _p1_pairs(cell_frame: pd.DataFrame, margin_frame: pd.DataFrame) -> pd.DataFrame:
+    """Cells that carry both a margin and an ROI spread --- the pairs P1's ρ is on."""
+    joined = cell_frame.merge(margin_frame, on=KEYS, how="left")
+    return joined.dropna(subset=["mean_book_sum", "roi_spread"])
+
+
+def _p1_book_pairs(cell_frame: pd.DataFrame, margin_frame: pd.DataFrame) -> pd.DataFrame:
+    """One row per bookmaker: mean margin against mean ROI spread.
+
+    This is the aggregation fig-margin-spread bootstraps. Sorted by book so a
+    seeded resample walks the same row order the figure does.
+    """
+    joined = cell_frame.merge(margin_frame, on=KEYS, how="left")
+    return (
+        joined.groupby("book")
+        .agg(mean_book_sum=("mean_book_sum", "mean"), roi_spread=("roi_spread", "mean"))
+        .dropna()
+        .reset_index()
+        .sort_values("book")
+        .reset_index(drop=True)
+    )
+
+
+def p1_cell_interval(
+    cell_frame: pd.DataFrame,
+    margin_frame: pd.DataFrame,
+    *,
+    rng: np.random.Generator,
+    n_resamples: int = BOOTSTRAP_RESAMPLES,
+) -> tuple[float, float, float, int]:
+    """Cell-level Spearman ρ with an ordinary pair-bootstrap interval.
+
+    The interval treats cells as independent, which they are not. Quote it
+    alongside :func:`p1_cluster_interval` and :func:`p1_book_interval`.
+    """
+    usable = _p1_pairs(cell_frame, margin_frame)
+    n = len(usable)
+    if n <= 2:
+        return float("nan"), float("nan"), float("nan"), n
+    rho, low, high = bootstrap_correlation(
+        usable["mean_book_sum"].to_numpy(dtype=float),
+        usable["roi_spread"].to_numpy(dtype=float),
+        rng=rng,
+        n_resamples=n_resamples,
+    )
+    return rho, low, high, n
+
+
+def p1_book_interval(
+    cell_frame: pd.DataFrame,
+    margin_frame: pd.DataFrame,
+    *,
+    rng: np.random.Generator,
+    n_resamples: int = BOOTSTRAP_RESAMPLES,
+) -> tuple[float, float, float, int]:
+    """Bookmaker-level ρ and percentile interval, matching fig-margin-spread."""
+    by_book = _p1_book_pairs(cell_frame, margin_frame)
+    n = len(by_book)
+    if n <= 2:
+        return float("nan"), float("nan"), float("nan"), n
+    rho, low, high = bootstrap_correlation(
+        by_book["mean_book_sum"].to_numpy(dtype=float),
+        by_book["roi_spread"].to_numpy(dtype=float),
+        rng=rng,
+        n_resamples=n_resamples,
+    )
+    return rho, low, high, n
+
+
+def p1_cluster_interval(
+    cell_frame: pd.DataFrame,
+    margin_frame: pd.DataFrame,
+    *,
+    rng: np.random.Generator,
+    n_resamples: int = BOOTSTRAP_RESAMPLES,
+) -> tuple[float, float, float, int]:
+    """Cell-level ρ with a bookmaker-clustered bootstrap interval."""
+    usable = _p1_pairs(cell_frame, margin_frame)
+    n = len(usable)
+    if usable["book"].nunique() < 2:
+        return float("nan"), float("nan"), float("nan"), n
+    rho, low, high = cluster_bootstrap_correlation(
+        usable["mean_book_sum"].to_numpy(dtype=float),
+        usable["roi_spread"].to_numpy(dtype=float),
+        usable["book"].to_numpy(),
+        rng=rng,
+        n_resamples=n_resamples,
+    )
+    return rho, low, high, n
+
+
+def p2_roi_diff_interval(
+    cell_frame: pd.DataFrame,
+    *,
+    rng: np.random.Generator,
+    n_resamples: int = BOOTSTRAP_RESAMPLES,
+) -> tuple[float, float, float, int]:
+    """Paired bootstrap of mean(1X2 ROI spread − OU25 ROI spread)."""
+    wide = cell_frame.pivot_table(
+        index=["league", "book"], columns="market", values="roi_spread", aggfunc="first"
+    ).dropna()
+    n = len(wide)
+    if n < 2 or "1X2" not in wide.columns or "OU25" not in wide.columns:
+        return float("nan"), float("nan"), float("nan"), n
+    point, low, high = bootstrap_mean_difference(
+        wide["1X2"].to_numpy(dtype=float),
+        wide["OU25"].to_numpy(dtype=float),
+        rng=rng,
+        n_resamples=n_resamples,
+    )
+    return point, low, high, n
+
+
 # --------------------------------------------------------------------------
 # LaTeX emission
 # --------------------------------------------------------------------------
@@ -228,7 +354,7 @@ def table_calibration() -> tuple[str, dict[str, str]]:
     )
     body = tabular(
         shown,
-        "S[table-format=5.0]S[table-format=1.6]S[table-format=1.6]",
+        "rS[table-format=1.6]S[table-format=1.6]",
         ["{Half-life (days)}", "{$\\xi$}", "{Paired mean RPS}"],
     )
     best = frame.loc[frame["mean_rps_paired"].idxmin()]
@@ -255,7 +381,7 @@ def table_coverage(cells: pd.DataFrame) -> str:
     )
     return tabular(
         grouped,
-        "llS[table-format=3.0]S[table-format=6.0]",
+        "llrr",
         ["Bookmaker", "Market", "{Cells}", "{Matches}"],
     )
 
@@ -275,7 +401,7 @@ def table_p1(cell_frame: pd.DataFrame, margin_frame: pd.DataFrame) -> tuple[str,
     )
     body = tabular(
         by_book,
-        "lS[table-format=3.0]S[table-format=1.4]S[table-format=1.4]S[table-format=1.4]",
+        "lrS[table-format=1.4]S[table-format=1.4]S[table-format=1.4]",
         [
             "Bookmaker",
             "{Cells}",
@@ -285,16 +411,37 @@ def table_p1(cell_frame: pd.DataFrame, margin_frame: pd.DataFrame) -> tuple[str,
         ],
     )
 
-    usable = joined.dropna(subset=["mean_book_sum", "roi_spread"])
     macros: dict[str, str] = {}
-    if len(usable) > 2:
-        rho = float(
-            np.corrcoef(
-                usable["mean_book_sum"].rank(),
-                usable["roi_spread"].rank(),
-            )[0, 1]
-        )
+    rho, low, high, n_cells = p1_cell_interval(
+        cell_frame,
+        margin_frame,
+        rng=np.random.default_rng(P1_CELL_BOOTSTRAP_SEED),
+    )
+    if np.isfinite(rho):
         macros["SpearmanMarginSpread"] = f"{rho:.3f}"
+        macros["NMarginCells"] = str(n_cells)
+        if np.isfinite(low) and np.isfinite(high):
+            macros["SpearmanMarginSpreadLow"] = f"{low:.3f}"
+            macros["SpearmanMarginSpreadHigh"] = f"{high:.3f}"
+    book_rho, book_low, book_high, n_books = p1_book_interval(
+        cell_frame,
+        margin_frame,
+        rng=np.random.default_rng(P1_BOOK_BOOTSTRAP_SEED),
+    )
+    if np.isfinite(book_rho):
+        macros["SpearmanBookSpread"] = f"{book_rho:.3f}"
+        macros["NMarginBooks"] = str(n_books)
+        if np.isfinite(book_low) and np.isfinite(book_high):
+            macros["SpearmanBookSpreadLow"] = f"{book_low:.3f}"
+            macros["SpearmanBookSpreadHigh"] = f"{book_high:.3f}"
+    _, cl_low, cl_high, _ = p1_cluster_interval(
+        cell_frame,
+        margin_frame,
+        rng=np.random.default_rng(P1_CLUSTER_BOOTSTRAP_SEED),
+    )
+    if np.isfinite(cl_low) and np.isfinite(cl_high):
+        macros["SpearmanClusterLow"] = f"{cl_low:.3f}"
+        macros["SpearmanClusterHigh"] = f"{cl_high:.3f}"
     for book, macro in (("Pinnacle", "SpreadPinnacle"), ("Bet365", "SpreadBetSixtyFive")):
         row = by_book[by_book["book"] == book]
         if not row.empty:
@@ -332,7 +479,7 @@ def table_p2(cell_frame: pd.DataFrame) -> tuple[str, dict[str, str]]:
     )
     body = tabular(
         summary,
-        "lS[table-format=3.0]S[table-format=1.4]S[table-format=1.4]S[table-format=1.4]S[table-format=1.3]",
+        "lrS[table-format=1.4]S[table-format=1.4]S[table-format=1.4]S[table-format=1.3]",
         [
             "Quantity",
             "{Pairs}",
@@ -345,7 +492,19 @@ def table_p2(cell_frame: pd.DataFrame) -> tuple[str, dict[str, str]]:
     macros = {
         "SpreadOneXTwo": f"{float(wide['1X2'].mean()):.4f}",
         "SpreadOverUnder": f"{float(wide['OU25'].mean()):.4f}",
+        "NPairedCells": str(len(wide)),
+        "ShareOneXTwoRoi": f"{100.0 * float((wide['1X2'] > wide['OU25']).mean()):.0f}\\%",
+        "ShareOneXTwoRps": f"{100.0 * float((rps['1X2'] > rps['OU25']).mean()):.0f}\\%",
     }
+    diff, diff_low, diff_high, _ = p2_roi_diff_interval(
+        cell_frame,
+        rng=np.random.default_rng(P2_BOOTSTRAP_SEED),
+    )
+    if np.isfinite(diff):
+        macros["PairRoiDiff"] = f"{diff:.4f}"
+        if np.isfinite(diff_low) and np.isfinite(diff_high):
+            macros["PairRoiDiffLow"] = f"{diff_low:.4f}"
+            macros["PairRoiDiffHigh"] = f"{diff_high:.4f}"
     return body, macros
 
 
@@ -368,7 +527,7 @@ def table_p3(cell_frame: pd.DataFrame) -> tuple[str, dict[str, str]]:
     ]
     body = tabular(
         shown,
-        "lll S[table-format=5.0] S[table-format=+1.4] S[table-format=+1.4] S[table-format=1.4]",
+        "lll r S[table-format=+1.4] S[table-format=+1.4] S[table-format=1.4]",
         [
             "League",
             "Bookmaker",
@@ -403,15 +562,15 @@ def table_dm(cells: pd.DataFrame) -> str:
     grouped["method"] = grouped["method"].map(METHOD_LABEL)
     return tabular(
         grouped,
-        "lS[table-format=3.0]S[table-format=1.4]S[table-format=1.4]S[table-format=+1.4]S[table-format=1.3]S[table-format=1.3]",
+        "lrS[table-format=1.4]S[table-format=1.4]S[table-format=+1.4]S[table-format=1.3]S[table-format=1.3]",
         [
             "Transform",
             "{Cells}",
             "{Model RPS}",
-            "{Benchmark RPS}",
-            "{Difference}",
-            "{Share favouring model}",
-            "{Share $q < 0.10$}",
+            r"{\makecell{Benchmark\\RPS}}",
+            "{Diff.}",
+            r"{\makecell{Share fav.\\model}}",
+            r"{\makecell{Share\\$q < 0.10$}}",
         ],
     )
 

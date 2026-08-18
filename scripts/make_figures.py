@@ -119,6 +119,88 @@ def _clean_axes(ax: plt.Axes) -> None:
     ax.tick_params(colors=INK_MUTED, length=3)
 
 
+_LABEL_ANGLES_DEG = [90, 45, 135, 0, 180, -45, -135, -90]
+
+
+def _place_labels(
+    ax: plt.Axes,
+    xs: np.ndarray,
+    ys: np.ndarray,
+    labels: list[str],
+    *,
+    fontsize: float = 7,
+    color: str = INK_SECONDARY,
+) -> None:
+    """Greedy collision-avoiding label placement for a named scatter.
+
+    A fixed alternating above/below offset (the previous approach) runs a
+    label straight through a neighbouring marker whenever two points are
+    close in y, which happens repeatedly on a 14-bookmaker scatter. Instead:
+    process points most-crowded-first, and for each try a ring of compass
+    offsets at two radii, keeping whichever clears every other marker and
+    every label already placed by the widest margin. Distances are judged
+    in axis-normalised space so the choice doesn't favour whichever axis
+    happens to have the larger data range.
+    """
+    xr = float(xs.max() - xs.min()) or 1.0
+    yr = float(ys.max() - ys.min()) or 1.0
+    nx = (xs - xs.min()) / xr
+    ny = (ys - ys.min()) / yr
+
+    crowding = np.array(
+        [
+            sum(
+                1.0 / (np.hypot(nx[i] - nx[j], ny[i] - ny[j]) + 1e-6)
+                for j in range(len(xs))
+                if j != i
+            )
+            for i in range(len(xs))
+        ]
+    )
+    order = np.argsort(-crowding)
+
+    placed: list[tuple[float, float]] = []
+    pt_radius = 20.0
+
+    for i in order:
+        best_dx_n, best_dy_n = 0.05, 0.05
+        best_score = -np.inf
+        for radius in (0.05, 0.09):
+            for angle in _LABEL_ANGLES_DEG:
+                rad = np.radians(angle)
+                cand_nx = nx[i] + radius * np.cos(rad)
+                cand_ny = ny[i] + radius * np.sin(rad)
+                # Hard-excluded, not merely penalised: a label above the
+                # topmost point or right of the rightmost one has nowhere to
+                # go but into the title or off the axes entirely.
+                if not (-0.04 <= cand_nx <= 1.04 and -0.04 <= cand_ny <= 1.0):
+                    continue
+                dists = [np.hypot(cand_nx - nx[j], cand_ny - ny[j]) for j in range(len(xs))]
+                dists += [np.hypot(cand_nx - px, cand_ny - py) for px, py in placed]
+                score = min(dists)
+                if score > best_score:
+                    best_score = score
+                    best_dx_n, best_dy_n = radius * np.cos(rad), radius * np.sin(rad)
+
+        norm = np.hypot(best_dx_n, best_dy_n) or 1.0
+        dx_pt = best_dx_n / norm * pt_radius
+        dy_pt = best_dy_n / norm * pt_radius
+        ha = "left" if dx_pt > 2 else ("right" if dx_pt < -2 else "center")
+        va = "bottom" if dy_pt > 2 else ("top" if dy_pt < -2 else "center")
+
+        ax.annotate(
+            labels[i],
+            (xs[i], ys[i]),
+            xytext=(dx_pt, dy_pt),
+            textcoords="offset points",
+            fontsize=fontsize,
+            color=color,
+            ha=ha,
+            va=va,
+        )
+        placed.append((nx[i] + best_dx_n, ny[i] + best_dy_n))
+
+
 def write(name: str, fig: Figure) -> None:
     GENERATED.mkdir(parents=True, exist_ok=True)
     path = GENERATED / name
@@ -160,10 +242,12 @@ def roi_spread_per_cell(cells: pd.DataFrame) -> pd.DataFrame:
 def margin_spread_by_book(cells: pd.DataFrame, margins: pd.DataFrame) -> pd.DataFrame:
     """Mean book sum against mean ROI spread, one row per bookmaker.
 
-    Exactly the aggregation `table_p1` uses for `\\SpearmanMarginSpread`: the
-    per-cell frame joined to the margin cache on (league, book, market), then
-    grouped by book and averaged. Reusing this grouping (rather than a
-    fresh one) is what keeps the figure's rho identical to the paper's macro.
+    Exactly the aggregation `p1_book_interval` uses: the per-cell frame joined
+    to the margin cache on (league, book, market), then grouped by book and
+    averaged. Reusing this grouping (rather than a fresh one) is what keeps
+    the figure's rho identical to the paper's `\\SpearmanBookSpread` macro.
+    The cell-level coefficient quoted as `\\SpearmanMarginSpread` is a
+    different aggregation and is not this figure.
     """
     cell_frame = roi_spread_per_cell(cells)
     joined = cell_frame.merge(margins, on=KEYS, how="left")
@@ -232,7 +316,8 @@ def longshot_index(implied: np.ndarray) -> int:
 def render_margin_spread(cells: pd.DataFrame, margins: pd.DataFrame) -> Figure:
     """fig-margin-spread: mean book sum against mean transform ROI spread,
     one point per bookmaker, labelled, with a fitted trend and rho + its
-    bootstrap CI. This carries P1, currently only a 14-row table."""
+    bootstrap CI. This is the bookmaker-level view of P1; the cell-level
+    coefficient is a different number, reported in the text."""
     by_book = margin_spread_by_book(cells, margins)
     if by_book.empty:
         raise ValueError("no bookmakers to plot in fig-margin-spread")
@@ -256,21 +341,15 @@ def render_margin_spread(cells: pd.DataFrame, margins: pd.DataFrame) -> Figure:
     )
 
     ax.scatter(x, y, s=42, color=BLUE, edgecolor=SURFACE, linewidth=1.2, zorder=3)
-    # 14 labels crowd where bookmakers cluster in (margin, spread) space.
-    # Alternating the label above/below the marker, ordered by y, keeps
-    # neighbours in a cluster from writing over each other.
-    ordered = by_book.sort_values("roi_spread").reset_index(drop=True)
-    for i, row in ordered.iterrows():
-        dy = 7 if i % 2 == 0 else -11
-        ax.annotate(
-            str(row["book"]),
-            (row["mean_book_sum"], row["roi_spread"]),
-            xytext=(5, dy),
-            textcoords="offset points",
-            fontsize=7,
-            color=INK_SECONDARY,
-            va="bottom" if dy > 0 else "top",
-        )
+    # Extra headroom: the topmost point's label has nowhere to go but
+    # sideways without it, and a tight autoscale put "Ladbrokes" through
+    # the title.
+    ax.margins(x=0.10, y=0.14)
+    # 14 labels crowd where bookmakers cluster in (margin, spread) space;
+    # _place_labels finds each one a clear compass direction instead of
+    # alternating a fixed above/below offset that runs labels through
+    # whichever neighbour happens to sit close in y.
+    _place_labels(ax, x, y, by_book["book"].tolist())
 
     ax.set_xlabel("Mean book sum (bookmaker margin)")
     ax.set_ylabel("Mean ROI spread across transforms")
@@ -325,14 +404,6 @@ def render_divergence(
             label=METHOD_LABEL[method],
             zorder=3,
         )
-        ax.annotate(
-            f"{recovered[longshot]:.3f}",
-            (implied[longshot], recovered[longshot]),
-            xytext=(6, (list(METHOD_ORDER).index(method) - 1.5) * 9),
-            textcoords="offset points",
-            fontsize=7,
-            color=METHOD_COLOR[method],
-        )
 
     ax.set_xlim(lo, hi)
     ax.set_ylim(lo, hi)
@@ -345,6 +416,36 @@ def render_divergence(
         loc="left",
     )
     ax.legend(loc="upper left")
+
+    # The four recovered values at the longshot sit within ~0.003 of each
+    # other, so per-point inline annotations pile into an unreadable blob at
+    # this scale. A single leader-lined list, stacked in the empty region
+    # above the diagonal (recovered < raw holds everywhere, so nothing is
+    # ever plotted there), reads the same four numbers without the collision.
+    ranked = sorted(METHOD_ORDER, key=lambda m: results[m].probabilities[longshot], reverse=True)
+    box_x, box_y, row_gap = 0.52, 0.88, 0.072
+    for row, method in enumerate(ranked):
+        value = results[method].probabilities[longshot]
+        ax.annotate(
+            f"{METHOD_LABEL[method]}  {value:.3f}",
+            xy=(implied[longshot], value),
+            xycoords="data",
+            xytext=(box_x, box_y - row * row_gap),
+            textcoords="axes fraction",
+            fontsize=7,
+            color=METHOD_COLOR[method],
+            ha="left",
+            va="center",
+            arrowprops={
+                "arrowstyle": "-",
+                "color": INK_MUTED,
+                "linewidth": 0.6,
+                "shrinkA": 0,
+                "shrinkB": 3,
+                "connectionstyle": "arc3,rad=0.12",
+            },
+        )
+
     fig.tight_layout()
     return fig
 

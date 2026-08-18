@@ -1,7 +1,7 @@
 [project]
 name = "footy"
 version = "0.1.0"
-description = "Dixon-Coles football pricing core and de-margining artifact study apparatus (Plan 1: pure pricing/evaluation; empirical study not yet implemented)"
+description = "Reproducible study of whether a football-forecasting edge over bookmakers survives the choice of de-margining transform"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"

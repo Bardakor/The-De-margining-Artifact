@@ -18,8 +18,9 @@ how they treat longshots, which is exactly where a model's claimed edge tends to
 
 This repository holds a single fixed forecasting model constant across all four transforms
 and tests whether the measured edge changes — in size, in significance, or in sign — with
-the choice of benchmark. **Plan 1** (implemented) provides the pure pricing and evaluation
-apparatus; the empirical study (Plans 2–5) is not yet complete.
+the choice of benchmark. The pre-registered evaluation is complete: P1–P3 and the full
+walk-forward comparison are reported in the paper and generated from
+`results/cells.csv`.
 
 ## Research question
 
@@ -109,8 +110,7 @@ $x>y$, $x=y$, $x<y$; Over/Under $\ell$ over $x+y>\ell$; both-teams-to-score over
 $x>0 \wedge y>0$; Asian handicap $h$ over $x+h>y$. Because they are marginals of one
 distribution they cannot disagree, and the suite asserts this directly.
 
-Parameters are fit by maximum likelihood with exponential time decay $\varphi(\Delta t) = e^{-\xi \Delta t}$
-(Plan 2, not yet implemented).
+Parameters are fit by maximum likelihood with exponential time decay $\varphi(\Delta t) = e^{-\xi \Delta t}$.
 
 ### An independent check on the matrix
 
@@ -167,7 +167,7 @@ Kelly, edge and expected value can never disagree about whether a bet is worth t
 | **2 — Fitting** | Weighted log-likelihood, analytic gradient, `check_grad`, L-BFGS-B | **Complete** |
 | **3 — Data** | Ingest, header discovery, coverage matrix, all four transforms | **Complete** |
 | **4 — Study** | Walk-forward protocol, leakage test, scoring, inference | **Complete — run** |
-| **5 — Paper** | Tables, manuscript against the frozen pre-registration | **Complete — 11pp draft** |
+| **5 — Paper** | Tables, manuscript against the frozen pre-registration | **Complete** |
 
 ## Implemented components
 
@@ -192,9 +192,9 @@ Kelly, edge and expected value can never disagree about whether a bet is worth t
 | football-data.co.uk ingest, header discovery | `src/footy/data/football_data.py` | 64 |
 | (league × season × book × market) coverage matrix | `src/footy/data/coverage.py` | 15 |
 
-The counts above total 363. The remaining 35 of the 398 are cross-cutting rather than
-per-module: 7 Hypothesis property tests, 27 purity-scan tests, and 1 import smoke test —
-all listed under Validation strategy below.
+The counts above total 363. The remainder are cross-cutting rather than
+per-module: Hypothesis property tests, purity-scan tests, an import smoke test,
+figure and table helpers, and effect-size intervals.
 
 `src/footy/core/` contains no I/O, no clock, and no randomness — enforced by an AST scan in
 `tests/test_purity.py` that also catches randomness reached *through* a permitted module
@@ -234,7 +234,7 @@ make verify    # compile, ruff, mypy --strict, pytest
 ```
 
 `make verify` runs, in order: byte-compilation, `ruff check` and `ruff format --check`,
-`mypy --strict`, then `pytest` — **398 tests** at the latest green run, reproduced from a
+`mypy --strict`, then `pytest` — **416 tests** at the latest green run, reproduced from a
 clean clone.
 
 `make paper` compiles [`paper/main.tex`](paper/main.tex) and writes [`The-Demargining-Artifact.pdf`](The-Demargining-Artifact.pdf) at the repository root. `make tables` fills the result slots from `results/cells.csv` first; without that file the draft still compiles, with `[pending]` placeholders.
@@ -250,8 +250,8 @@ $\xi$ from that document and refuses to run if it disagrees with the calibration
 
 | | Outcome |
 |---|---|
-| **P1** — disagreement scales with the book's margin | **Supported.** Rank correlation 0.594. RPS spread 0.0001 at the sharpest books (sum ≈ 1.01–1.03), 0.0004–0.0009 at 1.06–1.09 |
-| **P2** — disagreement larger in 1X2 than Over/Under 2.5 | **Weakly supported.** Larger in 60% (ROI) and 80% (RPS) of pairs — but only 15 pairs exist |
+| **P1** — disagreement scales with the book's margin | **Directionally supported.** Across 91 cells, Spearman's $\rho = 0.594$. The bookmaker-level relationship ($n=14$) is $\rho = 0.442$ with a 95% CI that includes zero. RPS spread 0.0001 at the sharpest books (sum ≈ 1.01–1.03), 0.0004–0.0009 at 1.06–1.09 |
+| **P2** — disagreement larger in 1X2 than Over/Under 2.5 | **Directionally consistent.** Larger in 60% (ROI) and 80% (RPS) of pairs — but only 15 pairs exist, from three bookmakers |
 | **P3** — measured edge changes sign between proportional and Shin | **Met on its letter, empty in substance.** 1 cell of 91, on returns indistinguishable from zero either side |
 
 **The unpredicted finding that governs P3:** the model has no edge to reverse. It beats the
@@ -292,7 +292,9 @@ cannot settle it.
   consequential limitation: everything reported about P3 describes behaviour near zero
   rather than whether the transform choice can overturn a real finding. P1 and P2 are
   unaffected — both concern disagreement between benchmarks and neither requires the model
-  to be any good.
+  to be any good. Settling P3 would take an explicitly post-hoc extension (a stronger
+  model, opening lines, a softer segment, or a published model that already claims an
+  edge). That extension is not part of this repository's registered study.
 - The decay parameter is weakly identified. Half-lives from 250 to 1200 days score within
   0.0006 of the optimum. It is held fixed across all four arms, so it shifts them together
   and cannot generate a difference between them.
@@ -314,7 +316,8 @@ cannot settle it.
 Brier (1950) · Kelly (1956) · Epstein (1969) · Murphy (1973) · Maher (1982) · Shin (1993) ·
 Politis & Romano (1994) · Benjamini & Hochberg (1995) · Diebold & Mariano (1995) ·
 Dixon & Coles (1997) · Karlis & Ntzoufras (2009) · Constantinou & Fenton (2012) ·
-Štrumbelj (2014) · Boshnakov, Kharrat & McHale (2017) · Wheatcroft (2021)
+Štrumbelj (2014) · Cheung (2015) · Clarke, Kovalchik & Ingram (2017) ·
+Boshnakov, Kharrat & McHale (2017) · Wheatcroft (2021) · Goto, Takeishi & Yairi (2026)
 
 Full citations in [`docs/model.md`](docs/model.md) and the
 [study design spec](docs/superpowers/specs/2026-08-16-demargining-study-design.md).

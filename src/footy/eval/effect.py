@@ -88,6 +88,90 @@ def bootstrap_correlation(
     return (rho, float(low), float(high))
 
 
+def cluster_bootstrap_correlation(
+    x: npt.ArrayLike,
+    y: npt.ArrayLike,
+    clusters: npt.ArrayLike,
+    *,
+    rng: np.random.Generator,
+    n_resamples: int = 10_000,
+    level: float = 0.95,
+) -> tuple[float, float, float]:
+    """Percentile interval for Spearman correlation, resampling clusters.
+
+    Ordinary pair bootstrap treats every (x_i, y_i) as independent. When the
+    same bookmaker (or the same matches) appear in several cells, that
+    understates the uncertainty. This resample draws clusters with replacement
+    and keeps every row of a drawn cluster together, repeating a cluster if
+    it is drawn more than once.
+    """
+    x_arr = np.asarray(x, dtype=np.float64)
+    y_arr = np.asarray(y, dtype=np.float64)
+    c_arr = np.asarray(clusters)
+    if x_arr.shape != y_arr.shape:
+        raise ValueError(f"x and y must have the same shape, got {x_arr.shape} and {y_arr.shape}")
+    if c_arr.shape != x_arr.shape:
+        raise ValueError(f"clusters must match x, got {c_arr.shape} against {x_arr.shape}")
+    if not 0.0 < level < 1.0:
+        raise ValueError(f"level must lie in (0, 1), got {level}")
+    if n_resamples < 1:
+        raise ValueError("need at least one resample")
+
+    unique, inverse = np.unique(c_arr, return_inverse=True)
+    n_clusters = int(unique.size)
+    if n_clusters < 2:
+        raise ValueError("need at least two clusters")
+
+    groups = [np.flatnonzero(inverse == i) for i in range(n_clusters)]
+    rho = spearman(x_arr, y_arr)
+    rhos = np.empty(n_resamples, dtype=np.float64)
+    for i in range(n_resamples):
+        drawn = rng.integers(0, n_clusters, size=n_clusters)
+        idx = np.concatenate([groups[int(j)] for j in drawn])
+        rhos[i] = spearman(x_arr[idx], y_arr[idx])
+
+    tail = (1.0 - level) / 2.0
+    finite = rhos[np.isfinite(rhos)]
+    if finite.size == 0:
+        return rho, float("nan"), float("nan")
+    low, high = np.quantile(finite, [tail, 1.0 - tail])
+    return (rho, float(low), float(high))
+
+
+def bootstrap_mean_difference(
+    a: npt.ArrayLike,
+    b: npt.ArrayLike,
+    *,
+    rng: np.random.Generator,
+    n_resamples: int = 10_000,
+    level: float = 0.95,
+) -> tuple[float, float, float]:
+    """Paired percentile interval for mean(a - b).
+
+    Resamples the paired differences with replacement. Used for P2, where
+    each pair is a (league, bookmaker) cell that prices both markets.
+    """
+    a_arr = np.asarray(a, dtype=np.float64)
+    b_arr = np.asarray(b, dtype=np.float64)
+    if a_arr.shape != b_arr.shape:
+        raise ValueError(f"a and b must have the same shape, got {a_arr.shape} and {b_arr.shape}")
+    if a_arr.size < 2:
+        raise ValueError("need at least two paired observations")
+    if not 0.0 < level < 1.0:
+        raise ValueError(f"level must lie in (0, 1), got {level}")
+    if n_resamples < 1:
+        raise ValueError("need at least one resample")
+
+    diff = a_arr - b_arr
+    point = float(np.mean(diff))
+    n = diff.size
+    draws = rng.choice(n, size=(n_resamples, n), replace=True)
+    means = diff[draws].mean(axis=1)
+    tail = (1.0 - level) / 2.0
+    low, high = np.quantile(means, [tail, 1.0 - tail])
+    return (point, float(low), float(high))
+
+
 def spread_as_share_of_gap(spread: float, model_gap: float) -> float:
     """Express a spread (e.g. RPS difference) as a share of the model-market gap.
 

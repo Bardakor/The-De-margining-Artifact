@@ -7,6 +7,8 @@ import pytest
 
 from footy.eval.effect import (
     bootstrap_correlation,
+    bootstrap_mean_difference,
+    cluster_bootstrap_correlation,
     equivalent_sample_size,
     spearman,
     spread_as_share_of_gap,
@@ -34,6 +36,29 @@ def test_a_small_sample_gives_a_wide_interval() -> None:
     y = 0.6 * x + rng.normal(size=14)
     _, low, high = bootstrap_correlation(x, y, rng=rng, n_resamples=2000)
     assert high - low > 0.4
+
+
+def test_cluster_bootstrap_is_wider_when_dependence_is_within_cluster() -> None:
+    """Fourteen independent books, each duplicated into several cells, must not
+    be treated as 70 independent observations."""
+    rng = np.random.default_rng(2)
+    books = np.arange(14)
+    x_book = rng.normal(size=14)
+    y_book = 0.5 * x_book + rng.normal(size=14)
+    x = np.repeat(x_book, 5)
+    y = np.repeat(y_book, 5)
+    clusters = np.repeat(books, 5)
+    _, pair_low, pair_high = bootstrap_correlation(x, y, rng=rng, n_resamples=1500)
+    _, cl_low, cl_high = cluster_bootstrap_correlation(x, y, clusters, rng=rng, n_resamples=1500)
+    assert (cl_high - cl_low) > (pair_high - pair_low)
+
+
+def test_paired_mean_difference_brackets_the_point() -> None:
+    rng = np.random.default_rng(3)
+    a = rng.normal(0.02, 0.01, size=15)
+    b = rng.normal(0.01, 0.01, size=15)
+    point, low, high = bootstrap_mean_difference(a, b, rng=rng, n_resamples=2000)
+    assert low < point < high
 
 
 def test_spread_expressed_against_the_model_gap() -> None:
