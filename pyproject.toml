@@ -51,13 +51,12 @@ files = ["src", "tests"]
 module = "scipy.*"
 ignore_missing_imports = true
 
-# make_figures.py lives in scripts/, not src/, so it is not itself under
-# strict mypy (matching make_tables.py and study.py, neither of which is
-# either) --- but tests/test_make_figures.py imports it off sys.path to test
-# its data-prep functions, and mypy needs to be told that import is expected
-# to be unresolvable rather than a real error.
+# scripts/*.py live outside src/, so they are not themselves under strict
+# mypy (matching study.py) --- but tests import them off sys.path, and mypy
+# needs to be told those imports are expected to be unresolvable rather
+# than real errors.
 [[tool.mypy.overrides]]
-module = "make_figures"
+module = ["make_figures", "make_tables"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

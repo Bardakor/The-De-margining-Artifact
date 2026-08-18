@@ -21,5 +21,8 @@ __pycache__/
 /paper/generated/
 /paper/build/
 
+# Local Claude Code worktrees are not part of the study.
+.claude/
+
 # OS
 .DS_Store
