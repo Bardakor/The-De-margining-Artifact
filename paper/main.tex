@@ -45,6 +45,14 @@
 \setlength{\floatsep}{10pt plus 2pt minus 2pt}
 \setlength{\textfloatsep}{12pt plus 2pt minus 4pt}
 \setlength{\intextsep}{6pt plus 2pt minus 2pt}
+% Float pages: top-align, and do not stretch the gap between two floats.
+% The default \@fpsep is 8pt plus 2fil, which opens a desert between
+% stacked figures. Leftover space, if any, falls at the bottom.
+\makeatletter
+\setlength{\@fptop}{0pt}
+\setlength{\@fpsep}{8pt}
+\setlength{\@fpbot}{0pt plus 1fil}
+\makeatother
 
 \captionsetup{
   font=small,
@@ -61,6 +69,7 @@
 \widowpenalty=10000
 \displaywidowpenalty=10000
 \preto\section{\Needspace{8\baselineskip}}
+\preto\subsection{\Needspace{8\baselineskip}}
 \BeforeBeginEnvironment{lstlisting}{\Needspace{18\baselineskip}}
 
 \newcommand{\inputtable}[1]{%
@@ -840,9 +849,22 @@ fixtures scores better for reasons unrelated to forecast quality. That sweep
 placed its minimum at 700 days, on the edge of its grid. Scoring every
 candidate on the \xipairedn{} fixtures that \emph{all} candidates forecast
 moved the optimum to \xihalflife{} days and made it interior, with the
-neighbouring candidates worse on either side (Table~\ref{tab:xi}).
+neighbouring candidates worse on either side (Table~\ref{tab:xi} and
+Figure~\ref{fig:calibration}).
 
-\begin{table}[ht]
+\Needspace{8\baselineskip}
+Stated plainly: $\xi$ is weakly identified. Half-lives of 400 and 700 days
+differ by $7.3 \times 10^{-5}$ in paired RPS, and anything between roughly 250
+and 1200 days scores within $6 \times 10^{-4}$ of the optimum. We do not
+present 400 days as a precisely determined quantity. What Table~\ref{tab:xi}
+and Figure~\ref{fig:calibration} establish is that the extremes are wrong. A
+30-day half-life is far worse (\xirpsfastest{}), and no decay at all is worse
+than moderate decay (\xirpsnodecay{} against \xirpsbest{}), so exponential
+decay earns its place without its exact rate mattering much. Because the same
+model is held fixed across transforms, a weakly identified $\xi$ cannot
+generate a difference between them.
+
+\begin{table}[H]
   \centering
   \caption{Paired selection of the decay rate on the calibration period.
   Every candidate is scored on the same \xipairedn{} fixtures.}
@@ -852,7 +874,7 @@ neighbouring candidates worse on either side (Table~\ref{tab:xi}).
     {\pendingtable{3}}
 \end{table}
 
-\begin{figure}[ht]
+\begin{figure}[H]
   \centering
   \IfFileExists{generated/fig-calibration.pdf}
     {\includegraphics[width=0.72\textwidth]{generated/fig-calibration.pdf}}
@@ -865,18 +887,7 @@ neighbouring candidates worse on either side (Table~\ref{tab:xi}).
   Table~\ref{tab:xi} states in numbers.}
   \label{fig:calibration}
 \end{figure}
-
-Stated plainly: $\xi$ is weakly identified. Half-lives of 400 and 700 days
-differ by $7.3 \times 10^{-5}$ in paired RPS, and anything between roughly 250
-and 1200 days scores within $6 \times 10^{-4}$ of the optimum. We do not
-present 400 days as a precisely determined quantity. What the curve does
-establish is that the extremes are wrong. A 30-day half-life is far worse
-(\xirpsfastest{}), and no decay at all is worse than moderate decay
-(\xirpsnodecay{} against \xirpsbest{}), so exponential decay earns its place
-without its exact rate
-mattering much. Because one model is held fixed across all four transforms, a
-weakly identified $\xi$ shifts every arm together and cannot generate a
-difference between them.
+\FloatBarrier
 
 \subsection{Metrics}
 \label{sec:metrics}
@@ -1028,7 +1039,7 @@ not in doubt (the transforms provably coincide as the book sum approaches
 one), so what this measures is the size of the effect at realistic margins,
 not whether it exists.
 
-\begin{table}[H]
+\begin{table}[ht]
   \centering
   \caption{Transform disagreement against book margin. Spread is the range of
   a quantity across the four transforms within a cell.}
@@ -1038,38 +1049,42 @@ not whether it exists.
     {\pendingtable{P1}}
 \end{table}
 
-\begin{figure}[ht]
-  \centering
-  \IfFileExists{generated/fig-margin-spread.pdf}
-    {\includegraphics[width=0.62\textwidth]{generated/fig-margin-spread.pdf}}
-    {\pendingfigure{margin-spread}}
-  \caption{Mean bookmaker margin (book sum) against the mean ROI spread across
-  the four transforms, one point per bookmaker, with a least-squares trend.
-  $\rho$ and its 95\% bootstrap confidence interval are computed on these
-  bookmaker-level points ($n = \NMarginBooks{}$). Because that is a coarser
-  aggregation than the cell-level correlation quoted as
-  \SpearmanMarginSpread{} above, the two
-  numbers need not agree exactly, but both are positive and both put the
-  higher-margin books toward the higher-spread end.}
-  \label{fig:margin-spread}
-\end{figure}
+Figure~\ref{fig:margin-spread} repeats the comparison at one point per
+bookmaker, the coarser aggregation behind \SpearmanBookSpread{}. That
+bookmaker-level $\rho$ need not match the cell-level coefficient above; both
+are positive and both put the higher-margin books toward the higher-spread
+end. Figure~\ref{fig:divergence} shows the same disagreement in probability
+space, on the single highest-margin closing book, chosen by margin alone.
+The annotated longshot is where the four transforms separate.
 
-\begin{figure}[ht]
+% One top-of-page float, two panels boxed so the page cannot stretch a
+% gap between them. [H] and [p] both produced deserts: [H] blocked
+% following text from filling leftover space; [p] inserted infinite glue
+% between the panels.
+\begin{figure}[!t]
   \centering
-  \IfFileExists{generated/fig-divergence.pdf}
-    {\includegraphics[width=0.62\textwidth]{generated/fig-divergence.pdf}}
-    {\pendingfigure{divergence}}
-  \caption{The four transforms' recovered probabilities against the raw
-  implied probability, for the single closing book with the highest measured
-  margin in the archive, chosen by margin alone, before any transform was
-  run, so the example is not cherry-picked for a dramatic-looking spread. The
-  longshot outcome (smallest raw implied probability) is annotated with each
-  transform's recovered value: this is where the transforms are expected, and
-  shown, to disagree most, which is what no table of summary statistics can
-  make visible.}
-  \label{fig:divergence}
+  \begin{minipage}{\textwidth}
+    \centering
+    \captionsetup{skip=4pt, belowskip=0pt}
+    \IfFileExists{generated/fig-margin-spread.pdf}
+      {\includegraphics[width=0.70\textwidth]{generated/fig-margin-spread.pdf}}
+      {\pendingfigure{margin-spread}}
+    \caption{Mean bookmaker margin against mean ROI spread across the four
+    transforms, one point per bookmaker, with a least-squares trend.
+    $\rho$ and its 95\% bootstrap interval are computed on these
+    $n = \NMarginBooks{}$ bookmaker-level points.}
+    \label{fig:margin-spread}
+    \vspace{0.35em}
+    \IfFileExists{generated/fig-divergence.pdf}
+      {\includegraphics[width=0.70\textwidth]{generated/fig-divergence.pdf}}
+      {\pendingfigure{divergence}}
+    \caption{The four transforms' recovered probabilities against the raw
+    implied probability, for the single closing book with the highest measured
+    margin in the archive, chosen by margin alone. The longshot outcome is
+    annotated: this is where the transforms disagree most.}
+    \label{fig:divergence}
+  \end{minipage}
 \end{figure}
-\FloatBarrier
 
 \subsection{P2: disagreement is larger in the three-outcome market}
 
@@ -1091,7 +1106,7 @@ treats the \NPairedCells{} (league, bookmaker) pairs as independent, which they
 are not: only three bookmakers price both markets. It describes this sample;
 it is not a licence to generalise.
 
-\begin{table}[H]
+\begin{table}[ht]
   \centering
   \caption{Transform disagreement by market, on cells where both markets are
   available from the same bookmaker.}
@@ -1130,7 +1145,7 @@ The prediction was therefore not so much falsified as rendered untestable by
 this design, which is a limitation of the study rather than a finding about
 the transforms.
 
-\begin{table}[H]
+\begin{table}[ht]
   \centering
   \caption{The one cell in which the sign of measured ROI differs across
   transforms.}
@@ -1151,7 +1166,7 @@ and in one cell of \NCells{} under proportional normalisation. Around
 three-quarters of cells reject equal predictive accuracy at $q<0.10$ after the
 Benjamini--Hochberg correction, in every case in the market's favour.
 
-\begin{table}[H]
+\begin{table}[ht]
   \centering
   \caption{Model versus benchmark RPS by transform, with Diebold--Mariano
   statistics and Benjamini--Hochberg adjusted $p$-values.}
@@ -1161,7 +1176,7 @@ Benjamini--Hochberg correction, in every case in the market's favour.
     {\pendingtable{DM}}
 \end{table}
 
-\begin{figure}[H]
+\begin{figure}[ht]
   \centering
   \IfFileExists{generated/fig-cell-scatter.pdf}
     {\includegraphics[width=0.58\textwidth]{generated/fig-cell-scatter.pdf}}
@@ -1179,7 +1194,7 @@ and 11\% of cells show positive ROI at all. Exactly one cell of \NCells{} has a
 bootstrap interval lying entirely above zero, which is fewer than the four or
 five that would be expected by chance across this many cells.
 
-\begin{figure}[H]
+\begin{figure}[ht]
   \centering
   \IfFileExists{generated/fig-roi.pdf}
     {\includegraphics[width=\textwidth]{generated/fig-roi.pdf}}
