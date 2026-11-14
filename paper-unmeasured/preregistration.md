@@ -103,3 +103,10 @@ timestamp.
   the estimated variances and measurable shares on the real stints and
   minutes, re-run M4 end to end, and take the 90% interval of the contrast.
   The player bootstrap and the A7 joint bootstrap are reported alongside.
+- **A10 (2026-11-14).** M4's primary estimator is cross-half: with one game
+  split shared by both sides, the statistics prediction from one half is
+  correlated with RAPM from the other half, and the squared correlation is
+  divided by the product of the half-length reliabilities. The within-sample
+  estimator is reported as robustness. Reason: on real StatsBomb data (M7a) the
+  within-sample correction exceeded 1 because the same matches drive both
+  sides; in M4 that shared match noise would bias the unmeasured share down.
