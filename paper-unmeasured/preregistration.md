@@ -55,3 +55,18 @@ reported whatever the outcome.
 Everything else — the taxonomy, the descriptive structure of the metrics (M2),
 the recovery study (M9), the comparison with V1 — is exploratory and labelled
 as such in the paper.
+
+## Amendments
+
+Each is committed before any real-data analysis has run; the commit is the
+timestamp.
+
+- **A1 (2026-11-14).** H6 is decided by the OLS Shapley shares (M6); the
+  Plackett–Luce shares are reported alongside, and any disagreement between the
+  two is reported. Reason: M6 produces both and the original text did not say
+  which decides.
+- **A2 (2026-11-14).** The 2026 edition exists (ceremony 2026-10-26, voting
+  period 2025-08-03 to 2026-07-19, inside the window), so by the rule above its
+  ranked players are in the pool.
+- **A3 (2026-11-14).** For the 2021 edition, "previous edition" in the
+  reputation block means 2019 (2020 was cancelled).
