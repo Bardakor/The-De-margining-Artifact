@@ -1,0 +1,833 @@
+[
+ {
+  "id": "e1",
+  "index": 1,
+  "period": 1,
+  "timestamp": "00:00:00.000",
+  "minute": 0,
+  "second": 0,
+  "type": {
+   "name": "Starting XI"
+  },
+  "team": {
+   "name": "Home FC"
+  },
+  "possession": 1,
+  "tactics": {
+   "lineup": [
+    {
+     "player": {
+      "id": 1,
+      "name": "Home One"
+     }
+    },
+    {
+     "player": {
+      "id": 2,
+      "name": "Home Two"
+     }
+    },
+    {
+     "player": {
+      "id": 4,
+      "name": "Home Four"
+     }
+    },
+    {
+     "player": {
+      "id": 7,
+      "name": "Home Seven"
+     }
+    }
+   ]
+  }
+ },
+ {
+  "id": "e2",
+  "index": 2,
+  "period": 1,
+  "timestamp": "00:00:00.000",
+  "minute": 0,
+  "second": 0,
+  "type": {
+   "name": "Starting XI"
+  },
+  "team": {
+   "name": "Away FC"
+  },
+  "possession": 1,
+  "tactics": {
+   "lineup": [
+    {
+     "player": {
+      "id": 11,
+      "name": "Away One"
+     }
+    },
+    {
+     "player": {
+      "id": 12,
+      "name": "Away Two"
+     }
+    }
+   ]
+  }
+ },
+ {
+  "id": "e3",
+  "index": 3,
+  "period": 1,
+  "timestamp": "00:00:00.000",
+  "minute": 0,
+  "second": 0,
+  "type": {
+   "name": "Half Start"
+  },
+  "team": {
+   "name": "Home FC"
+  },
+  "possession": 1
+ },
+ {
+  "id": "e4",
+  "index": 4,
+  "period": 1,
+  "timestamp": "00:00:00.000",
+  "minute": 0,
+  "second": 0,
+  "type": {
+   "name": "Half Start"
+  },
+  "team": {
+   "name": "Away FC"
+  },
+  "possession": 1
+ },
+ {
+  "id": "e5",
+  "index": 5,
+  "period": 1,
+  "timestamp": "00:01:00.000",
+  "minute": 1,
+  "second": 0,
+  "type": {
+   "name": "Pass"
+  },
+  "team": {
+   "name": "Home FC"
+  },
+  "possession": 1,
+  "player": {
+   "id": 1,
+   "name": "Home One"
+  },
+  "location": [
+   60.0,
+   40.0
+  ],
+  "pass": {
+   "end_location": [
+    90.0,
+    40.0
+   ]
+  }
+ },
+ {
+  "id": "e6",
+  "index": 6,
+  "period": 1,
+  "timestamp": "00:10:00.000",
+  "minute": 10,
+  "second": 0,
+  "type": {
+   "name": "Pass"
+  },
+  "team": {
+   "name": "Home FC"
+  },
+  "possession": 3,
+  "player": {
+   "id": 2,
+   "name": "Home Two"
+  },
+  "location": [
+   60.0,
+   0.0
+  ],
+  "pass": {
+   "end_location": [
+    90.0,
+    40.0
+   ],
+   "type": {
+    "name": "Throw-in"
+   }
+  }
+ },
+ {
+  "id": "e7",
+  "index": 7,
+  "period": 1,
+  "timestamp": "00:10:05.000",
+  "minute": 10,
+  "second": 5,
+  "type": {
+   "name": "Pass"
+  },
+  "team": {
+   "name": "Home FC"
+  },
+  "possession": 3,
+  "player": {
+   "id": 2,
+   "name": "Home Two"
+  },
+  "location": [
+   30.0,
+   40.0
+  ],
+  "pass": {
+   "end_location": [
+    100.0,
+    40.0
+   ],
+   "outcome": {
+    "name": "Incomplete"
+   }
+  }
+ },
+ {
+  "id": "e8",
+  "index": 8,
+  "period": 1,
+  "timestamp": "00:12:00.000",
+  "minute": 12,
+  "second": 0,
+  "type": {
+   "name": "Pressure"
+  },
+  "team": {
+   "name": "Away FC"
+  },
+  "possession": 4,
+  "player": {
+   "id": 11,
+   "name": "Away One"
+  },
+  "location": [
+   20.0,
+   40.0
+  ]
+ },
+ {
+  "id": "e9",
+  "index": 9,
+  "period": 1,
+  "timestamp": "00:12:01.000",
+  "minute": 12,
+  "second": 1,
+  "type": {
+   "name": "Duel"
+  },
+  "team": {
+   "name": "Away FC"
+  },
+  "possession": 4,
+  "player": {
+   "id": 12,
+   "name": "Away Two"
+  },
+  "location": [
+   25.0,
+   40.0
+  ],
+  "duel": {
+   "type": {
+    "name": "Tackle"
+   },
+   "outcome": {
+    "name": "Won"
+   }
+  }
+ },
+ {
+  "id": "e10",
+  "index": 10,
+  "period": 1,
+  "timestamp": "00:12:02.000",
+  "minute": 12,
+  "second": 2,
+  "type": {
+   "name": "Interception"
+  },
+  "team": {
+   "name": "Away FC"
+  },
+  "possession": 4,
+  "player": {
+   "id": 12,
+   "name": "Away Two"
+  },
+  "location": [
+   25.0,
+   40.0
+  ],
+  "interception": {
+   "outcome": {
+    "name": "Won"
+   }
+  }
+ },
+ {
+  "id": "e11",
+  "index": 11,
+  "period": 1,
+  "timestamp": "00:12:03.000",
+  "minute": 12,
+  "second": 3,
+  "type": {
+   "name": "Block"
+  },
+  "team": {
+   "name": "Away FC"
+  },
+  "possession": 4,
+  "player": {
+   "id": 11,
+   "name": "Away One"
+  },
+  "location": [
+   15.0,
+   40.0
+  ]
+ },
+ {
+  "id": "e12",
+  "index": 12,
+  "period": 1,
+  "timestamp": "00:12:04.000",
+  "minute": 12,
+  "second": 4,
+  "type": {
+   "name": "Clearance"
+  },
+  "team": {
+   "name": "Away FC"
+  },
+  "possession": 4,
+  "player": {
+   "id": 12,
+   "name": "Away Two"
+  },
+  "location": [
+   10.0,
+   40.0
+  ]
+ },
+ {
+  "id": "e13",
+  "index": 13,
+  "period": 1,
+  "timestamp": "00:20:00.000",
+  "minute": 20,
+  "second": 0,
+  "type": {
+   "name": "Pass"
+  },
+  "team": {
+   "name": "Home FC"
+  },
+  "possession": 5,
+  "player": {
+   "id": 4,
+   "name": "Home Four"
+  },
+  "location": [
+   40.0,
+   40.0
+  ],
+  "pass": {
+   "end_location": [
+    100.0,
+    40.0
+   ]
+  }
+ },
+ {
+  "id": "e16",
+  "index": 14,
+  "period": 1,
+  "timestamp": "00:20:00.000",
+  "minute": 20,
+  "second": 0,
+  "type": {
+   "name": "Player Off"
+  },
+  "team": {
+   "name": "Away FC"
+  },
+  "possession": 4,
+  "player": {
+   "id": 11,
+   "name": "Away One"
+  }
+ },
+ {
+  "id": "e17",
+  "index": 15,
+  "period": 1,
+  "timestamp": "00:22:00.000",
+  "minute": 22,
+  "second": 0,
+  "type": {
+   "name": "Player On"
+  },
+  "team": {
+   "name": "Away FC"
+  },
+  "possession": 4,
+  "player": {
+   "id": 11,
+   "name": "Away One"
+  }
+ },
+ {
+  "id": "e18",
+  "index": 16,
+  "period": 1,
+  "timestamp": "00:46:30.000",
+  "minute": 46,
+  "second": 30,
+  "type": {
+   "name": "Substitution"
+  },
+  "team": {
+   "name": "Home FC"
+  },
+  "possession": 5,
+  "player": {
+   "id": 2,
+   "name": "Home Two"
+  },
+  "substitution": {
+   "replacement": {
+    "id": 6,
+    "name": "Home Six"
+   }
+  }
+ },
+ {
+  "id": "e19",
+  "index": 17,
+  "period": 1,
+  "timestamp": "00:46:40.000",
+  "minute": 46,
+  "second": 40,
+  "type": {
+   "name": "Bad Behaviour"
+  },
+  "team": {
+   "name": "Away FC"
+  },
+  "possession": 5,
+  "player": {
+   "id": 13,
+   "name": "Away Three"
+  },
+  "bad_behaviour": {
+   "card": {
+    "name": "Red Card"
+   }
+  }
+ },
+ {
+  "id": "e14",
+  "index": 18,
+  "period": 1,
+  "timestamp": "00:47:00.000",
+  "minute": 47,
+  "second": 0,
+  "type": {
+   "name": "Half End"
+  },
+  "team": {
+   "name": "Home FC"
+  },
+  "possession": 1
+ },
+ {
+  "id": "e15",
+  "index": 19,
+  "period": 1,
+  "timestamp": "00:47:00.000",
+  "minute": 47,
+  "second": 0,
+  "type": {
+   "name": "Half End"
+  },
+  "team": {
+   "name": "Away FC"
+  },
+  "possession": 1
+ },
+ {
+  "id": "e20",
+  "index": 20,
+  "period": 2,
+  "timestamp": "00:00:00.000",
+  "minute": 45,
+  "second": 0,
+  "type": {
+   "name": "Half Start"
+  },
+  "team": {
+   "name": "Home FC"
+  },
+  "possession": 1
+ },
+ {
+  "id": "e21",
+  "index": 21,
+  "period": 2,
+  "timestamp": "00:00:00.000",
+  "minute": 45,
+  "second": 0,
+  "type": {
+   "name": "Half Start"
+  },
+  "team": {
+   "name": "Away FC"
+  },
+  "possession": 1
+ },
+ {
+  "id": "e22",
+  "index": 22,
+  "period": 2,
+  "timestamp": "00:00:00.000",
+  "minute": 45,
+  "second": 0,
+  "type": {
+   "name": "Substitution"
+  },
+  "team": {
+   "name": "Home FC"
+  },
+  "possession": 6,
+  "player": {
+   "id": 7,
+   "name": "Home Seven"
+  },
+  "substitution": {
+   "replacement": {
+    "id": 3,
+    "name": "Home Three"
+   }
+  }
+ },
+ {
+  "id": "e23",
+  "index": 23,
+  "period": 2,
+  "timestamp": "00:05:00.000",
+  "minute": 50,
+  "second": 0,
+  "type": {
+   "name": "Ball Receipt*"
+  },
+  "team": {
+   "name": "Home FC"
+  },
+  "possession": 2,
+  "player": {
+   "id": 3,
+   "name": "Home Three"
+  },
+  "location": [
+   90.0,
+   40.0
+  ]
+ },
+ {
+  "id": "e24",
+  "index": 24,
+  "period": 2,
+  "timestamp": "00:05:01.000",
+  "minute": 50,
+  "second": 1,
+  "type": {
+   "name": "Carry"
+  },
+  "team": {
+   "name": "Home FC"
+  },
+  "possession": 2,
+  "player": {
+   "id": 3,
+   "name": "Home Three"
+  },
+  "location": [
+   90.0,
+   40.0
+  ],
+  "carry": {
+   "end_location": [
+    101.0,
+    35.0
+   ]
+  }
+ },
+ {
+  "id": "kp1",
+  "index": 25,
+  "period": 2,
+  "timestamp": "00:05:03.000",
+  "minute": 50,
+  "second": 3,
+  "type": {
+   "name": "Pass"
+  },
+  "team": {
+   "name": "Home FC"
+  },
+  "possession": 2,
+  "player": {
+   "id": 3,
+   "name": "Home Three"
+  },
+  "location": [
+   101.0,
+   35.0
+  ],
+  "pass": {
+   "end_location": [
+    110.0,
+    40.0
+   ],
+   "shot_assist": true
+  }
+ },
+ {
+  "id": "e26",
+  "index": 26,
+  "period": 2,
+  "timestamp": "00:05:04.000",
+  "minute": 50,
+  "second": 4,
+  "type": {
+   "name": "Ball Receipt*"
+  },
+  "team": {
+   "name": "Home FC"
+  },
+  "possession": 2,
+  "player": {
+   "id": 1,
+   "name": "Home One"
+  },
+  "location": [
+   110.0,
+   40.0
+  ]
+ },
+ {
+  "id": "e27",
+  "index": 27,
+  "period": 2,
+  "timestamp": "00:05:05.000",
+  "minute": 50,
+  "second": 5,
+  "type": {
+   "name": "Shot"
+  },
+  "team": {
+   "name": "Home FC"
+  },
+  "possession": 2,
+  "player": {
+   "id": 1,
+   "name": "Home One"
+  },
+  "location": [
+   110.0,
+   40.0
+  ],
+  "shot": {
+   "statsbomb_xg": 0.3,
+   "key_pass_id": "kp1",
+   "outcome": {
+    "name": "Goal"
+   },
+   "type": {
+    "name": "Open Play"
+   },
+   "body_part": {
+    "name": "Right Foot"
+   },
+   "technique": {
+    "name": "Normal"
+   },
+   "end_location": [
+    120.0,
+    40.0,
+    1.0
+   ]
+  }
+ },
+ {
+  "id": "e29",
+  "index": 28,
+  "period": 2,
+  "timestamp": "00:07:00.000",
+  "minute": 52,
+  "second": 0,
+  "type": {
+   "name": "Dribble"
+  },
+  "team": {
+   "name": "Home FC"
+  },
+  "possession": 6,
+  "player": {
+   "id": 6,
+   "name": "Home Six"
+  },
+  "location": [
+   70.0,
+   20.0
+  ],
+  "dribble": {
+   "outcome": {
+    "name": "Complete"
+   }
+  }
+ },
+ {
+  "id": "e30",
+  "index": 29,
+  "period": 2,
+  "timestamp": "00:10:00.000",
+  "minute": 55,
+  "second": 0,
+  "type": {
+   "name": "Own Goal Against"
+  },
+  "team": {
+   "name": "Away FC"
+  },
+  "possession": 7,
+  "player": {
+   "id": 12,
+   "name": "Away Two"
+  },
+  "location": [
+   5.0,
+   40.0
+  ]
+ },
+ {
+  "id": "e31",
+  "index": 30,
+  "period": 2,
+  "timestamp": "00:10:00.000",
+  "minute": 55,
+  "second": 0,
+  "type": {
+   "name": "Own Goal For"
+  },
+  "team": {
+   "name": "Home FC"
+  },
+  "possession": 7
+ },
+ {
+  "id": "e28",
+  "index": 31,
+  "period": 2,
+  "timestamp": "00:15:00.000",
+  "minute": 60,
+  "second": 0,
+  "type": {
+   "name": "Foul Committed"
+  },
+  "team": {
+   "name": "Home FC"
+  },
+  "possession": 6,
+  "player": {
+   "id": 4,
+   "name": "Home Four"
+  },
+  "location": [
+   50.0,
+   40.0
+  ],
+  "foul_committed": {
+   "card": {
+    "name": "Second Yellow"
+   }
+  }
+ },
+ {
+  "id": "e32",
+  "index": 32,
+  "period": 2,
+  "timestamp": "00:48:00.000",
+  "minute": 93,
+  "second": 0,
+  "type": {
+   "name": "Half End"
+  },
+  "team": {
+   "name": "Home FC"
+  },
+  "possession": 1
+ },
+ {
+  "id": "e33",
+  "index": 33,
+  "period": 2,
+  "timestamp": "00:48:00.000",
+  "minute": 93,
+  "second": 0,
+  "type": {
+   "name": "Half End"
+  },
+  "team": {
+   "name": "Away FC"
+  },
+  "possession": 1
+ },
+ {
+  "id": "e34",
+  "index": 34,
+  "period": 5,
+  "timestamp": "00:01:00.000",
+  "minute": 121,
+  "second": 0,
+  "type": {
+   "name": "Shot"
+  },
+  "team": {
+   "name": "Away FC"
+  },
+  "possession": 8,
+  "player": {
+   "id": 11,
+   "name": "Away One"
+  },
+  "location": [
+   108.0,
+   40.0
+  ],
+  "shot": {
+   "statsbomb_xg": 0.78,
+   "outcome": {
+    "name": "Goal"
+   },
+   "type": {
+    "name": "Penalty"
+   }
+  }
+ }
+]
