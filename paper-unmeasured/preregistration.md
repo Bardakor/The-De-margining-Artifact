@@ -75,3 +75,19 @@ timestamp.
   zone-xA per 90 is reported as secondary where ESPN coverage allows. A player
   enters H7 with at least 360 knockout minutes in each period. Reason: the
   original text named neither.
+- **A5 (2026-11-14).** H7 is concluded ("not a stable trait") only if r < 0.2
+  *and* the test had power: with the within-period split-half reliabilities of
+  the over-performance score, a true correlation of 0.3 would have been
+  detected with ≥ 80% power. Otherwise H7 is reported as inconclusive
+  (underpowered). Reason: a difference score from a few hundred knockout
+  minutes is unreliable, so r < 0.2 alone would be near-automatic.
+- **A6 (2026-11-14).** H8 is tested on player-season non-penalty xG *per shot*
+  (which removes shot volume); refuted if that correlation is < 0.8. The
+  per-90 correlation is descriptive. Reason: season totals are driven by shot
+  counts, so the original test was near-automatic. If ESPN data is withdrawn,
+  H8 is reported as not tested.
+- **A7 (2026-11-14).** In M4 and H3, R²_true is clipped to [0, 1]; intervals
+  come from a joint bootstrap over players and RAPM replicates that
+  re-estimates both reliabilities in each replicate; raw values are reported.
+- **A8 (2026-11-14).** M3 estimates home advantage per competition-season, not
+  as one constant (empty stadiums in 2019/20–2020/21).
