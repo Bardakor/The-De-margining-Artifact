@@ -70,3 +70,8 @@ timestamp.
   ranked players are in the pool.
 - **A3 (2026-11-14).** For the 2021 edition, "previous edition" in the
   reputation block means 2019 (2020 was cancelled).
+- **A4 (2026-11-14).** H7's primary metric is non-penalty goals plus assists
+  per 90 (available for every competition from Transfermarkt); np zone-xG plus
+  zone-xA per 90 is reported as secondary where ESPN coverage allows. A player
+  enters H7 with at least 360 knockout minutes in each period. Reason: the
+  original text named neither.
