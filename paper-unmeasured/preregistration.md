@@ -110,3 +110,13 @@ timestamp.
   estimator is reported as robustness. Reason: on real StatsBomb data (M7a) the
   within-sample correction exceeded 1 because the same matches drive both
   sides; in M4 that shared match noise would bias the unmeasured share down.
+- **A11 (2026-11-14).** Primary analyses use only data available for every
+  match of the panel: Transfermarkt (plus the StatsBomb-derived stints and
+  appearances of WC 2022 and Euros 2020/2024). M4's statistics are per-90
+  non-penalty goals, penalty goals, assists, yellow cards and red cards. M5's
+  families become: box {goals, non-penalty goals, assists}; box + raw on-pitch
+  goal difference per 90 (the unadjusted plus-minus public sites show); impact
+  (RAPM); hybrid. Any ESPN-based version (shots, zone-xG, fouls won) is
+  secondary, restricted to the leagues ESPN covers, and reported only if ESPN
+  is retained. Reason: the primary analysis must not depend on the pending
+  ESPN decision, and must be uniform across leagues.

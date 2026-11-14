@@ -1,0 +1,107 @@
+player,in_v1,bdo_editions,tm_player_id,tm_name,position_group,is_goalkeeper,minutes_in_window,match_method,confidence
+Rodri,True,2023;2024;2026,357565,Rodri,DM,False,21739,name+club,high
+Kylian Mbappé,True,2021;2022;2023;2024;2025;2026,342229,Kylian Mbappé,CF,False,24929,name+club,high
+Vinícius Júnior,True,2022;2023;2024;2025;2026,371998,Vinicius Junior,W,False,25559,name+club,high
+Lionel Messi,True,2021;2023;2026,28003,Lionel Messi,CF,False,17401,name+club,high
+Harry Kane,True,2021;2022;2023;2024;2025;2026,132098,Harry Kane,CF,False,26130,name+club,high
+Jude Bellingham,True,2023;2024;2025;2026,581678,Jude Bellingham,CM,False,22766,name+club,high
+Mohamed Salah,True,2021;2022;2023;2025,148455,Mohamed Salah,W,False,25225,name+club,high
+Erling Haaland,True,2021;2022;2023;2024;2025;2026,418560,Erling Haaland,CF,False,23267,name+club,high
+Robert Lewandowski,True,2021;2022;2023;2025,38253,Robert Lewandowski,CF,False,24287,name+club,high
+Kevin De Bruyne,True,2021;2022;2023,88755,Kevin De Bruyne,AM,False,17804,name+club,high
+Lamine Yamal,True,2024;2025;2026,937958,Lamine Yamal,W,False,11865,name+club,high
+Achraf Hakimi,True,2025;2026,398073,Achraf Hakimi,FB,False,21988,name+club,high
+Thibaut Courtois,True,2022,108390,Thibaut Courtois,GK,True,26089,name+club,high
+Bernardo Silva,True,2022;2023,241641,Bernardo Silva,AM,False,24738,name+club,high
+Rúben Dias,True,2021;2023;2024,258004,Rúben Dias,CB,False,24076,name+club,high
+Gianluigi Donnarumma,True,2021;2025,315858,Gianluigi Donnarumma,GK,True,25093,name+club,high
+Karim Benzema,True,2021;2022;2023,18922,Karim Benzema,CF,False,18440,name+club,high
+Vitinha,True,2024;2025;2026,487469,Vitinha,DM,False,18376,name+club,high
+Pedri,True,2021;2025,683840,Pedri,CM,False,19146,name+club,high
+Federico Valverde,True,2024,369081,Federico Valverde,CM,False,25762,name+club,high
+Bukayo Saka,True,2023;2024,433177,Bukayo Saka,W,False,22669,name+club,high
+Lautaro Martínez,True,2021;2023;2024;2025;2026,406625,Lautaro Martínez,CF,False,23467,name+club,high
+Ousmane Dembélé,True,2025;2026,288230,Ousmane Dembélé,W,False,15557,name+club,high
+Luka Modrić,True,2021;2022;2023,27992,Luka Modrić,CM,False,21575,name+club,high
+Declan Rice,True,2024;2025;2026,357662,Declan Rice,DM,False,27071,name+club,high
+Khvicha Kvaratskhelia,True,2023;2025;2026,502670,Khvicha Kvaratskhelia,W,False,17589,name+club,high
+Unai Simón,True,,262396,Unai Simón,GK,True,23022,name_unique,medium
+Sadio Mané,True,2022;2026,200512,Sadio Mané,W,False,17164,name+club,high
+Emiliano Martínez,True,2023;2024,111873,Emiliano Martínez,GK,True,25411,name+club,high
+Alisson Becker,True,,105470,Alisson,GK,True,24605,manual,high
+Nuno Mendes,True,2025;2026,616341,Nuno Mendes,FB,False,15724,name+club,high
+Julián Álvarez,True,2023,576024,Julián Alvarez,CF,False,14298,name+club,high
+Joshua Kimmich,True,2022,161056,Joshua Kimmich,DM,False,26503,name+club,high
+Virgil van Dijk,True,2022;2025,139208,Virgil van Dijk,CB,False,24911,name+club,high
+Pau Cubarsí,True,2026,962110,Pau Cubarsí,CB,False,10385,name+club,high
+Marquinhos,True,2026,181767,Marquinhos,CB,False,20627,name+club,high
+Antoine Griezmann,True,2023,125781,Antoine Griezmann,CF,False,23501,name+club,high
+Moisés Caicedo,True,,687626,Moisés Caicedo,DM,False,18147,manual,high
+Jamal Musiala,True,2023,580195,Jamal Musiala,AM,False,14162,name+club,high
+Phil Foden,True,2021;2022;2024,406635,Phil Foden,W,False,20891,name+club,high
+Bruno Fernandes,True,2021;2026,240306,Bruno Fernandes,AM,False,28651,name+club,high
+Raphinha,True,2025,411295,Raphinha,W,False,18863,name+club,high
+Cole Palmer,True,2024;2025,568177,Cole Palmer,AM,False,11444,name+club,high
+Nico Williams,True,2024,709187,Nico Williams,W,False,13536,name+club,high
+N'Golo Kanté,True,2021,225083,N'Golo Kanté,DM,False,13899,name+club,high
+Son Heung-min,True,2022,91845,Heung-min Son,W,False,20742,name+club,high
+Victor Osimhen,True,2023,401923,Victor Osimhen,CF,False,16482,name+club,high
+Cristiano Ronaldo,True,2021;2022,8198,Cristiano Ronaldo,CF,False,16904,name+club,high
+Jorginho,False,2021,102017,Jorginho,DM,False,16974,name+club,high
+Romelu Lukaku,False,2021,96341,Romelu Lukaku,CF,False,18234,name+club,high
+Giorgio Chiellini,False,2021,29260,Giorgio Chiellini,CB,False,3944,name+club,high
+Leonardo Bonucci,False,2021,39983,Leonardo Bonucci,CB,False,10724,name+club,high
+Raheem Sterling,False,2021,134425,Raheem Sterling,W,False,15098,name+club,high
+Neymar,False,2021,68290,Neymar,W,False,10110,name+club,high
+Luis Suárez,False,2021,44352,Luis Suárez,CF,False,8953,name+club,high
+Simon Kjær,False,2021,48859,Simon Kjær,CB,False,9609,name+club,high
+Mason Mount,False,2021,346483,Mason Mount,AM,False,14945,name+club,high
+Riyad Mahrez,False,2021;2022,171424,Riyad Mahrez,W,False,15587,name+club,high
+Gerard Moreno,False,2021,177467,Gerard Moreno,CF,False,13719,name+club,high
+Nicolò Barella,False,2021;2023,255942,Nicolò Barella,CM,False,25384,name+club,high
+César Azpilicueta,False,2021,57500,César Azpilicueta,CB,False,15381,name+club,high
+Sébastien Haller,False,2022,181375,Sébastien Haller,CF,False,12643,name+club,high
+Fabinho,False,2022,225693,Fabinho,DM,False,17495,name+club,high
+Rafael Leão,False,2022,357164,Rafael Leão,W,False,19451,name+club,high
+Casemiro,False,2022,16306,Casemiro,DM,False,22031,name+club,high
+Luis Díaz,False,2022;2026,480692,Luis Díaz,W,False,20039,name+club,high
+Dušan Vlahović,False,2022,357498,Dušan Vlahović,CF,False,17469,name+club,high
+Trent Alexander-Arnold,False,2022,314353,Trent Alexander-Arnold,FB,False,21264,name+club,high
+Mike Maignan,False,2022,182906,Mike Maignan,GK,True,23993,name+club,high
+Antonio Rüdiger,False,2022;2024,86202,Antonio Rüdiger,CB,False,25224,name+club,high
+João Cancelo,False,2022,182712,João Cancelo,FB,False,19981,name+club,high
+Christopher Nkunku,False,2022,344381,Christopher Nkunku,CF,False,15419,name+club,high
+Darwin Núñez,False,2022,546543,Darwin Núñez,CF,False,14313,name+club,high
+Yassine Bounou,False,2023,207834,Yassine Bounou,GK,True,19371,name+club,high
+İlkay Gündoğan,False,2023,53622,İlkay Gündoğan,CM,False,21343,name+club,high
+Kim Min-jae,False,2023,503482,Min-jae Kim,CB,False,16315,name+club,high
+André Onana,False,2023,234509,André Onana,GK,True,19687,name+club,high
+Joško Gvardiol,False,2023,475959,Josko Gvardiol,CB,False,19037,name+club,high
+Randal Kolo Muani,False,2023,487969,Randal Kolo Muani,CF,False,16375,name+club,high
+Martin Ødegaard,False,2023;2024,316264,Martin Ødegaard,AM,False,18829,name+club,high
+Dani Carvajal,False,2024,138927,Daniel Carvajal,FB,False,14829,name+club,medium
+Toni Kroos,False,2024,31909,Toni Kroos,CM,False,16282,name+club,high
+Florian Wirtz,False,2024;2025,598577,Florian Wirtz,AM,False,18258,name+club,high
+Dani Olmo,False,2024,293385,Dani Olmo,AM,False,15090,name+club,high
+Ademola Lookman,False,2024,406040,Ademola Lookman,CF,False,15363,name+club,high
+Granit Xhaka,False,2024,111455,Granit Xhaka,DM,False,24564,name+club,high
+Hakan Çalhanoğlu,False,2024,126414,Hakan Çalhanoğlu,DM,False,21082,name+club,high
+William Saliba,False,2024;2026,495666,William Saliba,CB,False,22526,name+club,high
+Álex Grimaldo,False,2024,193082,Alejandro Grimaldo,W,False,24717,manual,high
+Artem Dovbyk,False,2024,343537,Artem Dovbyk,CF,False,13611,name+club,high
+Mats Hummels,False,2024,39728,Mats Hummels,CB,False,15392,name+club,high
+Désiré Doué,False,2025,914562,Désiré Doué,W,False,8859,name+club,high
+Viktor Gyökeres,False,2025,325443,Viktor Gyökeres,CF,False,11406,name+club,high
+Scott McTominay,False,2025,315969,Scott McTominay,DM,False,18701,name+club,high
+João Neves,False,2025;2026,670681,João Neves,CM,False,10950,name+club,high
+Serhou Guirassy,False,2025,270541,Serhou Guirassy,CF,False,15757,name+club,high
+Alexis Mac Allister,False,2025,534033,Alexis Mac Allister,CM,False,18995,name+club,high
+Fabián Ruiz,False,2025;2026,350219,Fabián Ruiz,CM,False,17667,name+club,high
+Denzel Dumfries,False,2025,321528,Denzel Dumfries,W,False,19047,name+club,high
+Michael Olise,False,2025;2026,566723,Michael Olise,W,False,13968,name+club,high
+Ferran Torres,False,2026,398184,Ferran Torres,W,False,15485,name+club,high
+Marc Cucurella,False,2026,284857,Marc Cucurella,FB,False,21791,name+club,high
+Willian Pacho,False,2026,661171,Willian Pacho,CB,False,15655,name+club,high
+Gabriel Magalhães,False,2026,435338,Gabriel,CB,False,22502,name+club,high
+Dayot Upamecano,False,2026,344695,Dayot Upamecano,CB,False,21533,name+club,high
+Julián Quiñones,False,2026,416090,Julián Quiñones,CF,False,5687,name+club,high
