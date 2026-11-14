@@ -1,6 +1,6 @@
 # Ballon d'Or (men) 2021-2026: sources and checks
 
-Curated 2026-11-14 for `ballon_dor.csv` (180 rows = 6 editions x 30 ranked players).
+Curated 2026-11-14 for `ballon_dor.csv` (210 rows = 7 editions x 30 ranked players: 2019, 2021-2026; 2019 serves only as the "previous edition" for 2021).
 Scoring: 2021-2023 five picks per voter (6-4-3-2-1 = 16 pts/voter). 2024-2026 ten picks per voter (15-12-10-8-7-5-4-3-2-1 = 67 pts/voter).
 
 ## Official sources: not reached
@@ -23,6 +23,15 @@ Total points are not published as a figure by any source; the sums above are our
 
 ## 2020
 Cancelled (COVID-19). No edition, no rows.
+
+## 2019 (added; only as the "previous edition" reputation feature for 2021)
+- Rows: 30 (210 rows in the CSV with 2019). All 30 have points. Sum = 2816 = 176 x 16 (dailymercato also states 176 journalists, 2,816 points in total).
+- Ceremony: 2 Dec 2019, Theatre du Chatelet, Paris.
+- Voting period: calendar year 2019 (Wikipedia: "best footballers in the world for 2019"; nominees announced 21 Oct 2019). Not a club season.
+- Scoring: 6-4-3-2-1 per ballot.
+- Source URLs: Wikipedia https://en.wikipedia.org/wiki/2019_Ballon_d%27Or (raw wikitext) ; https://www.topendsports.com/sport/soccer/awards/ballondor-2019.htm ; https://www.dailymercato.com/news/ballon-d-or-2019-messi-n-a-gagne-qu-avec-7-points-d-avance-sur-van-dijk (top places, voter count and total only; full table not read).
+- Ranks, ties and points identical between Wikipedia and topendsports. Ties: 20 (Aubameyang, Tadic), 24 (Koulibaly, ter Stegen), 26 (Benzema, Wijnaldum), 28 (Joao Felix, Marquinhos, van de Beek). No disagreement found. Official page not reachable, same caveat as above.
+- Club: last club listed, i.e. at the ceremony (De Jong, Griezmann, Barcelona; Hazard, Real Madrid; De Ligt, Juventus; Joao Felix, Atletico Madrid). Wikipedia lists both clubs for these.
 
 ## Per edition
 Number ranked = 30 in every edition. All 30 have published points in every edition (no empty `points`).
