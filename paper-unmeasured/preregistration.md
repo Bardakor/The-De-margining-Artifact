@@ -1,0 +1,57 @@
+# Pre-registration — The Unmeasured Remainder
+
+Committed on 2026-11-14, before any player-level statistic, RAPM, ranking or
+Ballon d'Or regression has been computed. The data sources had been probed for
+availability only (schemas and a 21-match commentary sample). The git commit
+that adds this file is the timestamp.
+
+Design: `docs/superpowers/specs/2026-11-14-unmeasured-remainder-design.md`.
+
+## Fixed before results
+
+- Window: matches dated 2020-01-01 to 2026-08-31 inclusive.
+- Pool: the 48 players of `data/v1_ranking.csv` ∪ every player ranked in a
+  Ballon d'Or edition 2021–2025 (and 2026 only if published before 2026-11-14
+  with a voting period inside the window). Goalkeepers ranked separately.
+- Minimum minutes for a player-season to enter M1, M2 and M4: 900.
+- "Decided" pairwise ordering: P(i ranked above j) ≥ 0.9 or ≤ 0.1 in M8.
+- Bootstrap: 200 match-level replicates; 90% intervals.
+- Multiverse: the full factorial in design §5 (M5), every specification
+  weighted equally in M8.
+
+## Hypotheses
+
+Each is stated with its test and the result that would refute it. All are
+reported whatever the outcome.
+
+- **H1 — Most of the ranking is undecided.** Fewer than half of the pool's
+  outfield pairwise orderings are decided in M8. Refuted if ≥ 50% are decided.
+- **H2 — No consensus number one.** No outfield player has P(#1) ≥ 0.5 in M8.
+  Refuted if one does.
+- **H3 — The unmeasured share follows position.** The disattenuated unmeasured
+  share of on-pitch impact (M4) is larger for CB and DM pooled than for CF and
+  W pooled; the 90% bootstrap interval of the difference excludes 0. Refuted if
+  the interval includes 0 or the difference is negative.
+- **H4 — Modelling choices outweigh sampling noise.** For the ten players
+  ranked highest by the median specification, the specification component of
+  rank variance exceeds the sampling component (M8 decomposition) on average.
+  Refuted if the mean ratio specification/sampling is ≤ 1.
+- **H5 — "What best means" is the decisive choice.** Time aggregation has the
+  largest total-order index (M5) for the rank of the player with the highest
+  M8 P(#1). Refuted if another dimension's index is larger.
+- **H6 — Recognition follows the team.** In M6, the Shapley share of the team-
+  success block exceeds that of the individual-statistics block. Refuted
+  otherwise.
+- **H7 — "Big-game player" is not a stable trait.** The correlation of knockout
+  over-performance between 2020–2022 and 2023–2026 (M7b) is below 0.2.
+  Refuted if ≥ 0.2.
+- **H8 — Coarse shot data loses little at season level.** Player-season
+  correlation between zone-xG and StatsBomb xG on overlapping matches is
+  ≥ 0.9, while the shot-level correlation is lower. Refuted if the season
+  correlation is < 0.9.
+
+## Not pre-registered
+
+Everything else — the taxonomy, the descriptive structure of the metrics (M2),
+the recovery study (M9), the comparison with V1 — is exploratory and labelled
+as such in the paper.

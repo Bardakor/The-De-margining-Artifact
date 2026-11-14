@@ -26,3 +26,7 @@ __pycache__/
 
 # OS
 .DS_Store
+
+# Paper 2: generated macros, figures and LaTeX build products.
+/paper-unmeasured/generated/
+/paper-unmeasured/build/
