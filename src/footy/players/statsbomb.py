@@ -27,6 +27,12 @@ Parsing rules (assumptions, each stated once here):
   its last event's timestamp, so stoppage time counts. Temporary absences (Player
   Off / Player On, e.g. treatment) are not subtracted. Players never on the pitch
   get no row. Lineup files are cached for linking but not used here.
+- Position: the StatsBomb position in which the player spent the most minutes of the
+  match. A player takes his Starting XI slot's position, a substitute takes the
+  position of the player he replaces (the Substitution event's ``position``), and a
+  Tactical Shift re-assigns every player in its lineup from its time on. Ties go to
+  the position held first. ``POSITION_GROUPS`` maps positions to design §4.4's groups;
+  wing-backs are FB, wide midfielders W, and left/right attacking midfielders AM.
 - Open play: a pass whose StatsBomb pass type is not Corner, Free Kick, Goal Kick,
   Kick Off or Throw-in. A pass is completed when it has no outcome. Carries have
   no outcome in StatsBomb and all count as successful.
@@ -50,6 +56,14 @@ Parsing rules (assumptions, each stated once here):
   pass and each carry; failed passes and everything else get 0 (Singh 2019).
 - shots and sb_xg in ``sb_player_match`` include penalties; ``sb_shots.shot_type``
   lets the caller drop them. Goals = Shot outcome Goal plus "Own Goal For" events.
+- Box-score columns, the public box score rebuilt from events: goals (Shot outcome
+  Goal, penalties in, own goals out), assists (the pass a goal's key_pass_id names),
+  shots_on_target (outcome Goal, Saved or Saved to Post), fouls_won and
+  fouls_committed (event counts; a handball is a foul committed), offsides (Offside
+  events credited to their player, plus Pass Offside credited to the pass recipient,
+  the player caught), yellow_cards (Yellow Card) and red_cards (Red Card or Second
+  Yellow, so a second yellow is one yellow plus one red), cards from Foul Committed
+  or Bad Behaviour.
 """
 
 from __future__ import annotations
@@ -193,7 +207,21 @@ SET_PIECES = ("Corner", "Free Kick", "Goal Kick", "Kick Off", "Throw-in")
 ON_BALL = ("Ball Receipt*", "Carry", "Pass", "Shot", "Dribble", "Miscontrol", "Ball Recovery")
 GROUP_STAGES = ("Regular Season", "Group Stage")
 SENDING_OFF = ("Red Card", "Second Yellow")
+ON_TARGET = ("Goal", "Saved", "Saved to Post")
 GOAL = (120.0, 40.0)
+POSITION_GROUPS = {
+    "Goalkeeper": "GK",
+    "Center Back": "CB", "Left Center Back": "CB", "Right Center Back": "CB",
+    "Left Back": "FB", "Right Back": "FB", "Left Wing Back": "FB", "Right Wing Back": "FB",
+    "Center Defensive Midfield": "DM", "Left Defensive Midfield": "DM",
+    "Right Defensive Midfield": "DM",
+    "Center Midfield": "CM", "Left Center Midfield": "CM", "Right Center Midfield": "CM",
+    "Center Attacking Midfield": "AM", "Left Attacking Midfield": "AM",
+    "Right Attacking Midfield": "AM",
+    "Left Wing": "W", "Right Wing": "W", "Left Midfield": "W", "Right Midfield": "W",
+    "Center Forward": "CF", "Left Center Forward": "CF", "Right Center Forward": "CF",
+    "Secondary Striker": "CF",
+}  # fmt: skip
 _DETAIL = {
     "Pass": "pass",
     "Carry": "carry",
@@ -207,6 +235,7 @@ EVENT_COLUMNS = [
     "sb_match_id", "id", "index", "period", "minute", "second", "type", "team",
     "player_id", "player_name", "possession", "x", "y", "end_x", "end_y",
     "outcome", "kind", "body_part", "technique", "key_pass", "key_pass_id", "xg",
+    "recipient_id", "card",
 ]  # fmt: skip
 SHOT_COLUMNS = [
     "sb_match_id", "minute", "second", "player_id", "player_name", "team", "x", "y",
@@ -216,9 +245,12 @@ COUNT_COLUMNS = [
     "passes", "passes_completed", "progressive_passes", "progressive_carries",
     "passes_into_box", "key_passes", "sb_xa", "pressures", "tackles", "interceptions",
     "blocks", "clearances", "dribbles_completed", "touches_in_box", "xt_added", "shots",
-    "sb_xg",
+    "sb_xg", "goals", "assists", "shots_on_target", "fouls_won", "fouls_committed",
+    "offsides", "yellow_cards", "red_cards",
 ]  # fmt: skip
-PLAYER_COLUMNS = ["sb_match_id", "player_id", "player_name", "team", "minutes", *COUNT_COLUMNS]
+PLAYER_COLUMNS = [
+    "sb_match_id", "player_id", "player_name", "team", "minutes", "position", *COUNT_COLUMNS,
+]  # fmt: skip
 MATCH_COLUMNS = [
     "sb_match_id", "competition", "season", "date", "home_team", "away_team",
     "home_score", "away_score", "stage", "knockout",
@@ -290,10 +322,12 @@ def flatten_events(match_id: int, events: Json) -> pd.DataFrame:
                 bool(detail.get("shot_assist") or detail.get("goal_assist")),
                 detail.get("key_pass_id"),
                 detail.get("statsbomb_xg"),
+                (detail.get("recipient") or {}).get("id"),
+                _name(e.get("foul_committed") or e.get("bad_behaviour") or {}, "card"),
             )
         )
     flat = pd.DataFrame(rows, columns=EVENT_COLUMNS)
-    flat["player_id"] = flat["player_id"].astype("Int64")
+    flat[["player_id", "recipient_id"]] = flat[["player_id", "recipient_id"]].astype("Int64")
     flat[["x", "y", "end_x", "end_y", "xg"]] = flat[["x", "y", "end_x", "end_y", "xg"]].astype(
         float
     )
@@ -309,8 +343,18 @@ def period_lengths(events: Json) -> dict[int, float]:
     return out
 
 
+def _modal_position(spells: list[tuple[float, str | None]], start: float, end: float) -> str | None:
+    """Position held longest within [start, end]; each spell runs to the next one."""
+    held: dict[str | None, float] = {}
+    for k, (since, position) in enumerate(spells):
+        until = spells[k + 1][0] if k + 1 < len(spells) else end
+        held[position] = held.get(position, 0.0) + max(min(until, end) - max(since, start), 0.0)
+    return max(held, key=held.__getitem__)
+
+
 def event_minutes(match_id: int, events: Json) -> pd.DataFrame:
-    """Minutes on the pitch per player, from Starting XI, Substitution and card events."""
+    """Minutes and modal position per player, from Starting XI, Tactical Shift,
+    Substitution and card events."""
     lengths = period_lengths(events)
     total = sum(lengths.values())
 
@@ -324,26 +368,40 @@ def event_minutes(match_id: int, events: Json) -> pd.DataFrame:
     on: dict[int, float] = {}
     off: dict[int, float] = {}
     who: dict[int, tuple[str, str]] = {}
+    spells: dict[int, list[tuple[float, str | None]]] = {}  # (from, position), in event order
     for e in events:
         etype, team = e["type"]["name"], e["team"]["name"]
         if etype == "Starting XI":
             for slot in e["tactics"]["lineup"]:
                 on[slot["player"]["id"]] = 0.0
                 who[slot["player"]["id"]] = (slot["player"]["name"], team)
+                spells.setdefault(slot["player"]["id"], []).append((0.0, _name(slot, "position")))
+        elif etype == "Tactical Shift":
+            for slot in e["tactics"]["lineup"]:
+                spell = (elapsed(e), _name(slot, "position"))
+                spells.setdefault(slot["player"]["id"], []).append(spell)
         elif etype == "Substitution":
             off.setdefault(e["player"]["id"], elapsed(e))
             replacement = e["substitution"]["replacement"]
             on.setdefault(replacement["id"], elapsed(e))
             who.setdefault(replacement["id"], (replacement["name"], team))
+            spells.setdefault(replacement["id"], []).append((elapsed(e), _name(e, "position")))
         elif "player" in e:
             card = (e.get("foul_committed") or e.get("bad_behaviour") or {}).get("card")
             if card is not None and card["name"] in SENDING_OFF:
                 off.setdefault(e["player"]["id"], elapsed(e))
     rows = [
-        (match_id, pid, *who[pid], max(off.get(pid, total) - start, 0.0) / 60.0)
+        (
+            match_id,
+            pid,
+            *who[pid],
+            max(off.get(pid, total) - start, 0.0) / 60.0,
+            _modal_position(spells[pid], start, off.get(pid, total)),
+        )
         for pid, start in on.items()
     ]
-    out = pd.DataFrame(rows, columns=["sb_match_id", "player_id", "player_name", "team", "minutes"])
+    columns = ["sb_match_id", "player_id", "player_name", "team", "minutes", "position"]
+    out = pd.DataFrame(rows, columns=columns)
     out["player_id"] = out["player_id"].astype("Int64")
     return out
 
@@ -415,6 +473,7 @@ def player_counts(flat: pd.DataFrame) -> pd.DataFrame:
     completed_open = is_pass & outcome.isna() & ~kind.isin(SET_PIECES)
     progressive = is_progressive(flat["x"], flat["y"], flat["end_x"], flat["end_y"])
     shot = etype == "Shot"
+    goal = shot & (outcome == "Goal")
     xg_by_pass = flat[shot].groupby("key_pass_id")["xg"].sum()
     entering = in_box(flat["end_x"], flat["end_y"]) & ~in_box(flat["x"], flat["y"])
     counts = pd.DataFrame(
@@ -437,10 +496,21 @@ def player_counts(flat: pd.DataFrame) -> pd.DataFrame:
             "xt_added": 0.0,
             "shots": shot,
             "sb_xg": flat["xg"].where(shot, 0.0),
+            "goals": goal,
+            "assists": is_pass & flat["id"].isin(flat.loc[goal, "key_pass_id"]),
+            "shots_on_target": shot & outcome.isin(ON_TARGET),
+            "fouls_won": etype == "Foul Won",
+            "fouls_committed": etype == "Foul Committed",
+            "offsides": etype == "Offside",
+            "yellow_cards": flat["card"] == "Yellow Card",
+            "red_cards": flat["card"].isin(SENDING_OFF),
         }
     )
     counts = counts[counts["player_id"].notna()]
     out = counts.groupby(["sb_match_id", "player_id"]).sum()
+    caught = flat[is_pass & (outcome == "Pass Offside")].groupby(["sb_match_id", "recipient_id"])
+    caught_offside = caught.size().rename_axis(["sb_match_id", "player_id"]).rename("offsides")
+    out = out.add(caught_offside.to_frame(), fill_value=0)
     return out.join(_touches_in_box(flat), how="left").reset_index()
 
 

@@ -98,6 +98,63 @@ def test_player_counts(table: pd.DataFrame) -> None:
     assert _row(table, 12, "tackles", "interceptions", "clearances") == [1, 1, 1]
 
 
+def test_box_score_counts(table: pd.DataFrame) -> None:
+    box = ("goals", "assists", "shots_on_target", "fouls_committed", "yellow_cards", "red_cards")
+    assert _row(table, 1, *box) == [1, 0, 1, 0, 0, 0]
+    assert _row(table, 3, *box) == [0, 1, 0, 0, 0, 0]  # his key pass set up the goal
+    assert _row(table, 4, *box) == [0, 0, 0, 1, 0, 1]  # second yellow: a red, not a yellow
+    assert 13 not in table.index  # bench red card: no minutes, no row
+
+
+def _event(index: int, period: int, stamp: str, etype: str, **extra: Any) -> dict[str, Any]:
+    base = {"id": f"e{index}", "index": index, "period": period, "timestamp": stamp,
+            "minute": 0, "second": 0, "type": {"name": etype}, "team": {"name": "A"},
+            "possession": 1}  # fmt: skip
+    return base | extra
+
+
+def _lineup(*slots: tuple[int, str]) -> dict[str, Any]:
+    return {"lineup": [{"player": {"id": p, "name": f"P{p}"}, "position": {"name": pos}}
+                       for p, pos in slots]}  # fmt: skip
+
+
+def test_modal_position_follows_tactical_shifts_and_substitutions() -> None:
+    events = [
+        _event(1, 1, "00:00:00.000", "Starting XI",
+               tactics=_lineup((1, "Left Back"), (2, "Left Wing"), (3, "Center Forward"))),
+        _event(2, 1, "00:30:00.000", "Tactical Shift",
+               tactics=_lineup((1, "Left Wing Back"), (2, "Left Midfield"), (3, "Center Forward"))),
+        _event(3, 1, "00:45:00.000", "Half End"),
+        _event(4, 2, "00:10:00.000", "Substitution", player={"id": 3, "name": "P3"},
+               position={"name": "Center Forward"},
+               substitution={"replacement": {"id": 4, "name": "P4"}}),
+        _event(5, 2, "00:20:00.000", "Tactical Shift",
+               tactics=_lineup((1, "Left Back"), (2, "Left Wing"), (4, "Right Wing"))),
+        _event(6, 2, "00:45:00.000", "Half End"),
+    ]  # fmt: skip
+    got = sb.event_minutes(1, events).set_index("player_id")
+    # P1: Left Back 0-30 and 65-90 (55 min) beats Left Wing Back 30-65 (35 min).
+    # P4 comes on at 55 in P3's Center Forward slot (10 min), then Right Wing (25 min).
+    assert got["position"].to_dict() == {
+        1: "Left Back", 2: "Left Wing", 3: "Center Forward", 4: "Right Wing",
+    }  # fmt: skip
+    assert got["minutes"].to_dict() == {1: 90.0, 2: 90.0, 3: 55.0, 4: 35.0}
+    assert set(sb.POSITION_GROUPS.values()) == {"GK", "CB", "FB", "DM", "CM", "AM", "W", "CF"}
+    assert {sb.POSITION_GROUPS[p] for p in got["position"]} == {"FB", "W", "CF"}
+
+
+def test_offsides_credited_to_the_player_caught() -> None:
+    events = [
+        _event(1, 1, "00:10:00.000", "Pass", player={"id": 2, "name": "P2"},
+               location=[60.0, 40.0],
+               **{"pass": {"end_location": [100.0, 40.0], "outcome": {"name": "Pass Offside"},
+                           "recipient": {"id": 3, "name": "P3"}}}),
+        _event(2, 1, "00:20:00.000", "Offside", player={"id": 4, "name": "P4"}),
+    ]  # fmt: skip
+    counts = sb.player_counts(sb.flatten_events(1, events)).set_index("player_id")["offsides"]
+    assert counts.to_dict() == {2: 0, 3: 1, 4: 1}  # P3 has no event of his own
+
+
 def test_xt_added_credits_successful_open_play_moves(
     flat: pd.DataFrame, table: pd.DataFrame
 ) -> None:
