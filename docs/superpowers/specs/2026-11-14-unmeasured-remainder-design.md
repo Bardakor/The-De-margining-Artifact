@@ -57,6 +57,16 @@ Anti-goals (failure even if it "works")
 | StatsBomb open data (`raw.githubusercontent.com/statsbomb/open-data/master/data/…`) | full event data with location and StatsBomb xG | men's competitions with seasons in 2019/20–2024: WC 2022, Euro 2020, Euro 2024, Copa América 2024, AFCON 2023, La Liga 2019/20 & 2020/21, Ligue 1 2021/22 & 2022/23, 1. Bundesliga 2023/24, MLS 2023 | public, attribution required |
 | Ballon d'Or results | points of every ranked player, editions 2021–2025 (2020 cancelled), 2026 only if published before 2026-11-14 and voting covers our window | — | curated by hand from ≥ 2 sources, committed as CSV with source URLs |
 
+Coverage found by the data audit (2026-11-14): Transfermarkt has no lineups
+or stints for WC 2022 and Euros 2020/2024 (events only; StatsBomb fills them),
+SA1 only from 2024/25, MLS only from 2025, no 2026 CL/EL final, WC 2026 group
+stage only; latest game 2026-07-06. StatsBomb club seasons are single-team
+samples (Barcelona, PSG, Leverkusen, Inter Miami), only the tournaments are
+complete. **ESPN is on hold**: the Disney Terms of Use forbid automated
+extraction and www.espn.com/robots.txt disallows `/soccer/commentary` and
+`/soccer/lineups`; collection stopped at 5,134 cached summaries pending
+Liam's decision (`docs/unmeasured/data-licences.md`).
+
 Unavailable, checked: Understat ("We will come back soon"), FBref (HTTP 403 to
 scripts), ClubElo API (HTTP 502). Team strength is therefore computed in-house
 (§4.3). Claude's call: do not work around blocks on sites that refuse scripts.
@@ -65,8 +75,12 @@ Study window (Claude's call): matches dated 2020-01-01 to 2026-08-31 inclusive.
 The end date is the Transfermarkt snapshot; ESPN is cut at the same date so the
 sources agree. The paper says plainly that Sep–Nov 2026 is outside the window.
 
-Season label: club season runs 1 Jul → 30 Jun, labelled `2021/22`. A
-national-team tournament belongs to the season in which its final is played.
+Season label (revised after the data audit): club competitions use
+Transfermarkt's own season id (the 1-July rule mislabels the COVID-extended
+2019/20 season and calendar-year leagues such as MLS). A national-team
+tournament or the Club World Cup takes `season_label` of its *first* match
+date, so a summer tournament belongs to the season that has just ended
+(Euro 2020 → 2020/21, WC 2022 → 2022/23, WC 2026 → 2025/26).
 
 ## 4. Data contracts
 
@@ -134,7 +148,7 @@ of the whole study. ESPN and StatsBomb ids are linked to them (§4.4).
 - `team_elo`: game_id, home_elo_pre, away_elo_pre. Elo with goal-difference
   multiplier and home advantage, run over **all** Transfermarkt games
   2015-07-01 onward (burn-in) so cross-league European games tie leagues
-  together. K and home advantage chosen by minimising one-step-ahead log loss
+  together. K and home advantage chosen by minimising one-step-ahead squared error of the expected score
   on 2015–2019, frozen before 2020. National teams get their own Elo pool.
 
 ### 4.4 Linking and panel (`footy/players/linking.py`, `zone_xg.py`, `panel.py`)
