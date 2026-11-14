@@ -51,3 +51,26 @@ def test_transfers_keep_squad_sizes_and_move_players() -> None:
     clubs = lg.player_match.groupby(["season", "player_id"])["club_id"].first().unstack(0)
     moved = (clubs.nunique(axis=1) > 1).mean()
     assert moved > 0.2
+
+
+def test_match_shocks_move_team_shots_and_goals_together() -> None:
+    def shots_goals_corr(match_shock_sd: float) -> float:
+        lg = simulate_league(np.random.default_rng(12), n_seasons=4, match_shock_sd=match_shock_sd)
+        g = lg.games
+        goals = pd.concat(
+            [
+                g[["game_id", "home_club_id", "home_goals"]].set_axis(
+                    ["game_id", "club_id", "gf"], axis=1
+                ),
+                g[["game_id", "away_club_id", "away_goals"]].set_axis(
+                    ["game_id", "club_id", "gf"], axis=1
+                ),
+            ]
+        )
+        shots = lg.player_match.groupby(["game_id", "club_id"], as_index=False)["shots"].sum()
+        team = shots.merge(goals, on=["game_id", "club_id"])
+        return float(np.corrcoef(team["shots"], team["gf"])[0, 1])
+
+    # 720 team-matches: SE of a correlation ~0.04.
+    assert abs(shots_goals_corr(0.0)) < 0.15
+    assert shots_goals_corr(0.5) > 0.2

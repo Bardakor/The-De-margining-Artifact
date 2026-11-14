@@ -17,7 +17,11 @@ Model, stated so tests can rely on it:
   so in the population exactly a share ``m`` of the variance of ``offence`` is
   visible in his box score. Defence is never visible in the box score.
 - Box score and team goals are independent given the true effects: a player's
-  goals come from his own shots, not from the stint goals.
+  goals come from his own shots, not from the stint goals. The exception is
+  ``match_shock_sd > 0``: each team-match then draws one shock
+  ``s ~ Normal(0, match_shock_sd)``, added to that team's scoring rate in every
+  stint of the match and multiplying its players' shot rates in that match by
+  ``exp(s)``, so the same matches move both sides.
 - Every match: each side starts 11 players drawn uniformly from its squad and
   makes ``subs_per_side`` substitutions at distinct minutes in 46..89. No red
   cards, no stoppage time.
@@ -63,6 +67,7 @@ def simulate_league(
     conversion: float = 0.11,
     subs_per_side: int = 3,
     transfer_rate: float = 0.2,
+    match_shock_sd: float = 0.0,
 ) -> League:
     n_players = n_teams * squad_size
     player_ids = np.arange(1, n_players + 1)
@@ -92,6 +97,9 @@ def simulate_league(
                 side: _subs(rng, squads[t], on[side], subs_per_side)
                 for side, t in (("home", home), ("away", away))
             }
+            shock = {"home": 0.0, "away": 0.0}
+            if match_shock_sd > 0:  # no draw at 0, so default leagues are unchanged
+                shock = {side: float(rng.normal(0.0, match_shock_sd)) for side in shock}
             cuts = sorted({0, 90} | {m for s in subs.values() for m, _, _ in s})
             minutes_on: dict[int, int] = {}
             gf = {p: 0 for p in np.concatenate([squads[home], squads[away]]).tolist()}
@@ -110,6 +118,7 @@ def simulate_league(
                         + sign * home_advantage / 2
                         + offence[np.array(on[side]) - 1].sum()
                         - defence[np.array(on[other]) - 1].sum()
+                        + shock[side]
                     )
                     goals[side] = int(rng.poisson(max(RATE_FLOOR, rate) * length / 90))
                 stint_id += 1
@@ -141,7 +150,7 @@ def simulate_league(
                 for p, mins in minutes_on.items():
                     if club[p - 1] != team:
                         continue
-                    shots = int(rng.poisson(shot_rate[p - 1] * mins / 90))
+                    shots = int(rng.poisson(shot_rate[p - 1] * np.exp(shock[side]) * mins / 90))
                     scored = int(rng.binomial(shots, conversion))
                     player_match.append(
                         (

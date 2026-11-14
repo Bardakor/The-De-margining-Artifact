@@ -2,84 +2,122 @@
 
 For the players of one position group:
 
-1. Out-of-fold predictions of RAPM from the per-90 statistics by ridge
-   regression, K folds over players. Statistics are z-scored on the training
-   folds, the intercept is unpenalised and the ridge strength
-   ``alpha * n_train`` is the ``alpha`` in ``ALPHAS`` with the smallest
-   out-of-fold squared error. ``R2_obs = max(corr(prediction, RAPM), 0)**2``:
-   out-of-sample predictions anti-correlated with RAPM explain nothing.
-2. ``rel_pred``: the ridge at that ``alpha`` refitted on all players of the
-   group and applied to each half's statistics; the correlation of the two
-   half-predictions, stepped up by Spearman-Brown. (Using the out-of-fold
-   models instead would let the per-fold intercepts pass for reliable signal.)
-3. ``rel_RAPM``: the correlation of the RAPM split-half estimates, averaged
-   over splits and stepped up by Spearman-Brown, times the group's
-   ``rapm.attribution_factor`` (split-half alone counts teammate leakage as
-   signal and biases the share upward).
+1. Prediction model. Ridge regression of RAPM on the per-90 statistics
+   (z-scored, unpenalised intercept, strength ``alpha * n``); ``alpha`` is the
+   value in ``ALPHAS`` with the smallest out-of-fold squared error over K folds
+   of players. ``R2_full = max(corr(out-of-fold prediction, RAPM), 0)**2`` and
+   ``share_naive = 1 - R2_full`` is the share without any correction. The model
+   refitted on all players at that ``alpha`` makes the half predictions below.
+2. Game splits. For each split, RAPM is fitted on each half of the games and
+   the statistics are computed on the same halves (``split_stats``), so half A
+   of one side shares no match with half B of the other.
+3. ``estimator="cross"`` (default, pre-registration amendment A10):
+   ``r = mean(corr(pred(stats_A), RAPM_B), corr(pred(stats_B), RAPM_A))`` over
+   splits, ``R2_obs = max(r, 0)**2``, divided by the half-length reliabilities
+   ``rel_pred = corr(pred(stats_A), pred(stats_B))`` and
+   ``rel_RAPM = corr(RAPM_A, RAPM_B) * attribution`` (half-data attribution,
+   ``rapm.attribution_factor(..., halves=True)``). A match that moves both a
+   player's shots and his stints' goals sits in one half only, so it cannot
+   inflate ``R2_obs``.
+   ``estimator="within"``: ``R2_obs = R2_full``, divided by the Spearman-Brown
+   stepped-up versions of the same reliabilities (full-data attribution).
+   Shared match noise inflates ``R2_obs`` and biases the share down.
 4. ``R2_true = R2_obs / (rel_RAPM * rel_pred)``; ``share = 1 - R2_true``; both
-   reported raw and clipped to [0, 1]. ``share_naive = 1 - R2_obs`` is the
-   share without disattenuation.
-5. Joint bootstrap (pre-registration amendment A8): each draw resamples players
-   with replacement within each group (copies of one player stay in one fold)
-   and re-estimates everything above on them, both reliabilities included.
-   When RAPM bootstrap replicates are passed, draw ``b`` uses replicate ``b``
-   and the split of replicate ``b``'s own games, so match sampling enters the
-   share and its reliability together. Percentile intervals.
+   reported raw and clipped to [0, 1].
+5. Joint bootstrap (amendment A8): each draw resamples players with
+   replacement within each group (copies of one player stay in one fold) and
+   re-estimates everything above, both reliabilities included. With RAPM
+   bootstrap replicates, draw ``b`` uses replicate ``b`` and the split of its
+   own games, for RAPM and statistics alike. Percentile intervals.
 
-Assumptions: only players present in every input enter; the attribution factor
-is held fixed (a property of the schedule, with a sampling SD near 0.005 at a
-few hundred players); a replicate's reliability comes from one split of its
-games, against the average of many splits for the point estimate, which makes
-the intervals slightly conservative; the selection of ``alpha`` on the same
-folds makes ``R2_obs`` very slightly optimistic (seven candidate values).
+``attribution`` corrects split-half reliability for teammate leakage (A9; see
+``rapm.attribution_factor``). Assumptions: only players present in every input
+enter; the attribution factor is held fixed in the bootstrap (a property of the
+schedule, sampling SD near 0.005 at a few hundred players); a replicate has one
+split, against several for the point estimate; ``alpha`` is selected on the
+same folds that give ``R2_full`` (seven candidates, very slightly optimistic).
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
+
+from footy.players.rapm import Halves
 
 ALPHAS = 10.0 ** np.arange(-4.0, 3.0)
 H3_HIGH = ("CB", "DM")
 H3_LOW = ("CF", "W")
 
 FloatArray = NDArray[np.float64]
-Frames3 = tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]
+Estimator = Literal["cross", "within"]
+SplitArrays = tuple[FloatArray, FloatArray, FloatArray, FloatArray]
+
+
+@dataclass(frozen=True)
+class Splits:
+    """Per game split ``r``: one RAPM component fitted on each half (row ``r``
+    of ``rapm_a`` / ``rapm_b``, one column per player id) and the per-90
+    statistics on the same halves (item ``r`` of ``stats``)."""
+
+    rapm_a: pd.DataFrame
+    rapm_b: pd.DataFrame
+    stats: list[tuple[pd.DataFrame, pd.DataFrame]]
+
+
+def split_stats(
+    player_match: pd.DataFrame, halves: Halves, columns: Sequence[str]
+) -> list[tuple[pd.DataFrame, pd.DataFrame]]:
+    """Per-90 rates of the count ``columns`` per player on both halves of every
+    split in ``halves``, games weighted as in the RAPM fits (so bootstrap counts
+    carry over). ``player_match`` has game_id, player_id, minutes and
+    ``columns``; players without minutes in a half are left out of it."""
+    cols = list(columns)
+    out = []
+    for r in range(len(halves.games_a)):
+        pair = []
+        for games in (halves.games_a.iloc[r], halves.games_b.iloc[r]):
+            w = player_match["game_id"].map(games).fillna(0.0).to_numpy()
+            sums = (
+                player_match[["minutes", *cols]].mul(w, axis=0).groupby(player_match["player_id"])
+            ).sum()
+            sums = sums[sums["minutes"] > 0]
+            pair.append(sums[cols].div(sums["minutes"], axis=0) * 90)
+        out.append((pair[0], pair[1]))
+    return out
 
 
 def unmeasured_share(
     rapm: pd.Series,
-    rapm_halves: tuple[pd.DataFrame, pd.DataFrame],
-    attribution: Mapping[str, float],
     stats: pd.DataFrame,
-    stats_a: pd.DataFrame,
-    stats_b: pd.DataFrame,
+    splits: Splits,
+    attribution: Mapping[str, float],
     groups: pd.Series,
     rng: np.random.Generator,
     *,
+    estimator: Estimator = "cross",
     n_boot: int = 200,
-    replicates: Frames3 | None = None,
+    replicates: tuple[pd.DataFrame, Splits] | None = None,
     n_folds: int = 5,
     level: float = 0.9,
 ) -> pd.DataFrame:
     """One row per group label of ``groups`` (player id -> label).
 
-    ``rapm`` is one RAPM component (index player id); ``rapm_halves`` its
-    split-half estimates (one row per split, one column per player, e.g.
-    ``halves.a["offence"], halves.b["offence"]`` from ``rapm.split_halves``);
-    ``attribution`` maps group -> ``rapm.attribution_factor``. ``stats``,
-    ``stats_a`` and ``stats_b`` are per-90 rates indexed by player id, from all
-    matches and from two disjoint halves of them. ``replicates`` is
-    (values, half_a, half_b) of the same component from ``rapm.bootstrap_rapm``,
-    one row per replicate.
+    ``rapm`` is one RAPM component and ``stats`` the per-90 statistics from all
+    matches, both indexed by player id; ``splits`` holds the same component and
+    statistics on game halves; ``attribution`` maps group -> attribution factor
+    (half-data for "cross", full-data for "within"). ``replicates`` is
+    (values with one row per replicate, their ``Splits``) from
+    ``rapm.bootstrap_rapm``.
     """
     point, draws = _estimate(
-        rapm, rapm_halves, attribution, stats, stats_a, stats_b, groups, rng,
-        n_boot, replicates, n_folds,
-    )  # fmt: skip
+        rapm, stats, splits, attribution, groups, rng, estimator, n_boot, replicates, n_folds
+    )
     rows = {}
     for g, est in point.items():
         lo, hi = _interval(draws[g]["share"], level)
@@ -99,18 +137,17 @@ def unmeasured_share(
 
 def position_contrast(
     rapm: pd.Series,
-    rapm_halves: tuple[pd.DataFrame, pd.DataFrame],
-    attribution: Mapping[str, float],
     stats: pd.DataFrame,
-    stats_a: pd.DataFrame,
-    stats_b: pd.DataFrame,
+    splits: Splits,
+    attribution: Mapping[str, float],
     groups: pd.Series,
     rng: np.random.Generator,
     *,
     high: Sequence[str] = H3_HIGH,
     low: Sequence[str] = H3_LOW,
+    estimator: Estimator = "cross",
     n_boot: int = 200,
-    replicates: Frames3 | None = None,
+    replicates: tuple[pd.DataFrame, Splits] | None = None,
     n_folds: int = 5,
     level: float = 0.9,
 ) -> pd.Series:
@@ -124,8 +161,8 @@ def position_contrast(
     hi_label, lo_label = "+".join(high), "+".join(low)
     pool = {**{g: hi_label for g in high}, **{g: lo_label for g in low}}
     point, draws = _estimate(
-        rapm, rapm_halves, attribution, stats, stats_a, stats_b, groups.map(pool).dropna(),
-        rng, n_boot, replicates, n_folds,
+        rapm, stats, splits, attribution, groups.map(pool).dropna(), rng, estimator,
+        n_boot, replicates, n_folds,
     )  # fmt: skip
     hi_s, lo_s = draws[hi_label]["share"], draws[lo_label]["share"]
     lo, hi = _interval(hi_s - lo_s, level)
@@ -144,48 +181,56 @@ def position_contrast(
 
 def _estimate(
     rapm: pd.Series,
-    rapm_halves: tuple[pd.DataFrame, pd.DataFrame],
-    attribution: Mapping[str, float],
     stats: pd.DataFrame,
-    stats_a: pd.DataFrame,
-    stats_b: pd.DataFrame,
+    splits: Splits,
+    attribution: Mapping[str, float],
     groups: pd.Series,
     rng: np.random.Generator,
+    estimator: Estimator,
     n_boot: int,
-    replicates: Frames3 | None,
+    replicates: tuple[pd.DataFrame, Splits] | None,
     n_folds: int,
 ) -> tuple[dict[str, dict[str, float]], dict[str, dict[str, FloatArray]]]:
-    frames = (stats, stats_a, stats_b)
-    ids = rapm.index.intersection(groups.dropna().index)
-    for idx in (*(s.index for s in frames), *(h.columns for h in rapm_halves)):
-        ids = ids.intersection(idx)
-    if replicates is not None:
-        if min(len(r) for r in replicates) < n_boot:
-            raise ValueError(f"{len(replicates[0])} RAPM replicates for n_boot={n_boot}")
-        for r in replicates:
-            ids = ids.intersection(r.columns)
+    all_splits = [splits] if replicates is None else [splits, replicates[1]]
+    ids = rapm.index.intersection(groups.dropna().index).intersection(stats.index)
+    for s in all_splits:
+        ids = ids.intersection(s.rapm_a.columns).intersection(s.rapm_b.columns)
+        for a, b in s.stats:
+            ids = ids.intersection(a.index).intersection(b.index)
+    cols = stats.columns
     y = rapm.loc[ids].to_numpy(dtype=np.float64)
-    ha, hb = (h.loc[:, ids].to_numpy(dtype=np.float64) for h in rapm_halves)
-    z, za, zb = (s.loc[ids, stats.columns].to_numpy(dtype=np.float64) for s in frames)
+    z = stats.loc[ids, cols].to_numpy(dtype=np.float64)
     labels = groups.loc[ids].to_numpy()
     members = {str(g): np.flatnonzero(labels == g) for g in sorted(set(labels))}
 
-    def one(
-        g: str, idx: NDArray[np.int64], yv: FloatArray, a: FloatArray, b: FloatArray
-    ) -> dict[str, float]:
-        rel = _spearman_brown(a[:, idx], b[:, idx]) * attribution[g]
-        return _share(yv[idx], rel, z[idx], za[idx], zb[idx], idx, rng, n_folds)
+    def arrays(s: Splits) -> SplitArrays:
+        ra, rb = (h.loc[:, ids].to_numpy(dtype=np.float64) for h in (s.rapm_a, s.rapm_b))
+        sa, sb = (
+            np.stack([pair[k].loc[ids, cols].to_numpy(dtype=np.float64) for pair in s.stats])
+            for k in (0, 1)
+        )
+        return ra, rb, sa, sb
 
-    point = {g: one(g, m, y, ha, hb) for g, m in members.items()}
+    def one(g: str, idx: NDArray[np.int64], yv: FloatArray, sp: SplitArrays) -> dict[str, float]:
+        ra, rb, sa, sb = (x[:, idx] for x in sp)
+        return _share(yv[idx], z[idx], ra, rb, sa, sb, attribution[g], idx, rng, n_folds, estimator)
+
+    base = arrays(splits)
+    point = {g: one(g, m, y, base) for g, m in members.items()}
+    reps = None
+    if replicates is not None:
+        if min(len(replicates[0]), len(replicates[1].stats)) < n_boot:
+            raise ValueError(f"{len(replicates[0])} RAPM replicates for n_boot={n_boot}")
+        reps = (replicates[0].loc[:, ids].to_numpy(dtype=np.float64), arrays(replicates[1]))
     keys = ("share", "rel_rapm", "rel_pred")
     draws = {g: {k: np.empty(n_boot) for k in keys} for g in members}
     for i in range(n_boot):
-        yv, a, b = y, ha, hb
-        if replicates is not None:
-            rows, a, b = (r.iloc[i : i + 1][ids].to_numpy(dtype=np.float64) for r in replicates)
-            yv = rows[0]
+        yv, sp = y, base
+        if reps is not None:
+            ra, rb, sa, sb = reps[1]
+            yv, sp = reps[0][i], (ra[i : i + 1], rb[i : i + 1], sa[i : i + 1], sb[i : i + 1])
         for g, m in members.items():
-            est = one(g, m[rng.integers(len(m), size=len(m))], yv, a, b)
+            est = one(g, m[rng.integers(len(m), size=len(m))], yv, sp)
             for k in keys:
                 draws[g][k][i] = est[k]
     return point, draws
@@ -193,14 +238,19 @@ def _estimate(
 
 def _share(
     y: FloatArray,
-    rel_rapm: float,
     z: FloatArray,
-    za: FloatArray,
-    zb: FloatArray,
+    ra: FloatArray,
+    rb: FloatArray,
+    sa: FloatArray,
+    sb: FloatArray,
+    attribution: float,
     units: NDArray[np.int64],
     rng: np.random.Generator,
     n_folds: int,
+    estimator: Estimator,
 ) -> dict[str, float]:
+    """y, z: full-data RAPM and statistics; ra, rb: (splits, players) RAPM on
+    each half; sa, sb: (splits, players, stats) statistics on the same halves."""
     _, unit = np.unique(units, return_inverse=True)
     fold = (rng.permutation(unit.max() + 1) % n_folds)[unit]
     pred = np.empty((len(ALPHAS), len(y)))
@@ -209,9 +259,15 @@ def _share(
         for i, alpha in enumerate(ALPHAS):
             pred[i, test] = _ridge(z[train], y[train], alpha)(z[test])
     best = int(np.argmin(((pred - y) ** 2).sum(axis=1)))
-    r2_obs = max(float(np.corrcoef(pred[best], y)[0, 1]), 0.0) ** 2
+    r2_full = max(float(np.corrcoef(pred[best], y)[0, 1]), 0.0) ** 2
     model = _ridge(z, y, ALPHAS[best])
-    rel_pred = _spearman_brown(model(za)[None, :], model(zb)[None, :])
+    pa, pb = model(sa), model(sb)
+    rel_pred, rel_rapm = _mean_corr(pa, pb), _mean_corr(ra, rb)
+    if estimator == "cross":
+        r2_obs = max((_mean_corr(pa, rb) + _mean_corr(pb, ra)) / 2, 0.0) ** 2
+    else:
+        r2_obs, rel_pred, rel_rapm = r2_full, _step_up(rel_pred), _step_up(rel_rapm)
+    rel_rapm *= attribution
     r2_true = r2_obs / (rel_rapm * rel_pred)
     return {
         "n": float(unit.max() + 1),
@@ -219,13 +275,15 @@ def _share(
         "rel_rapm": rel_rapm,
         "rel_pred": rel_pred,
         "r2_true": r2_true,
-        "share_naive": 1 - r2_obs,
+        "share_naive": 1 - r2_full,
         "share": 1 - r2_true,
     }
 
 
 def _ridge(z: FloatArray, y: FloatArray, alpha: float) -> Callable[[FloatArray], FloatArray]:
-    """Ridge on z-scored columns, unpenalised intercept, strength alpha * n."""
+    """Ridge on z-scored columns, unpenalised intercept, strength alpha * n.
+    The returned predictor works on the last axis (players x stats, or
+    splits x players x stats)."""
     mu, sd = z.mean(axis=0), z.std(axis=0)
     sd[sd == 0] = 1.0
     s = (z - mu) / sd
@@ -238,12 +296,15 @@ def _ridge(z: FloatArray, y: FloatArray, alpha: float) -> Callable[[FloatArray],
     return predict
 
 
-def _spearman_brown(a: FloatArray, b: FloatArray) -> float:
-    """Step-up of the row-wise correlation of a and b (splits x players),
-    averaged over rows."""
+def _mean_corr(a: FloatArray, b: FloatArray) -> float:
+    """Row-wise correlation of a and b (splits x players), averaged over rows."""
     a = a - a.mean(axis=1, keepdims=True)
     b = b - b.mean(axis=1, keepdims=True)
-    r = float(np.mean((a * b).sum(axis=1) / np.sqrt((a * a).sum(axis=1) * (b * b).sum(axis=1))))
+    return float(np.mean((a * b).sum(axis=1) / np.sqrt((a * a).sum(axis=1) * (b * b).sum(axis=1))))
+
+
+def _step_up(r: float) -> float:
+    """Spearman-Brown: reliability of the full-length measure from a half's."""
     return 2 * r / (1 + r)
 
 

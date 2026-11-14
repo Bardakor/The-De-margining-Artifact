@@ -56,7 +56,8 @@ COMPONENTS = ("offence", "defence", "total")
 LSQR_TOL = 1e-10
 
 FloatArray = NDArray[np.float64]
-Split = tuple[FloatArray, FloatArray, FloatArray, FloatArray]  # est_a, est_b, minutes_a, _b
+# est_a, est_b, minutes_a, minutes_b, game weights a, game weights b
+Split = tuple[FloatArray, FloatArray, FloatArray, FloatArray, FloatArray, FloatArray]
 
 
 @dataclass(frozen=True)
@@ -68,6 +69,7 @@ class Design:
     y: FloatArray
     w: FloatArray
     game: NDArray[np.int64]
+    game_ids: pd.Index
     stint_ids: NDArray[np.int64]
     players: pd.Index
     groups: pd.Index
@@ -94,12 +96,17 @@ class RapmFit:
 @dataclass(frozen=True)
 class Halves:
     """Estimates from two disjoint halves of the games; one row per split,
-    one column per player. ``a`` and ``b`` map component -> frame."""
+    one column per player. ``a`` and ``b`` map component -> frame.
+    ``games_a`` / ``games_b`` give each game's weight in each half (one row per
+    split, one column per game_id: 0 or 1, or the bootstrap count), so the
+    statistics can be split the same way."""
 
     a: dict[str, pd.DataFrame]
     b: dict[str, pd.DataFrame]
     minutes_a: pd.DataFrame
     minutes_b: pd.DataFrame
+    games_a: pd.DataFrame
+    games_b: pd.DataFrame
 
 
 @dataclass(frozen=True)
@@ -163,12 +170,13 @@ def build_design(
     response = np.concatenate([st[home_col], st[away_col]]).astype(np.float64)
     w = np.concatenate([minutes, minutes])
     y = np.divide(response * 90.0, w, out=np.zeros_like(w), where=w > 0)
-    game_codes, _ = pd.factorize(st["game_id"])
+    game_codes, game_ids = pd.factorize(st["game_id"])
     return Design(
         x=x,
         y=y,
         w=w,
         game=np.concatenate([game_codes, game_codes]).astype(np.int64),
+        game_ids=pd.Index(game_ids),
         stint_ids=st["stint_id"].to_numpy(dtype=np.int64),
         players=pd.Index(players),
         groups=pd.Index(groups),
@@ -253,6 +261,7 @@ def attribution_factor(
     min_minutes: float,
     n_sims: int = 5,
     groups: pd.Series | None = None,
+    halves: bool = False,
 ) -> pd.DataFrame:
     """Share of an estimate's stable variance that is the player's own effect.
 
@@ -265,16 +274,33 @@ def attribution_factor(
     signal. ``split_half * attribution`` is the squared correlation of RAPM
     with the player's own effect, the reliability M4 needs. Assumes effects
     independent of who plays with whom.
+
+    ``halves=True`` gives the factor for half-data estimates (M4's cross-half
+    estimator): each simulation fits the two halves of a random game split
+    without noise and returns ``corr(a, beta) * corr(b, beta) / corr(a, b)``.
+    The two halves leak through partly different teammates, so this ratio,
+    not ``corr(a, beta)**2``, turns the half-to-half correlation into the
+    half estimates' correlation with the own effect.
     """
     labels = _labels(d.players, groups).where(d.player_minutes() >= min_minutes)
     p = d.n_players
+    comps = list(COMPONENTS)
     corrs = []
     for _ in range(n_sims):
         beta = rng.standard_normal(2 * p)
-        y = np.asarray(d.x[:, : 2 * p] @ beta, dtype=np.float64)
-        est = _components(_solve(replace(d, y=y), lam), p)
-        corr = _group_corr(est, _components(beta, p), labels)
-        corr[list(COMPONENTS)] **= 2
+        planted = _components(beta, p)
+        dn = replace(d, y=np.asarray(d.x[:, : 2 * p] @ beta, dtype=np.float64))
+        if halves:
+            n_games = _n_games(d)
+            in_a = rng.permutation(n_games) < n_games // 2
+            est_a, est_b = (_components(_solve(dn, lam, w.astype(np.float64)[d.game]), p)
+                            for w in (in_a, ~in_a))  # fmt: skip
+            corr = _group_corr(est_a, planted, labels)
+            corr[comps] *= _group_corr(est_b, planted, labels)[comps]
+            corr[comps] /= _group_corr(est_a, est_b, labels)[comps]
+        else:
+            corr = _group_corr(_components(_solve(dn, lam), p), planted, labels)
+            corr[comps] **= 2
         corrs.append(corr)
     return _mean(corrs)
 
@@ -322,22 +348,24 @@ def fit_rapm_by_season(
 def _split(d: Design, lam: float, rng: np.random.Generator, counts: FloatArray) -> Split:
     """Halve the games at random; ``counts`` weighs each game (bootstrap)."""
     in_a = rng.permutation(len(counts)) < len(counts) // 2
-    wa, wb = (counts * in_a)[d.game], (counts * ~in_a)[d.game]
+    ga, gb = counts * in_a, counts * ~in_a
     p = d.n_players
-    est_a, est_b = (_components(_solve(d, lam, w), p) for w in (wa, wb))
-    return est_a, est_b, d.player_minutes(wa), d.player_minutes(wb)
+    est_a, est_b = (_components(_solve(d, lam, g[d.game]), p) for g in (ga, gb))
+    return est_a, est_b, d.player_minutes(ga[d.game]), d.player_minutes(gb[d.game]), ga, gb
 
 
 def _stack(d: Design, splits: list[Split]) -> Halves:
-    def frame(i: int, k: int | None) -> pd.DataFrame:
+    def frame(i: int, k: int | None, columns: pd.Index = d.players) -> pd.DataFrame:
         rows = [s[i] if k is None else s[i][:, k] for s in splits]
-        return pd.DataFrame(np.array(rows), columns=d.players)
+        return pd.DataFrame(np.array(rows), columns=columns)
 
     return Halves(
         a={c: frame(0, k) for k, c in enumerate(COMPONENTS)},
         b={c: frame(1, k) for k, c in enumerate(COMPONENTS)},
         minutes_a=frame(2, None),
         minutes_b=frame(3, None),
+        games_a=frame(4, None, d.game_ids),
+        games_b=frame(5, None, d.game_ids),
     )
 
 
