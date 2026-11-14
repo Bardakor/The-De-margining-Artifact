@@ -4,8 +4,9 @@ Usage:
     uv run python scripts/players/acquire_transfermarkt.py
 
 Design §4.1/§4.3. The download is skipped for files already cached. The summary
-prints row counts, the stint reconciliation checks, the Elo fit and the coverage
-of the pool-relevant competitions.
+prints row counts, the stint reconciliation checks, the validation of stint-derived
+appearances against Transfermarkt's own rows, and the Elo fit. The per competition x
+season coverage goes to results/players/coverage/tm_coverage.csv.
 """
 
 from __future__ import annotations
@@ -14,7 +15,9 @@ import numpy as np
 import pandas as pd
 
 from footy.players import stints, transfermarkt
+from footy.players.paths import RESULTS
 
+KEY = ["game_id", "player_id"]
 POOL_COMPETITIONS = (
     "GB1",
     "ES1",
@@ -33,6 +36,12 @@ POOL_COMPETITIONS = (
 )
 
 
+def _in(rows: pd.DataFrame, other: pd.DataFrame) -> np.ndarray:
+    return np.asarray(
+        pd.MultiIndex.from_frame(rows[KEY]).isin(pd.MultiIndex.from_frame(other[KEY]))
+    )
+
+
 def main() -> None:
     print("download:", transfermarkt.download())
     t = transfermarkt.build()
@@ -46,6 +55,7 @@ def main() -> None:
         "team_elo",
     ):
         print(f"{name:18s} {len(t[name]):>9,d} rows")
+    print("tm_appearances by source:", t["tm_appearances"]["source"].value_counts().to_dict())
 
     games, sel, st = t["tm_games"], t["stint_selection"], t["tm_stints"]
     complete = sel["complete"]
@@ -73,18 +83,26 @@ def main() -> None:
     )
     print(pd.Series(category).value_counts().to_string())
 
-    mins = t["tm_appearances"][t["tm_appearances"]["game_id"].isin(st["game_id"])].merge(
-        stints.player_minutes(st, t["tm_stint_players"]),
-        on=["game_id", "player_id"],
-        how="left",
-        suffixes=("", "_stints"),
-    )
-    gap = (mins["minutes_stints"].fillna(0) - mins["minutes"]).abs()
+    derived = t["tm_appearances"][t["tm_appearances"]["source"] == "stints"]
+    tm_rows = t["tm_rows"]
+    both = derived.merge(tm_rows, on=KEY, suffixes=("", "_tm"))
+    gap = (both["minutes"] - both["minutes_tm"]).abs()
+    print(f"\n[2] stint-derived vs Transfermarkt rows, {len(both):,d} shared (game, player):")
+    print(f"    minutes within +-2: {(gap <= 2).mean():.2%} (within +-5: {(gap <= 5).mean():.2%})")
+    for col in ("goals", "assists", "yellow", "red"):
+        print(f"    {col:8s} equal: {(both[col] == both[f'{col}_tm']).mean():.3%}")
+    tm_stint_games = tm_rows[tm_rows["game_id"].isin(st["game_id"])]
+    only_tm = tm_stint_games[~_in(tm_stint_games, derived)]
     print(
-        f"\n[2] minutes within +-2 of appearances for {(gap <= 2).mean():.2%} of "
-        f"{len(mins):,d} (game, player) rows; within +-5: {(gap <= 5).mean():.2%}; "
-        f"player absent from stints: {mins['minutes_stints'].isna().sum():,d}"
+        f"    Transfermarkt rows in stint games with no derived row: {len(only_tm):,d} "
+        f"(their minutes: {only_tm['minutes'].value_counts().head(3).to_dict()})"
     )
+    filled = derived[(derived["minutes"] >= 1) & ~_in(derived, tm_rows)]
+    print(
+        f"    derived player-games (minutes >= 1) with no Transfermarkt row: {len(filled):,d} "
+        "by competition:"
+    )
+    print(filled["competition_id"].value_counts().to_string())
 
     outside = ~(st["home_n"].between(7, 11) & st["away_n"].between(7, 11))
     print(
@@ -97,25 +115,26 @@ def main() -> None:
     print("\n[4] Elo (squared error of expected home score):")
     print(t["elo_report"].to_string(index=False))
 
-    print("\ncoverage of pool-relevant competitions (window):")
-    has_apps = set(t["tm_appearances"]["game_id"])
-    rows = []
-    for cid in POOL_COMPETITIONS:
-        g = games[games["competition_id"] == cid]
-        s = sel[sel["game_id"].isin(g["game_id"])]
-        rows.append(
-            {
-                "competition": cid,
-                "games": len(g),
-                "first": g["date"].min(),
-                "last": g["date"].max(),
-                "seasons": ",".join(sorted(g["season"].unique())),
-                "complete_lineups": int(s["complete"].sum()),
-                "with_stints": int(s["has_stints"].sum()),
-                "with_appearances": int(g["game_id"].isin(has_apps).sum()),
-            }
+    coverage = t["coverage"]
+    path = RESULTS / "coverage" / "tm_coverage.csv"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    coverage.to_csv(path, index=False, date_format="%Y-%m-%d")
+    print(f"\ncoverage ({len(coverage):,d} competition-seasons) -> {path}; pool competitions:")
+    pool = coverage[coverage["competition_id"].isin(POOL_COMPETITIONS)]
+    print(
+        pool.groupby("competition_id")
+        .agg(
+            seasons=("season", ",".join),
+            games=("games", "sum"),
+            with_stints=("games_with_stints", "sum"),
+            player_games=("player_games", "sum"),
+            only_from_stints=("player_games_only_from_stints", "sum"),
+            first=("first_date", "min"),
+            last=("last_date", "max"),
         )
-    print(pd.DataFrame(rows).to_string(index=False))
+        .reindex(list(POOL_COMPETITIONS))
+        .to_string()
+    )
 
 
 if __name__ == "__main__":

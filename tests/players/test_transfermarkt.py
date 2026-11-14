@@ -139,10 +139,39 @@ def test_build_on_fixtures(tmp_path: Path) -> None:
     assert stints["away_goals"].tolist() == [1, 0, 0, 0]
     assert stints["away_n"].tolist() == [11, 11, 10, 10]
 
-    apps = tables["tm_appearances"].set_index("player_id")
-    assert apps.loc[209, "penalty_goals"] == 1 and apps.loc[203, "penalty_goals"] == 0
+    all_apps = tables["tm_appearances"]
+    assert all_apps.groupby("game_id")["source"].unique().map(list).to_dict() == {
+        1: ["stints"],
+        4: ["tm_appearances"],
+    }
+    apps = all_apps[all_apps["game_id"] == 1].set_index("player_id")
+    assert len(apps) == 24  # 22 starters and the two players brought on
+    minutes = apps["minutes"].to_dict()
+    assert (minutes[110], minutes[112], minutes[205], minutes[211], minutes[212]) == (
+        60,
+        30,
+        75,
+        80,
+        10,
+    )
+    planted = {
+        109: (1, 0, 0, 0, 0),  # goals, assists, yellow, red, penalty_goals
+        108: (0, 1, 0, 0, 0),
+        209: (1, 0, 0, 0, 1),
+        203: (0, 0, 0, 0, 0),  # own goal: credited to nobody's goals
+        205: (0, 0, 2, 0, 0),  # second yellow: yellow 2, red 0 (Transfermarkt's convention)
+    }
+    stats = ["goals", "assists", "yellow", "red", "penalty_goals"]
+    assert {p: tuple(apps.loc[p, stats]) for p in planted} == planted
     assert bool(apps.loc[101, "captain"]) and bool(apps.loc[101, "started"])
     assert not bool(apps.loc[112, "started"]) and apps.loc[112, "position"] == "Second Striker"
+
+    coverage = tables["coverage"].set_index(["competition_id", "season"])
+    counts = coverage[["games", "games_with_stints", "player_games"]]
+    assert counts.loc[[("GB1", "2019/20"), ("FAC", "2019/20")]].to_numpy().tolist() == [
+        [1, 1, 24],
+        [1, 0, 1],
+    ]
 
     assert set(tables["tm_players"]["player_id"]) == {109, 209}
     assert tables["tm_valuations"]["date"].dt.year.tolist() == [2021]

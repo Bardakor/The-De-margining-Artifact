@@ -44,11 +44,12 @@ Processing assumptions:
 - A game is extra time (end_min 120) when any event minute or any appearance exceeds 90.
 - Stints are built only for window games with 11 distinct starters on each side and
   no substitution or sending-off at an unknown minute.
-- tm_appearances is Transfermarkt's own appearances table; started/position/captain
-  come from the lineups and are missing where the lineup is. The raw table has no rows
-  at all for Euro 2020/2024, World Cup 2022, Copa America 2024, Saudi Pro League and
-  MLS games, and covers 69% of players on the pitch in stint games; it is not filled
-  in here.
+- tm_appearances (``source`` column): for every game with stints the rows are derived
+  (``stint_appearances``: minutes from stints, counts from game_events), because the raw
+  appearances table has no rows at all for Copa America 2024, Saudi Pro League and MLS
+  games and misses 31% of players on the pitch in stint games. Games without stints
+  keep Transfermarkt's own rows, with started/position/captain from the lineups
+  (missing where the lineup is).
 - tm_players keeps players with an appearance or a lineup entry in the window.
 """
 
@@ -117,6 +118,7 @@ POSITION_GROUPS = {
 _NOT_KNOCKOUT = re.compile(r"matchday|group", re.IGNORECASE)
 _SENDING_OFF = re.compile(r"Red card|Second yellow")
 _PENALTY_GOAL = re.compile(r"^\s*,\s*Penalty\s*(?:,|$)")
+_YELLOW = re.compile(r"Yellow card|Second yellow")
 _OWN_GOAL = re.compile(r"Own-goal")
 
 
@@ -189,22 +191,56 @@ def build_games(games: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+STATS = ["goals", "assists", "yellow", "red", "penalty_goals"]
+KEY = ["game_id", "player_id"]
+
+
+def event_stats(events: pd.DataFrame) -> pd.DataFrame:
+    """Per (game_id, player_id) counts from game_events, in Transfermarkt's own conventions.
+
+    Checked against the appearances table on stint games: goals exclude own goals
+    (99.999% agreement); assists include assists to own goals (99.68%, vs 99.56%
+    without); a second yellow counts as a yellow, not a red, so a player sent off for two
+    yellows has yellow 2, red 0 (yellow 99.955%, red 99.937%).
+    """
+    description = events["description"].fillna("")
+    goal = events["type"] == "Goals"
+    own = description.str.contains(_OWN_GOAL)
+    card = events["type"] == "Cards"
+    assists = events.loc[goal, ["game_id", "player_assist_id"]]
+    long = pd.concat(
+        [
+            events.loc[goal & ~own, KEY].assign(stat="goals"),
+            assists.rename(columns={"player_assist_id": "player_id"}).assign(stat="assists"),
+            events.loc[card & description.str.contains(_YELLOW), KEY].assign(stat="yellow"),
+            events.loc[card & description.str.contains("Red card"), KEY].assign(stat="red"),
+            events.loc[goal & ~own & description.str.contains(_PENALTY_GOAL), KEY].assign(
+                stat="penalty_goals"
+            ),
+        ]
+    ).dropna()
+    long["player_id"] = long["player_id"].astype(int)
+    return (
+        long.groupby([*KEY, "stat"])
+        .size()
+        .unstack(fill_value=0)
+        .reindex(columns=STATS, fill_value=0)
+    )
+
+
+def _stats_for(rows: pd.DataFrame, stats: pd.DataFrame) -> pd.DataFrame:
+    index = pd.MultiIndex.from_frame(rows[KEY])
+    return stats.reindex(index, fill_value=0).set_index(rows.index)
+
+
 def build_appearances(
     appearances: pd.DataFrame, lineups: pd.DataFrame, events: pd.DataFrame
 ) -> pd.DataFrame:
-    lineup = lineups.drop_duplicates(["game_id", "player_id"])
+    """Transfermarkt's own appearance rows in the tm_appearances layout."""
+    lineup = lineups.drop_duplicates(KEY)
     merged = appearances.merge(
-        lineup[["game_id", "player_id", "type", "position", "team_captain"]],
-        on=["game_id", "player_id"],
-        how="left",
+        lineup[[*KEY, "type", "position", "team_captain"]], on=KEY, how="left"
     )
-    goals = events[events["type"] == "Goals"]
-    description = goals["description"].fillna("")
-    penalties = goals[
-        description.str.contains(_PENALTY_GOAL) & ~description.str.contains(_OWN_GOAL)
-    ]
-    pens = penalties.groupby(["game_id", "player_id"]).size().rename("penalty_goals")
-    merged = merged.join(pens, on=["game_id", "player_id"])
     listed = merged["type"].notna()
     return pd.DataFrame(
         {
@@ -221,8 +257,101 @@ def build_appearances(
             "started": (merged["type"] == "starting_lineup").astype("boolean").where(listed),
             "position": merged["position"],
             "captain": (merged["team_captain"] == 1).astype("boolean").where(listed),
-            "penalty_goals": merged["penalty_goals"].fillna(0).astype(int),
+            "penalty_goals": _stats_for(merged, event_stats(events))["penalty_goals"],
+            "source": "tm_appearances",
         }
+    )
+
+
+def stint_appearances(
+    games: pd.DataFrame,
+    lineups: pd.DataFrame,
+    events: pd.DataFrame,
+    tm_stints: pd.DataFrame,
+    tm_stint_players: pd.DataFrame,
+) -> pd.DataFrame:
+    """Appearance rows derived for every game with stints.
+
+    One row per starter and per player brought on (a player brought on at the folded
+    minute 90 has 0 minutes). Minutes come from the stints; started, position and
+    captain from the lineups (a player brought on who is missing from the lineup has
+    started False and no position or captain); counts from ``event_stats``.
+    """
+    ids = tm_stints["game_id"].unique()
+    lineup = lineups[lineups["game_id"].isin(ids)].drop_duplicates(KEY)
+    subs = events[(events["type"] == "Substitutions") & events["game_id"].isin(ids)]
+    subs = subs.dropna(subset=["player_in_id"])
+    rows = (
+        pd.concat(
+            [
+                lineup.loc[lineup["type"] == "starting_lineup", [*KEY, "club_id"]],
+                pd.DataFrame(
+                    {
+                        "game_id": subs["game_id"],
+                        "player_id": subs["player_in_id"].astype(int),
+                        "club_id": subs["club_id"],
+                    }
+                ),
+            ]
+        )
+        .drop_duplicates(KEY)
+        .merge(stints.player_minutes(tm_stints, tm_stint_players), on=KEY, how="left")
+        .merge(lineup[[*KEY, "type", "position", "team_captain"]], on=KEY, how="left")
+        .merge(games[["game_id", "date", "competition_id"]], on="game_id")
+    )
+    stats = _stats_for(rows, event_stats(events))
+    listed = rows["type"].notna()
+    return pd.DataFrame(
+        {
+            "game_id": rows["game_id"],
+            "player_id": rows["player_id"],
+            "club_id": rows["club_id"],
+            "date": rows["date"],
+            "competition_id": rows["competition_id"],
+            "minutes": rows["minutes"].fillna(0).astype(int),
+            **{stat: stats[stat] for stat in STATS[:4]},
+            "started": (rows["type"] == "starting_lineup").astype("boolean"),
+            "position": rows["position"],
+            "captain": (rows["team_captain"] == 1).astype("boolean").where(listed),
+            "penalty_goals": stats["penalty_goals"],
+            "source": "stints",
+        }
+    )
+
+
+def coverage_table(
+    games: pd.DataFrame,
+    appearances: pd.DataFrame,
+    tm_rows: pd.DataFrame,
+    selection: pd.DataFrame,
+) -> pd.DataFrame:
+    """Per competition x season: games, games with stints, player-games (minutes >= 1),
+    those player-games present only through stints, and the date range."""
+    played = appearances[appearances["minutes"] >= 1]
+    in_tm = pd.MultiIndex.from_frame(played[KEY]).isin(pd.MultiIndex.from_frame(tm_rows[KEY]))
+    per_game = (
+        played.assign(filled=(played["source"] == "stints") & ~in_tm)
+        .groupby("game_id")
+        .agg(player_games=("player_id", "size"), filled=("filled", "sum"))
+    )
+    frame = (
+        games[["game_id", "competition_id", "season", "date"]]
+        .merge(selection[["game_id", "has_stints"]], on="game_id")
+        .join(per_game, on="game_id")
+        .fillna({"player_games": 0, "filled": 0})
+    )
+    return (
+        frame.groupby(["competition_id", "season"])
+        .agg(
+            games=("game_id", "size"),
+            games_with_stints=("has_stints", "sum"),
+            player_games=("player_games", "sum"),
+            player_games_only_from_stints=("filled", "sum"),
+            first_date=("date", "min"),
+            last_date=("date", "max"),
+        )
+        .astype({"player_games": int, "player_games_only_from_stints": int})
+        .reset_index()
     )
 
 
@@ -319,7 +448,8 @@ def load(name: str, usecols: list[str], root: Path = RAW_DIR) -> pd.DataFrame:
 
 
 def build(root: Path = RAW_DIR, out: Path = PROCESSED) -> dict[str, pd.DataFrame]:
-    """Write every processed table; return them plus the Elo report and stint selection."""
+    """Write every processed table; return them plus the Elo report, the stint selection,
+    Transfermarkt's own appearance rows (``tm_rows``, for validation) and the coverage."""
     raw_games = load(
         "games",
         [
@@ -340,7 +470,16 @@ def build(root: Path = RAW_DIR, out: Path = PROCESSED) -> dict[str, pd.DataFrame
     )
     events = load(
         "game_events",
-        ["game_id", "minute", "type", "club_id", "player_id", "description", "player_in_id"],
+        [
+            "game_id",
+            "minute",
+            "type",
+            "club_id",
+            "player_id",
+            "description",
+            "player_in_id",
+            "player_assist_id",
+        ],
         root,
     )
     lineups = load(
@@ -389,11 +528,17 @@ def build(root: Path = RAW_DIR, out: Path = PROCESSED) -> dict[str, pd.DataFrame
     )
     ratings, elo_report = elo.team_elo(elo_games)
 
+    tm_rows = build_appearances(raw_apps, lineups, events)
+    derived = stint_appearances(games, lineups, events, tm_stints, tm_stint_players)
+    appearances = pd.concat(
+        [derived, tm_rows[~tm_rows["game_id"].isin(tm_stints["game_id"])]], ignore_index=True
+    )
+
     valuations = load("player_valuations", ["player_id", "date", "market_value_in_eur"], root)
     valuations["date"] = pd.to_datetime(valuations["date"])
     tables = {
         "tm_games": games,
-        "tm_appearances": build_appearances(raw_apps, lineups, events),
+        "tm_appearances": appearances,
         "tm_players": build_players(
             load(
                 "players",
@@ -407,7 +552,7 @@ def build(root: Path = RAW_DIR, out: Path = PROCESSED) -> dict[str, pd.DataFrame
                 ],
                 root,
             ),
-            pd.concat([raw_apps["player_id"], lineups["player_id"]]),
+            pd.concat([raw_apps["player_id"], lineups["player_id"], derived["player_id"]]),
         ),
         "tm_valuations": valuations[_window_mask(valuations["date"])].rename(
             columns={"market_value_in_eur": "market_value_eur"}
@@ -419,4 +564,10 @@ def build(root: Path = RAW_DIR, out: Path = PROCESSED) -> dict[str, pd.DataFrame
     out.mkdir(parents=True, exist_ok=True)
     for name, table in tables.items():
         table.to_csv(out / f"{name}.csv.gz", index=False, date_format="%Y-%m-%d")
-    return {**tables, "elo_report": elo_report, "stint_selection": selection}
+    return {
+        **tables,
+        "elo_report": elo_report,
+        "stint_selection": selection,
+        "tm_rows": tm_rows,
+        "coverage": coverage_table(games, appearances, tm_rows, selection),
+    }

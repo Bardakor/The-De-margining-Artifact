@@ -23,3 +23,4 @@ game_id,player_id,player_club_id,date,competition_id,yellow_cards,red_cards,goal
 1,210,20,2020-03-01,GB1,0,0,0,0,90
 1,211,20,2020-03-01,GB1,0,0,0,0,80
 1,212,20,2020-03-01,GB1,0,0,0,0,10
+4,105,10,2020-02-01,FAC,0,0,1,0,90
