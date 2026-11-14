@@ -91,3 +91,15 @@ timestamp.
   re-estimates both reliabilities in each replicate; raw values are reported.
 - **A8 (2026-11-14).** M3 estimates home advantage per competition-season, not
   as one constant (empty stadiums in 2019/20–2020/21).
+- **A9 (2026-11-14).** Two corrections found on synthetic leagues, before any
+  real-data run. (i) In M4, RAPM reliability is split-half reliability times an
+  attribution factor (effects planted on the real schedule and fitted without
+  noise): ridge lets teammates leak into each other's estimates, the leak is
+  stable across halves, and split-half alone counts it as signal (0.29 vs a
+  true 0.15 in one test league). (ii) A7's replicate-based joint bootstrap adds
+  a second draw of noise and overstates the spread (synthetic interval
+  [−0.08, 0.65] vs a true sampling spread near [0.36, 0.50]). H3 is therefore
+  decided by a parametric bootstrap on the real schedule: plant effects with
+  the estimated variances and measurable shares on the real stints and
+  minutes, re-run M4 end to end, and take the 90% interval of the contrast.
+  The player bootstrap and the A7 joint bootstrap are reported alongside.
