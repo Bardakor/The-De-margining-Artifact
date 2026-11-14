@@ -120,3 +120,13 @@ timestamp.
   secondary, restricted to the leagues ESPN covers, and reported only if ESPN
   is retained. Reason: the primary analysis must not depend on the pending
   ESPN decision, and must be uniform across leagues.
+- **A12 (2026-11-14).** M3 primary specification, fixed before its first
+  real-data fit: every stint in the panel (Transfermarkt stints of all
+  competitions, plus StatsBomb stints of WC 2022 and Euros 2020/2024);
+  intercept and home term per competition-season; a player gets his own
+  columns with ≥ 900 minutes in the window, otherwise the replacement column;
+  **no Elo covariate** — the players on the pitch already are the team's
+  strength, so adjusting for Elo would remove part of the signal being
+  estimated (the with-Elo fit is reported as robustness); λ by 5-fold
+  game-grouped CV; B = 200 game bootstrap; master seed 20261114 for every
+  analysis.
