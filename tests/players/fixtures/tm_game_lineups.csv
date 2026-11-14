@@ -1,0 +1,25 @@
+game_id,player_id,club_id,type,position,team_captain
+1,101,10,starting_lineup,Goalkeeper,1
+1,102,10,starting_lineup,Right-Back,0
+1,103,10,starting_lineup,Centre-Back,0
+1,104,10,starting_lineup,Centre-Back,0
+1,105,10,starting_lineup,Left-Back,0
+1,106,10,starting_lineup,Defensive Midfield,0
+1,107,10,starting_lineup,Central Midfield,0
+1,108,10,starting_lineup,Attacking Midfield,0
+1,109,10,starting_lineup,Centre-Forward,0
+1,110,10,starting_lineup,Left Winger,0
+1,111,10,starting_lineup,Right Winger,0
+1,112,10,substitutes,Second Striker,0
+1,201,20,starting_lineup,Goalkeeper,1
+1,202,20,starting_lineup,Right-Back,0
+1,203,20,starting_lineup,Centre-Back,0
+1,204,20,starting_lineup,Centre-Back,0
+1,205,20,starting_lineup,Left-Back,0
+1,206,20,starting_lineup,Defensive Midfield,0
+1,207,20,starting_lineup,Central Midfield,0
+1,208,20,starting_lineup,Attacking Midfield,0
+1,209,20,starting_lineup,Centre-Forward,0
+1,210,20,starting_lineup,Left Winger,0
+1,211,20,starting_lineup,Right Winger,0
+1,212,20,substitutes,Second Striker,0

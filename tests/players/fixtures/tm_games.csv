@@ -1,0 +1,10 @@
+game_id,competition_id,season,round,date,home_club_id,away_club_id,home_club_goals,away_club_goals,home_club_name,away_club_name,competition_type
+1,GB1,2019,25. Matchday,2020-03-01,10,20,2,1,Home FC,Away FC,domestic_league
+2,GB1,2019,8. Matchday,2019-10-01,10,20,1,0,Home FC,Away FC,domestic_league
+3,GB1,2019,12. Matchday,2019-11-01,20,10,2,2,Away FC,Home FC,domestic_league
+4,FAC,2019,Fourth Round,2020-02-01,10,30,5,4,Home FC,Cup FC,domestic_cup
+5,FIWC,2017,Group B,2018-06-20,1000,2000,0,0,Nation A,Nation B,national_team_competition
+6,EURO,2023,Group A,2024-06-20,1000,2000,1,0,Nation A,Nation B,national_team_competition
+7,EURO,2023,Final,2024-07-14,1000,3000,2,1,Nation A,Nation C,national_team_competition
+8,KLUB,2025,Group A,2025-06-20,10,40,1,1,Home FC,World FC,
+9,KLUB,2025,Final,2025-07-13,40,10,0,1,World FC,Home FC,

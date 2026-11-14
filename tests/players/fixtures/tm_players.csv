@@ -1,0 +1,4 @@
+player_id,name,date_of_birth,position,sub_position,country_of_citizenship
+109,Planted Striker,1995-05-05 00:00:00,Attack,Centre-Forward,England
+209,Planted Taker,1996-06-06 00:00:00,Midfield,Central Midfield,Spain
+999,Not In Window,1980-01-01 00:00:00,Defender,Centre-Back,Italy

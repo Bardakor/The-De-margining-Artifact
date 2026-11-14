@@ -1,0 +1,18 @@
+game_id,minute,type,club_id,player_id,description,player_in_id
+1,30,Goals,10,109,", Right-footed shot, 1. Goal of the Season",
+1,40,Cards,20,205,"1. Yellow card  , Foul",
+1,60,Substitutions,10,110,", Tactical",112
+1,60,Goals,20,209,", Penalty, 1. Goal of the Season Assist: , Penalty: Fouled player",
+1,75,Cards,20,205,"Second yellow , Foul",
+1,80,Substitutions,20,211,", Injury",212
+1,85,Goals,10,203,", Own-goal",
+4,20,Goals,10,105,", Header, 1. Tournament Goal",
+4,70,Goals,30,301,", Left-footed shot, 1. Tournament Goal",
+4,-1,Shootout,10,101,", Scored",
+4,-1,Shootout,10,102,", Scored",
+4,-1,Shootout,10,103,", Scored",
+4,-1,Shootout,10,104,", Scored",
+4,-1,Shootout,30,301,", Scored",
+4,-1,Shootout,30,302,", Scored",
+4,-1,Shootout,30,303,", Scored",
+4,-1,Shootout,30,305,", Saved",
