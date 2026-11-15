@@ -1,0 +1,378 @@
+% macros-defaults.tex -- The Unmeasured Remainder (paper 2)
+%
+% The contract between main.tex and the generator script
+% (scripts/players/make_paper2.py, run by `make paper2`). Every number that
+% comes from data, and every data-derived name, is one of the macros below.
+% main.tex inputs this file first, then generated/macros.tex if it exists.
+%
+% Rules for the generator:
+% - Redefine with \renewcommand{\Name}{value}. Never \newcommand (the names
+%   already exist) and never a name not declared here.
+% - Values are set in running text, never in math mode. Write a negative
+%   number as $-0.05$ (or \textminus), a share as a decimal unless the comment
+%   says "percent", and an interval bound as a bare number.
+% - "results/players/<dir>/" names the output directory of the module; the
+%   file inside it is the generator's choice, as long as the value is read
+%   from a file a run wrote, never typed.
+% - Shares are in [0, 1] unless the comment says "raw" (may lie outside).
+% - 90% intervals throughout (pre-registration), unless stated.
+%
+% Defaults render as [pending] (\TBD, defined in main.tex), so the draft
+% compiles before any result exists.
+
+% ---------------------------------------------------------------------------
+% Section 4, Data: panel, coverage, linking, Elo
+% ---------------------------------------------------------------------------
+% Games in the panel dated 2020-01-01..2026-08-31 (Transfermarkt plus the StatsBomb-only tournament games); panel.py via build_panel.py; results/players/coverage/
+\providecommand{\NGames}{\TBD}
+% Of those games, the number with stints (Transfermarkt stints plus StatsBomb stints of WC 2022, Euro 2020, Euro 2024); stints.py, panel.py; results/players/coverage/tm_coverage.csv (games_with_stints summed)
+\providecommand{\NGamesWithStints}{\TBD}
+% Stints in M3's primary design (A12: every stint of the panel); rapm.build_design; results/players/rapm/
+\providecommand{\NStints}{\TBD}
+% Competition-season groups, each with its own intercept and home term in M3 (A8, A12); rapm.build_design; results/players/rapm/
+\providecommand{\NCompetitionSeasons}{\TBD}
+% Distinct players with at least one minute in the panel; panel.player_match; results/players/coverage/
+\providecommand{\NPlayersPanel}{\TBD}
+% Rows of panel_player_match (player-matches with minutes >= 1); panel.player_match; results/players/coverage/
+\providecommand{\NPlayerMatches}{\TBD}
+% Player-seasons (scope "all") with >= 900 minutes, the population of M1 and M2; panel.player_season; results/players/coverage/
+\providecommand{\NPlayerSeasonsQualifying}{\TBD}
+% StatsBomb open-data men's matches dated inside the window; statsbomb.py; results/players/linking/game_link_rates.csv (matches minus before_window)
+\providecommand{\NSbMatches}{\TBD}
+% Of those, the number linked to a Transfermarkt game; linking.link_sb_games; results/players/linking/game_link_rates.csv (linked)
+\providecommand{\NSbMatchesLinked}{\TBD}
+% Share of StatsBomb player ids seen in linked matches that were linked to a Transfermarkt id (decimal); linking.link_sb_players; results/players/linking/player_links.csv
+\providecommand{\SbPlayerLinkRate}{\TBD}
+% Games whose stints and appearances come from StatsBomb because Transfermarkt has no lineups (WC 2022, Euro 2020, Euro 2024); panel.sb_tables; results/players/coverage/
+\providecommand{\NSbStintGames}{\TBD}
+% Date of the latest game in the Transfermarkt snapshot (e.g. 2026-07-06); transfermarkt.py; results/players/coverage/tm_coverage.csv (max last_date)
+\providecommand{\CovLastGameDate}{\TBD}
+% First season of the Saudi Pro League (SA1) present in the snapshot, as a season label (e.g. 2024/25); results/players/coverage/tm_coverage.csv
+\providecommand{\CovSaudiFirstSeason}{\TBD}
+% First season of MLS (MLS1) present in the snapshot, as a season label; results/players/coverage/tm_coverage.csv
+\providecommand{\CovMlsFirstSeason}{\TBD}
+% Elo K factor of the club pool, chosen on 2015-07-01..2019-12-31 and frozen; elo.team_elo fit report; results/players/elo/
+\providecommand{\EloKClub}{\TBD}
+% Elo home advantage H (rating points) of the club pool; elo.team_elo fit report; results/players/elo/
+\providecommand{\EloHClub}{\TBD}
+% Elo K factor of the national-team pool; elo.team_elo fit report; results/players/elo/
+\providecommand{\EloKNational}{\TBD}
+% Elo home advantage H of the national-team pool; elo.team_elo fit report; results/players/elo/
+\providecommand{\EloHNational}{\TBD}
+
+% ---------------------------------------------------------------------------
+% Section 4, Data: the player pool
+% ---------------------------------------------------------------------------
+% Pool size: V1's players union every player ranked in a 2021-2026 Ballon d'Or (A2); panel.match_pool; paper-unmeasured/data/pool.csv (rows)
+\providecommand{\NPool}{\TBD}
+% Outfield players in the pool; paper-unmeasured/data/pool.csv (is_goalkeeper False)
+\providecommand{\NPoolOutfield}{\TBD}
+% Goalkeepers in the pool (ranked separately); paper-unmeasured/data/pool.csv (is_goalkeeper True)
+\providecommand{\NPoolGoalkeepers}{\TBD}
+% Pool players who are not on the V1 list (Ballon d'Or only); paper-unmeasured/data/pool.csv (in_v1 False)
+\providecommand{\NPoolBdoOnly}{\TBD}
+% Pool players mapped to a Transfermarkt id with medium confidence; paper-unmeasured/data/pool.csv (confidence medium)
+\providecommand{\NPoolMediumConfidence}{\TBD}
+% Pool names left unmapped to a Transfermarkt id (0 if none); results/players/linking/pool_matching.csv
+\providecommand{\NPoolUnmapped}{\TBD}
+
+% ---------------------------------------------------------------------------
+% Section 6.1 / 7.1, M1 sampling noise (reliability.py)
+% ---------------------------------------------------------------------------
+% Split-half reliability (Spearman-Brown stepped up, mean of 200 splits), player-seasons >= 900 min, per-90 goals; reliability.split_half; results/players/reliability/
+\providecommand{\RelGoals}{\TBD}
+% Same, per-90 non-penalty goals; reliability.split_half; results/players/reliability/
+\providecommand{\RelNpGoals}{\TBD}
+% Same, per-90 assists; reliability.split_half; results/players/reliability/
+\providecommand{\RelAssists}{\TBD}
+% Same, per-90 non-penalty goals plus assists (H7's metric, A4); reliability.split_half; results/players/reliability/
+\providecommand{\RelNpga}{\TBD}
+% Same, raw on-pitch goal difference per 90 (minutes in matches with stints); reliability.split_half; results/players/reliability/
+\providecommand{\RelOnPitchGd}{\TBD}
+% Mean number of player-seasons entering a split, for np goals plus assists; reliability.SplitHalf.n_units; results/players/reliability/
+\providecommand{\NReliabilityUnits}{\TBD}
+% Stabilisation constant k (minutes; reliability 0.5 at k) of np goals plus assists per 90; reliability.stabilisation; results/players/reliability/
+\providecommand{\StabKNpga}{\TBD}
+% Minutes at which np goals plus assists per 90 reaches reliability 0.7 (= 7k/3); reliability.Stabilisation.minutes_07; results/players/reliability/
+\providecommand{\StabSevenNpga}{\TBD}
+% Stabilisation constant k (minutes) of raw on-pitch goal difference per 90; reliability.stabilisation; results/players/reliability/
+\providecommand{\StabKOnPitchGd}{\TBD}
+
+% ---------------------------------------------------------------------------
+% Section 6.2 / 7.2, M2 structure and double counting (structure.py)
+% ---------------------------------------------------------------------------
+% Number of per-90 metrics analysed in M2; results/players/structure/
+\providecommand{\NMetricsStructure}{\TBD}
+% Components retained by Horn's parallel analysis (95th percentile of 200 permutations); structure.parallel_analysis; results/players/structure/
+\providecommand{\NComponentsRetained}{\TBD}
+% Participation ratio of the correlation eigenvalues of the M2 metrics; structure.participation_ratio; results/players/structure/
+\providecommand{\ParticipationRatio}{\TBD}
+% Entropy effective number exp(H) of the same eigenvalues; structure.entropy_effective_number; results/players/structure/
+\providecommand{\EntropyEffective}{\TBD}
+% Spearman correlation of per-90 goals and per-90 non-penalty goals across player-seasons >= 900 min; structure.py; results/players/structure/
+\providecommand{\CorrGoalsNpGoals}{\TBD}
+% Team ICC(1) of np goals plus assists per 90, clubs within league-season; structure.team_icc; results/players/structure/
+\providecommand{\IccNpga}{\TBD}
+% Team ICC(1) of raw on-pitch goal difference per 90; structure.team_icc; results/players/structure/
+\providecommand{\IccOnPitchGd}{\TBD}
+% Variance inflation w'Rw / w'w of the V1-like composite (A13 (i) weights); structure.composite_diagnostics; results/players/structure/
+\providecommand{\VOneInflation}{\TBD}
+% Share of the V1-like composite's variance carried by the first principal component; structure.composite_diagnostics; results/players/structure/
+\providecommand{\VOnePcOneShare}{\TBD}
+% Claimed variance share (sum of w_k^2 / w'w) of goals and np goals together in the V1-like composite; structure.composite_diagnostics; results/players/structure/
+\providecommand{\VOneGoalsClaimed}{\TBD}
+% Effective variance share (sum of w_k (Rw)_k / w'Rw) of goals and np goals together in the V1-like composite; structure.composite_diagnostics; results/players/structure/
+\providecommand{\VOneGoalsEffective}{\TBD}
+
+% ---------------------------------------------------------------------------
+% Section 6.3 / 7.3, M3 on-pitch impact (rapm.py)
+% ---------------------------------------------------------------------------
+% Ridge penalty lambda chosen by 5-fold game-grouped CV (A12); rapm.cv_lambda; results/players/rapm/
+\providecommand{\RapmLambda}{\TBD}
+% Players with their own RAPM columns (>= 900 minutes in the window, A12); rapm.build_design; results/players/rapm/
+\providecommand{\NPlayersOwnColumns}{\TBD}
+% Split-half reliability (Spearman-Brown) of RAPM offence, all players with own columns; rapm.split_half_reliability; results/players/rapm/
+\providecommand{\RelRapmOffence}{\TBD}
+% Same, RAPM defence; rapm.split_half_reliability; results/players/rapm/
+\providecommand{\RelRapmDefence}{\TBD}
+% Same, RAPM total (offence + defence); rapm.split_half_reliability; results/players/rapm/
+\providecommand{\RelRapmTotal}{\TBD}
+% Full-data attribution factor A of RAPM total, all players with own columns (A9 (i)); rapm.attribution_factor(halves=False); results/players/rapm/
+\providecommand{\AttrFullTotal}{\TBD}
+% Half-data attribution factor A^{1/2} of RAPM total (M4's cross-half estimator); rapm.attribution_factor(halves=True); results/players/rapm/
+\providecommand{\AttrHalfTotal}{\TBD}
+% Attributed reliability of RAPM total = split-half reliability x full-data attribution factor; results/players/rapm/
+\providecommand{\RelRapmTotalAttributed}{\TBD}
+% Outfield pool players whose 90% bootstrap interval (B = 200) of pooled RAPM total excludes 0; rapm.bootstrap_rapm; results/players/rapm/
+\providecommand{\NPoolRapmExcludesZero}{\TBD}
+% Spearman correlation, over players with own columns, of RAPM total between the primary fit and the with-Elo robustness fit (A12); results/players/rapm/
+\providecommand{\RapmEloSpearman}{\TBD}
+% Minutes-weighted mean home term (goals per 90) over competition-seasons 2019/20 and 2020/21; rapm.fit_rapm; results/players/rapm/
+\providecommand{\HomeTermEmpty}{\TBD}
+% Minutes-weighted mean home term (goals per 90) over all other competition-seasons; rapm.fit_rapm; results/players/rapm/
+\providecommand{\HomeTermOther}{\TBD}
+
+% ---------------------------------------------------------------------------
+% Section 6.4 / 7.4, M4 unmeasured share (construct_gap.py, simulation.py)
+% ---------------------------------------------------------------------------
+% Smallest raw out-of-fold R2_full of RAPM total on the statistics across outfield position groups (no correction); construct_gap.unmeasured_share; results/players/construct_gap/
+\providecommand{\RTwoFullMin}{\TBD}
+% Largest raw out-of-fold R2_full across outfield position groups; construct_gap.unmeasured_share; results/players/construct_gap/
+\providecommand{\RTwoFullMax}{\TBD}
+% Cross-half unmeasured share of RAPM total, pooled CB+DM, clipped to [0, 1]; construct_gap.position_contrast; results/players/construct_gap/
+\providecommand{\ShareHigh}{\TBD}
+% Cross-half unmeasured share of RAPM total, pooled CF+W, clipped to [0, 1]; construct_gap.position_contrast; results/players/construct_gap/
+\providecommand{\ShareLow}{\TBD}
+% H3 contrast: clipped share CB+DM minus clipped share CF+W (point estimate); construct_gap.position_contrast; results/players/construct_gap/
+\providecommand{\ShareContrast}{\TBD}
+% H3 contrast from the raw (unclipped) shares; construct_gap.position_contrast; results/players/construct_gap/
+\providecommand{\ShareContrastRaw}{\TBD}
+% Lower bound of the 90% basic interval of the clipped contrast from the A9 parametric bootstrap (decides H3); simulation.parametric_bootstrap_contrast; results/players/simulation/
+\providecommand{\ShareContrastParamLo}{\TBD}
+% Upper bound of the same interval; simulation.parametric_bootstrap_contrast; results/players/simulation/
+\providecommand{\ShareContrastParamHi}{\TBD}
+% Lower bound of the 90% player-bootstrap percentile interval of the clipped contrast; construct_gap.position_contrast; results/players/construct_gap/
+\providecommand{\ShareContrastPlayerLo}{\TBD}
+% Upper bound of the same; construct_gap.position_contrast; results/players/construct_gap/
+\providecommand{\ShareContrastPlayerHi}{\TBD}
+% Lower bound of the 90% A7 joint bootstrap (players x RAPM replicates) interval of the clipped contrast; construct_gap.position_contrast; results/players/construct_gap/
+\providecommand{\ShareContrastJointLo}{\TBD}
+% Upper bound of the same; construct_gap.position_contrast; results/players/construct_gap/
+\providecommand{\ShareContrastJointHi}{\TBD}
+% Clipped contrast from the within-sample estimator (robustness, A10); construct_gap.position_contrast(estimator="within"); results/players/construct_gap/
+\providecommand{\ShareContrastWithin}{\TBD}
+% Number of position groups (of eight) whose raw R2_true lies outside [0, 1] and was clipped; construct_gap.unmeasured_share; results/players/construct_gap/
+\providecommand{\NGroupsClipped}{\TBD}
+% Leave-one-simulation-out coverage of the parametric interval over the S = 200 simulations (decimal); simulation.ContrastBootstrap.summary coverage_loo; results/players/simulation/
+\providecommand{\ParamCoverageLoo}{\TBD}
+% Share of simulations whose own M4 player-bootstrap interval covers the planted contrast; simulation.ContrastBootstrap.summary coverage_m4; results/players/simulation/
+\providecommand{\ParamCoverageMFour}{\TBD}
+
+% ---------------------------------------------------------------------------
+% Section 6.5 / 7.5, M5 specification uncertainty (multiverse.py)
+% ---------------------------------------------------------------------------
+% Number of distinct outfield pool rankings among the 5,760 specifications; multiverse.distinct_rankings; results/players/multiverse/
+\providecommand{\NDistinctRankingsOutfield}{\TBD}
+% Number of distinct goalkeeper pool rankings among the 5,760 specifications; multiverse.distinct_rankings; results/players/multiverse/
+\providecommand{\NDistinctRankingsGoalkeeper}{\TBD}
+% Outfield pool player ranked #1 by the largest share of specifications on the original data (name); multiverse.rank_probabilities; results/players/multiverse/
+\providecommand{\MultiverseTopName}{\TBD}
+% That share of specifications (decimal); multiverse.rank_probabilities; results/players/multiverse/
+\providecommand{\MultiverseTopPFirst}{\TBD}
+% Number of outfield pool players ranked #1 by at least one specification; multiverse.rank_probabilities; results/players/multiverse/
+\providecommand{\NPlayersEverFirst}{\TBD}
+% H5: total-order index of the aggregation dimension for the rank of the player with the highest M8 P(#1); multiverse.variance_indices; results/players/multiverse/
+\providecommand{\HFiveAggTotal}{\TBD}
+% H5: name of the dimension with the largest total-order index for that player (one of family, weights, position, context, aggregation, competition, minimum minutes, shrinkage); results/players/multiverse/
+\providecommand{\HFiveMaxDim}{\TBD}
+% H5: that largest total-order index; multiverse.variance_indices; results/players/multiverse/
+\providecommand{\HFiveMaxTotal}{\TBD}
+
+% ---------------------------------------------------------------------------
+% Section 6.6 / 7.6, M6 recognition (perception.py)
+% ---------------------------------------------------------------------------
+% Rows of the recognition universe after drops: (edition, candidate) pairs over 2021-2026, every outfield pool player with minutes in the voted season (A14); perception.fit_recognition; results/players/perception/
+\providecommand{\NBdoRows}{\TBD}
+% Distinct players in the recognition universe; results/players/perception/
+\providecommand{\NBdoCandidates}{\TBD}
+% Candidate-editions dropped because the player has no per-season RAPM estimate (A14); results/players/perception/
+\providecommand{\NBdoDropped}{\TBD}
+% Within-edition R2 of the full OLS model of log(1 + points); perception.fit_recognition; results/players/perception/
+\providecommand{\OlsRTwo}{\TBD}
+% Leave-one-edition-out R2 of the same model; perception.fit_recognition; results/players/perception/
+\providecommand{\OlsRTwoLoeo}{\TBD}
+% McFadden pseudo-R2 of the full Plackett-Luce model; perception.fit_recognition; results/players/perception/
+\providecommand{\PlPseudoRTwo}{\TBD}
+% OLS Shapley share (R2 units) of the individual-statistics block; perception.fit_recognition ols_shares; results/players/perception/
+\providecommand{\ShapleyStatsOls}{\TBD}
+% OLS Shapley share of the impact (RAPM) block; results/players/perception/
+\providecommand{\ShapleyImpactOls}{\TBD}
+% OLS Shapley share of the team-success block; results/players/perception/
+\providecommand{\ShapleyTeamOls}{\TBD}
+% OLS Shapley share of the reputation block; results/players/perception/
+\providecommand{\ShapleyRepOls}{\TBD}
+% Lower bound, 90% player-cluster bootstrap interval of the OLS team-success share; perception.bootstrap_shares; results/players/perception/
+\providecommand{\ShapleyTeamOlsLo}{\TBD}
+% Upper bound of the same; perception.bootstrap_shares; results/players/perception/
+\providecommand{\ShapleyTeamOlsHi}{\TBD}
+% Lower bound, 90% player-cluster bootstrap interval of the OLS individual-statistics share; perception.bootstrap_shares; results/players/perception/
+\providecommand{\ShapleyStatsOlsLo}{\TBD}
+% Upper bound of the same; perception.bootstrap_shares; results/players/perception/
+\providecommand{\ShapleyStatsOlsHi}{\TBD}
+% Share of bootstrap replicates in which the OLS team-success share exceeds the OLS statistics share; perception.bootstrap_shares; results/players/perception/
+\providecommand{\ShapleyTeamAboveStatsBoot}{\TBD}
+% Plackett-Luce Shapley share (pseudo-R2 units) of the individual-statistics block; perception.fit_recognition pl_shares; results/players/perception/
+\providecommand{\ShapleyStatsPl}{\TBD}
+% Plackett-Luce Shapley share of the impact block; results/players/perception/
+\providecommand{\ShapleyImpactPl}{\TBD}
+% Plackett-Luce Shapley share of the team-success block; results/players/perception/
+\providecommand{\ShapleyTeamPl}{\TBD}
+% Plackett-Luce Shapley share of the reputation block; results/players/perception/
+\providecommand{\ShapleyRepPl}{\TBD}
+% Text: "agree" if Plackett-Luce orders team success and statistics as OLS does, else "disagree" (A1); results/players/perception/
+\providecommand{\OlsPlAgreement}{\TBD}
+
+% ---------------------------------------------------------------------------
+% Section 6.7 / 7.7, M7a visibility of on-ball value (tournaments.py), exploratory
+% ---------------------------------------------------------------------------
+% Player-competition units in the StatsBomb visibility sample (scope "all", group ALL); tournaments.visibility; results/players/tournaments/visibility.csv (n_units)
+\providecommand{\NSbUnitsVisibility}{\TBD}
+% Distinct players in the same sample; results/players/tournaments/visibility.csv (n_players)
+\providecommand{\NSbPlayersVisibility}{\TBD}
+% Cross-half visibility r2_cross of xT added per 90 (scope all, group ALL); results/players/tournaments/visibility.csv
+\providecommand{\VisXtCross}{\TBD}
+% Lower bound of its 90% player-bootstrap interval; results/players/tournaments/visibility.csv (r2_cross_lo)
+\providecommand{\VisXtCrossLo}{\TBD}
+% Upper bound of the same; results/players/tournaments/visibility.csv (r2_cross_hi)
+\providecommand{\VisXtCrossHi}{\TBD}
+% Within-sample disattenuated r2_disatt of xT added per 90 (scope all, group ALL), shown against r2_cross; results/players/tournaments/visibility.csv
+\providecommand{\VisXtDisatt}{\TBD}
+
+% ---------------------------------------------------------------------------
+% Section 6.7 / 7.7, M7b big-game trait (clutch.py), H7
+% ---------------------------------------------------------------------------
+% Players with >= 360 knockout minutes in both periods (A4); clutch.knockout_persistence n_players; results/players/clutch/
+\providecommand{\NPlayersClutch}{\TBD}
+% Persistence r: correlation of knockout over-performance z (np G+A per 90) between 2020-2022 and 2023-2026; clutch.knockout_persistence; results/players/clutch/
+\providecommand{\ClutchR}{\TBD}
+% Lower bound, 90% player-bootstrap interval of r; results/players/clutch/
+\providecommand{\ClutchRLo}{\TBD}
+% Upper bound of the same; results/players/clutch/
+\providecommand{\ClutchRHi}{\TBD}
+% One-sided permutation p-value of r; results/players/clutch/
+\providecommand{\ClutchP}{\TBD}
+% Within-period split-half reliability of z, 2020-2022 (A5); results/players/clutch/
+\providecommand{\ClutchRelFirst}{\TBD}
+% Within-period split-half reliability of z, 2023-2026 (A5); results/players/clutch/
+\providecommand{\ClutchRelSecond}{\TBD}
+% Power to detect a true correlation of 0.3 given those reliabilities and the number of players (A5); results/players/clutch/
+\providecommand{\ClutchPower}{\TBD}
+% Persistence r on the placebo knockout labels; clutch.placebo_knockout; results/players/clutch/
+\providecommand{\ClutchPlaceboR}{\TBD}
+% One-sided test level alpha used in A5's power calculation. NOT fixed by the pre-registration: set by an amendment or by the run script, and read from its output; results/players/clutch/
+\providecommand{\HSevenAlpha}{\TBD}
+
+% ---------------------------------------------------------------------------
+% Section 6.8 / 7.8 and 7.10, M8 synthesis (synthesis.py)
+% ---------------------------------------------------------------------------
+% Outfield pool player with the highest P(#1) in the (s, b, u) mixture (name); synthesis.synthesise players; results/players/synthesis/
+\providecommand{\TopPlayerName}{\TBD}
+% That player's P(#1) (decimal); also H2's statistic; results/players/synthesis/
+\providecommand{\TopPlayerPFirst}{\TBD}
+% That player's P(top-3); results/players/synthesis/
+\providecommand{\TopPlayerPTopThree}{\TBD}
+% That player's P(top-10); results/players/synthesis/
+\providecommand{\TopPlayerPTopTen}{\TBD}
+% That player's median rank in the mixture; results/players/synthesis/
+\providecommand{\TopPlayerMedianRank}{\TBD}
+% Lower end of that player's 90% rank interval in the mixture; results/players/synthesis/
+\providecommand{\TopPlayerRankLo}{\TBD}
+% Upper end of the same; results/players/synthesis/
+\providecommand{\TopPlayerRankHi}{\TBD}
+% Lower end of that player's marginal 90% rank confidence set (Mogstad et al.) at the median specification; synthesis.rank_confidence_sets; results/players/synthesis/
+\providecommand{\TopPlayerMarginalLo}{\TBD}
+% Upper end of the same; results/players/synthesis/
+\providecommand{\TopPlayerMarginalHi}{\TBD}
+% That player's specification share of rank variance, Var_s(E[r|s]) / Var(r); results/players/synthesis/
+\providecommand{\TopPlayerVarSpec}{\TBD}
+% That player's sampling share, E_s[Var_b(E[r|s,b])] / Var(r); results/players/synthesis/
+\providecommand{\TopPlayerVarSamp}{\TBD}
+% That player's unmeasured share, E_{s,b}[Var_u(r|s,b)] / Var(r); results/players/synthesis/
+\providecommand{\TopPlayerVarUnm}{\TBD}
+% Outfield pool player with the second-highest P(#1) (name); results/players/synthesis/
+\providecommand{\SecondPlayerName}{\TBD}
+% That player's P(#1); results/players/synthesis/
+\providecommand{\SecondPlayerPFirst}{\TBD}
+% Number of unordered outfield pool pairs; results/players/synthesis/
+\providecommand{\NPairsOutfield}{\TBD}
+% Of those, pairs decided (P(i above j) >= 0.9 or <= 0.1); synthesis.verdicts; results/players/synthesis/
+\providecommand{\NPairsDecided}{\TBD}
+% H1 statistic: share of outfield pairs decided (decimal); synthesis.verdicts; results/players/synthesis/
+\providecommand{\SharePairsDecided}{\TBD}
+% H4 statistic: mean over the median specification's top 10 of Var_spec / Var_samp; synthesis.verdicts; results/players/synthesis/
+\providecommand{\HFourRatio}{\TBD}
+% Number of players behind H4's mean (rank <= 10 at the median specification, ties included, both components not 0); synthesis.verdicts; results/players/synthesis/
+\providecommand{\HFourNPlayers}{\TBD}
+% Text: the median specification's eight levels, e.g. "hybrid, equal-z, within-group z, ..."; synthesis.median_specification; results/players/synthesis/
+\providecommand{\MedianSpecLabel}{\TBD}
+% Kendall's W of the statistics, impact and recognition views (tie-corrected); synthesis.view_agreement; results/players/synthesis/
+\providecommand{\KendallW}{\TBD}
+% Mean pairwise Spearman correlation of the three views, (3W - 1) / 2; results/players/synthesis/
+\providecommand{\KendallMeanSpearman}{\TBD}
+% Goalkeeper with the highest P(#1) in the goalkeeper segment (name); results/players/synthesis/
+\providecommand{\TopGoalkeeperName}{\TBD}
+% That goalkeeper's P(#1); results/players/synthesis/
+\providecommand{\TopGoalkeeperPFirst}{\TBD}
+% Exploratory: Spearman correlation between V1's rank and the M8 median rank over V1's outfield players; results/players/synthesis/
+\providecommand{\VOneSpearman}{\TBD}
+
+% ---------------------------------------------------------------------------
+% Section 6.9 / 7.9, M9 recovery study (simulation.py), exploratory
+% ---------------------------------------------------------------------------
+% Number of simulated leagues in the rank-recovery study; simulation.rank_recovery; results/players/simulation/
+\providecommand{\NRecoverySims}{\TBD}
+% Share of simulations in which pooled RAPM total ranks the planted #1 of the pool first; simulation.RankRecovery.sims; results/players/simulation/
+\providecommand{\RecoveryRapmFirst}{\TBD}
+% Same for the equal-z within-group box composite; results/players/simulation/
+\providecommand{\RecoveryBoxFirst}{\TBD}
+% RAPM's recovery share in the bin of the smallest planted top-two gaps; simulation.RankRecovery.by_gap; results/players/simulation/
+\providecommand{\RecoveryRapmFirstSmallGap}{\TBD}
+% RAPM's recovery share in the bin of the largest planted top-two gaps; simulation.RankRecovery.by_gap; results/players/simulation/
+\providecommand{\RecoveryRapmFirstLargeGap}{\TBD}
+% Mean absolute rank error of RAPM total within the pool, averaged over simulations; results/players/simulation/
+\providecommand{\RecoveryRankErrorRapm}{\TBD}
+% Same for the box composite; results/players/simulation/
+\providecommand{\RecoveryRankErrorBox}{\TBD}
+
+% ---------------------------------------------------------------------------
+% Section 7.11, hypothesis verdicts (text: "supported", "refuted" or, for H7
+% only, "inconclusive (underpowered)"), from synthesis.verdicts and the M4,
+% M5, M6, M7b outputs. H8 has no macro: it is not tested (A6, A11, A15).
+% ---------------------------------------------------------------------------
+\providecommand{\VerdictHOne}{\TBD}
+\providecommand{\VerdictHTwo}{\TBD}
+\providecommand{\VerdictHThree}{\TBD}
+\providecommand{\VerdictHFour}{\TBD}
+\providecommand{\VerdictHFive}{\TBD}
+\providecommand{\VerdictHSix}{\TBD}
+\providecommand{\VerdictHSeven}{\TBD}
