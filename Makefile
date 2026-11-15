@@ -1,4 +1,5 @@
-.PHONY: install compile test lint typecheck verify clean tables figures paper
+.PHONY: install compile test lint typecheck verify clean tables figures paper \
+	players-data players-results paper2
 
 install:
 	uv sync --extra dev
@@ -34,6 +35,25 @@ paper: figures
 	latexmk -pdf -outdir=build -cd paper/main.tex
 	cp paper/build/main.pdf The-Demargining-Artifact.pdf
 
+# Paper 2, The Unmeasured Remainder. Data: downloads (cached) and processed tables.
+players-data:
+	uv run python scripts/players/acquire_transfermarkt.py
+	uv run python scripts/players/acquire_statsbomb.py
+	uv run python scripts/players/build_panel.py
+
+# Every analysis, master seed 20261114 (pre-registration A12). Hours, not minutes.
+players-results:
+	uv run python scripts/players/run_descriptive.py
+	uv run python scripts/players/run_impact.py
+	uv run python scripts/players/run_tournaments.py
+	uv run python scripts/players/run_ranking.py
+
+# Numbers, tables and figures come from results/players/, never typed into the paper.
+paper2:
+	uv run python scripts/players/make_paper2.py
+	latexmk -pdf -outdir=build -cd paper-unmeasured/main.tex
+	cp paper-unmeasured/build/main.pdf The-Unmeasured-Remainder.pdf
+
 clean:
-	rm -rf .pytest_cache .mypy_cache .ruff_cache paper/build
+	rm -rf .pytest_cache .mypy_cache .ruff_cache paper/build paper-unmeasured/build
 	find . -name __pycache__ -type d -exec rm -rf {} +

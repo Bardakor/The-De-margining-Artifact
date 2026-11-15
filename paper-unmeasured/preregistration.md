@@ -159,3 +159,18 @@ timestamp.
   prediction in that group; S = 200, five splits per simulation.
   (v) *Recognition view* for Kendall's W: Ballon d'Or points summed over
   the 2021–2026 editions, 0 for unranked pool players.
+- **A14 (2026-11-15).** M6's universe and features, fixed before any M6
+  fit. Universe: every outfield pool player with minutes in the season an
+  edition votes on (goalkeepers excluded: the statistics block says nothing
+  about them), points 0 if unranked. Edition → season: 2022–2026 vote on
+  2021/22–2025/26; 2021 (the last calendar-year edition) is mapped to
+  2020/21, an approximation. Blocks, all for that season over every
+  competition: individual statistics = goals, assists, minutes and
+  non-penalty goals per 90; impact = per-season RAPM offence and defence;
+  team success = indicators for league title (first in the final table
+  computed from the games, 3/1/0 points, then goal difference, then goals),
+  UCL winner, UCL losing finalist, and senior international tournament
+  winner; reputation = log(1 + previous edition's points) (2019 for 2021,
+  A3) and log market value at the last valuation on or before 30 June of
+  the edition year. Players without a per-season RAPM estimate are dropped
+  and counted.
