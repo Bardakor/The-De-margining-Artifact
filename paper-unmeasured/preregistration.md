@@ -180,3 +180,15 @@ timestamp.
   stated: H8 is reported as not tested (A6); A4's secondary zone-xG metric
   and A11's ESPN-based secondary analyses are not run. Shots, fouls won and
   shot quality appear only on the StatsBomb subset, as exploratory analyses.
+- **A16 (2026-11-15).** Three records, each stated with when it was made.
+  (i) Before any M5 or M8 run: empirical-Bayes shrinkage in M5 uses the
+  within-position-group stabilisation constant of each metric (M1, per
+  group), because it shrinks toward the group mean; the outfield-pooled k
+  would count differences between positions as signal and under-shrink.
+  (ii) After M2 ran: the team-ICC interval of M2 is changed from the
+  percentile to the basic club-bootstrap interval, because on synthetic data
+  the percentile interval was shifted low (a planted ICC sat at its upper
+  edge; a null estimate sat outside its own interval). Point estimates are
+  unchanged. (iii) After H7 was computed: A5 left the test level open; the
+  analysis used a one-sided Pearson test at α = 0.05 and simulated power.
+  This is recorded here and labelled as not pre-registered.
