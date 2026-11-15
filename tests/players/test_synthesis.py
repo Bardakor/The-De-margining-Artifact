@@ -10,12 +10,13 @@ import pytest
 from numpy.typing import NDArray
 from scipy.stats import rankdata
 
-from footy.players.multiverse import STAT_METRICS, variance_indices
+from footy.players.multiverse import STAT_METRICS, run_multiverse, spec_grid, variance_indices
 from footy.players.synthesis import (
     kendalls_w,
     median_specification,
-    multiverse_ranks,
+    multiverse_runs,
     rank_confidence_sets,
+    stats_weight_share,
     synthesise,
     verdicts,
     view_agreement,
@@ -24,13 +25,20 @@ from footy.players.synthesis import (
 FloatArray = NDArray[np.float64]
 COMPONENTS = ["var_specification", "var_sampling", "var_unmeasured"]
 SHARES = ["share_specification", "share_sampling", "share_unmeasured"]
+EQUAL_Z_OMEGA = {"box": 1.0, "box_gd": 3 / 4, "impact": 0.0, "hybrid": 3 / 6}
+
+
+def _omega(family: Sequence[str], values: Sequence[float] | None = None) -> pd.Series:
+    """omega per (spec_id, segment), the same in both segments; equal_z's by default."""
+    om = [EQUAL_Z_OMEGA[f] for f in family] if values is None else list(values)
+    index = pd.MultiIndex.from_product(
+        [range(len(om)), ["outfield", "goalkeeper"]], names=["spec_id", "segment"]
+    )
+    return pd.Series(np.repeat(om, 2), index=index)
 
 
 def _frames(
-    scores: FloatArray,
-    family: Sequence[str],
-    weights: Sequence[str],
-    segment: Sequence[str],
+    scores: FloatArray, family: Sequence[str], segment: Sequence[str]
 ) -> list[pd.DataFrame]:
     """M5-like ranks frames, one per row of ``scores`` (frames x specs x players)."""
     _, n_specs, n = scores.shape
@@ -38,7 +46,6 @@ def _frames(
         {
             "spec_id": np.repeat(np.arange(n_specs), n),
             "family": np.repeat(family, n),
-            "weights": np.repeat(weights, n),
             "player_id": np.tile(np.arange(1, n + 1), n_specs),
             "segment": np.tile(segment, n_specs),
         }
@@ -61,13 +68,13 @@ def _run(
     groups: Sequence[str],
     share: dict[str, float],
     *,
-    weights: Sequence[str] | None = None,
+    omega: Sequence[float] | None = None,
     n_unmeasured: int = 6,
     seed: int = 0,
 ) -> pd.DataFrame:
     """Synthesis of ``scores`` (replicates x specs x players); frame 0 is the point."""
     segment = ["goalkeeper" if g == "GK" else "outfield" for g in groups]
-    frames = _frames(scores, family, weights or ["equal_z"] * len(family), segment)
+    frames = _frames(scores, family, segment)
     group_of = pd.Series(list(groups), index=np.arange(1, len(groups) + 1))
     result = synthesise(
         frames[0],
@@ -75,6 +82,7 @@ def _run(
         share,
         group_of,
         np.random.default_rng(seed),
+        omega=_omega(family, omega),
         n_unmeasured=n_unmeasured,
     )
     return result.players.set_index("player_id")
@@ -82,8 +90,8 @@ def _run(
 
 def test_components_sum_to_the_total_rank_variance() -> None:
     rng = np.random.default_rng(1)
-    family = ["box", "box_zxg", "impact", "hybrid", "hybrid", "box", "impact", "box_zxg"]
-    weights = ["equal_z", "pc1", "rapm_ridge", "v1_like", "pc1", "equal_z", "pc1", "v1_like"]
+    family = ["box", "box_gd", "impact", "hybrid", "hybrid", "box", "impact", "box_gd"]
+    omega = [1.0, 0.6, 0.0, 0.7, 0.4, 1.0, 0.0, 0.75]
     groups = ["CF"] * 5 + ["CB"] * 4 + ["W"] * 3 + ["GK"] * 4
     quality = rng.standard_normal(len(groups))
     scores = quality + 0.5 * rng.standard_normal((1, len(family), len(groups)))
@@ -91,7 +99,7 @@ def test_components_sum_to_the_total_rank_variance() -> None:
     scores[:, 2:4, 3] = np.nan  # no qualifying season in two specifications
     share = {"CF": 0.3, "CB": 0.7, "W": 0.4, "GK": 0.5}
 
-    players = _run(scores, family, groups, share, weights=weights)
+    players = _run(scores, family, groups, share, omega=omega, n_unmeasured=200)
 
     np.testing.assert_allclose(players[COMPONENTS].sum(axis=1), players["var_total"], atol=1e-9)
     np.testing.assert_allclose(players[SHARES].sum(axis=1), 1.0, atol=1e-9)
@@ -122,14 +130,14 @@ def test_planted_sources_take_the_whole_rank_variance() -> None:
 def test_decomposition_matches_a_brute_force_nested_simulation() -> None:
     """Nested Monte Carlo with 4,000 draws per (s, b) and the scale computed by hand."""
     rng = np.random.default_rng(9)
-    family, weights = ["box", "hybrid", "impact"], ["equal_z", "v1_like", "equal_z"]
+    family, omega = ["box", "hybrid", "impact"], [1.0, 0.7, 0.0]  # 0.7: hybrid v1_like
     n, n_rep, sigma, n_u = 5, 4, 0.5, 4000
     scores = 0.4 * np.arange(n)[::-1] + rng.standard_normal((n_rep + 1, len(family), n))
-    players = _run(scores, family, ["CF"] * n, {"CF": sigma}, weights=weights, n_unmeasured=n_u)
+    players = _run(scores, family, ["CF"] * n, {"CF": sigma}, omega=omega, n_unmeasured=n_u)
 
     x = scores[1:]
     mad = np.median(np.abs(x - np.median(x, axis=2, keepdims=True)), axis=2, keepdims=True)
-    eff = np.array([1.0, 0.9, 0.0])[None, :, None] * sigma  # v1_like puts 0.9 on statistics
+    eff = np.array(omega)[None, :, None] * sigma
     tau = np.sqrt(eff / (1 - eff)) * 1.4826 * mad
     y = x[:, :, None, :] + tau[:, :, None, :] * rng.standard_normal((n_rep, len(family), n_u, n))
     r = rankdata(-y, axis=-1, method="min")
@@ -146,17 +154,18 @@ def test_decomposition_matches_a_brute_force_nested_simulation() -> None:
 
 def test_dominant_player_is_first_in_every_draw_and_decides_every_pair() -> None:
     rng = np.random.default_rng(3)
-    family = ["box", "box_zxg", "impact", "hybrid", "hybrid", "box"]
-    weights = ["equal_z", "pc1", "equal_z", "rapm_ridge", "v1_like", "v1_like"]
+    family = ["box", "box_gd", "impact", "hybrid", "hybrid", "box"]
     groups = ["CF"] * 6 + ["CB"] * 6 + ["DM"] * 3 + ["GK"] * 3
     scores = rng.standard_normal((11, len(family), len(groups)))
     scores[:, :, 0] = 100.0
     share = {"CF": 0.5, "CB": 0.9, "DM": 0.99, "GK": 0.5}
     segment = ["goalkeeper" if g == "GK" else "outfield" for g in groups]
-    frames = _frames(scores, family, weights, segment)
+    frames = _frames(scores, family, segment)
     group_of = pd.Series(groups, index=np.arange(1, len(groups) + 1))
 
-    result = synthesise(frames[0], frames[1:], share, group_of, np.random.default_rng(0))
+    result = synthesise(
+        frames[0], frames[1:], share, group_of, np.random.default_rng(0), omega=_omega(family)
+    )
     players = result.players.set_index("player_id")
     pairwise = result.pairwise["outfield"]
 
@@ -272,6 +281,28 @@ def _population(rng: np.random.Generator, n_players: int) -> tuple[pd.DataFrame,
     return rows, impact
 
 
+def test_omega_is_the_box_share_of_m5s_weights_on_any_data() -> None:
+    """Box 1, impact 0, equal_z hybrid 3/6 and box_gd 3/4 whatever the data; v1_like
+    from A13's weights; the hybrid ridge's box share is at most its stats half."""
+    k = dict.fromkeys(STAT_METRICS, 600.0)
+    for seed in (10, 11):
+        ps, impact = _population(np.random.default_rng(seed), 30)
+        run = run_multiverse(ps, impact, k, list(range(1, 21)), np.random.default_rng(seed))
+        omega = stats_weight_share(run.weights).reset_index()
+        omega = omega.merge(spec_grid()[["spec_id", "family", "weights"]], on="spec_id")
+        assert set(omega["segment"]) == {"outfield", "goalkeeper"}
+        cell = omega.groupby(["family", "weights"], observed=True)["omega"]
+        lo, hi = cell.min(), cell.max()
+        for family, value in EQUAL_Z_OMEGA.items():
+            assert hi[family, "equal_z"] == pytest.approx(lo[family, "equal_z"]) == value
+        np.testing.assert_allclose(omega.loc[omega["family"] == "box", "omega"], 1.0)
+        np.testing.assert_allclose(omega.loc[omega["family"] == "impact", "omega"], 0.0)
+        assert lo["hybrid", "v1_like"] == pytest.approx(hi["hybrid", "v1_like"]) == 0.7
+        assert lo["box_gd", "v1_like"] == pytest.approx(hi["box_gd", "v1_like"]) == 0.7 / 0.9
+        assert lo["hybrid", "rapm_ridge"] > 0.0 and hi["hybrid", "rapm_ridge"] <= 0.5 + 1e-12
+        assert lo["box_gd", "pc1"] > 0.0 and hi["box_gd", "pc1"] < 1.0
+
+
 def test_end_to_end_with_the_multiverse() -> None:
     rng = np.random.default_rng(7)
     ps, impact = _population(rng, 40)
@@ -283,12 +314,12 @@ def test_end_to_end_with_the_multiverse() -> None:
     pool = list(range(1, 21))
     groups = ps.groupby("player_id")["position_group"].first()
 
-    frames = multiverse_ranks([(ps, impact), *replicates], dict.fromkeys(STAT_METRICS, 600.0),
-                              pool, np.random.default_rng(8))  # fmt: skip
-    point = next(frames)
-    result = synthesise(
-        point, frames, {"CF": 0.4, "CB": 0.7, "GK": 0.5}, groups, rng, n_unmeasured=4
-    )
+    runs = multiverse_runs([(ps, impact), *replicates], dict.fromkeys(STAT_METRICS, 600.0),
+                           pool, np.random.default_rng(8))  # fmt: skip
+    first = next(runs)
+    point, omega = first.ranks, stats_weight_share(first.weights)
+    result = synthesise(point, (r.ranks for r in runs), {"CF": 0.4, "CB": 0.7, "GK": 0.5},
+                        groups, rng, omega=omega, n_unmeasured=4)  # fmt: skip
     players = result.players.set_index("player_id")
 
     assert result.n_replicates == 3

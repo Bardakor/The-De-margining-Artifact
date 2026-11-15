@@ -23,7 +23,10 @@ to the pool.
    ``replacement`` = (x - group 20th percentile) / segment SD (a per-group baseline
    on a common scale). A zero SD is replaced by 1.
 6. family × weights: season score = sum of weight × normalised metric, weights
-   scaled so their absolute values sum to 1.
+   scaled so their absolute values sum to 1 (``Multiverse.weights`` exposes them).
+   Families (A11, A13 (i)): ``box`` goals, non-penalty goals, assists; ``box_gd`` box
+   plus raw on-pitch goal difference; ``impact`` RAPM offence and defence; ``hybrid``
+   all six.
    ``equal_z`` 1/p each; ``pc1`` first principal component of the normalised
    metrics, sign set so goals load positively; ``rapm_ridge`` ridge regression of
    pooled RAPM on the normalised metrics, lambda by 5-fold CV with folds grouped by
@@ -35,7 +38,9 @@ to the pool.
 Input contract and assumptions (Claude's calls):
 
 - ``player_season``: player_id, season ("2021/22"), scope, position_group, minutes,
-  team_elo and the per-90 rates in ``STAT_METRICS``, all oriented higher = better.
+  team_elo and the per-90 rates in ``STAT_METRICS``, all oriented higher = better
+  (``on_pitch_gd``: raw on-pitch goal difference per 90 over the minutes in matches
+  with stints).
   Rows with another scope (e.g. "all") are ignored. Values must be finite.
   position_group must be constant within a player (design §4.4). club_id is not used.
 - ``impact_season``: player_id, season, rapm_offence, rapm_defence (per-season RAPM,
@@ -52,9 +57,9 @@ Input contract and assumptions (Claude's calls):
   last season present in ``player_season``, not on the player's last season.
 - Volume's replacement level is the 20th percentile of season scores over the
   segment (position ``none``) or within the player's group (otherwise).
-- ``V1_LIKE_WEIGHTS`` is a stylised imitation of the V1 ranking's emphasis on goals
-  and assists, chosen by Claude. They are not V1's actual weights. The small RAPM
-  weights stand in for V1's team-results component.
+- ``V1_LIKE_WEIGHTS`` are A13 (i)'s: a stylised imitation of the V1 ranking's emphasis
+  on goals and assists, not V1's actual weights. On-pitch goal difference stands in
+  for V1's team-results component.
 
 Fallbacks for combinations that are undefined or circular (counted in
 ``Multiverse.fallbacks``):
@@ -62,8 +67,9 @@ Fallbacks for combinations that are undefined or circular (counted in
 - rapm_ridge in ``impact``: regressing RAPM on its own components is circular, so the
   score is RAPM total (offence + defence): weights proportional to each component's
   raw SD, which under position ``none`` gives exactly the total up to a constant.
-- rapm_ridge in ``hybrid``: the ridge uses the stat metrics only; the impact block
-  gets the RAPM-total weights; each block carries half the weight.
+- rapm_ridge in ``hybrid``: the ridge uses the stat metrics (box and on_pitch_gd)
+  only; the impact block gets the RAPM-total weights; each block carries half the
+  weight.
 - shrinkage ``eb`` and context ``elo_partialled`` are not applied to RAPM metrics:
   RAPM is already ridge-shrunk and adjusted for team-mates, opponents and Elo (M3).
   ``impact × eb`` and ``impact × elo_partialled`` are therefore duplicates.
@@ -95,14 +101,14 @@ IntArray = NDArray[np.intp]
 
 SCOPES = ("league", "ucl", "intl")
 GOALKEEPER = "GK"
-BOX = ("goals", "assists", "shots", "shots_on_target", "fouls_won")
-ZONE_XG = ("np_zxg", "zxa")
+BOX = ("goals", "np_goals", "assists")
+ON_PITCH_GD = ("on_pitch_gd",)
 IMPACT_METRICS = ("rapm_offence", "rapm_defence")
-STAT_METRICS = BOX + ZONE_XG
+STAT_METRICS = BOX + ON_PITCH_GD
 METRICS = STAT_METRICS + IMPACT_METRICS
 FAMILIES: dict[str, tuple[str, ...]] = {
     "box": BOX,
-    "box_zxg": STAT_METRICS,
+    "box_gd": STAT_METRICS,
     "impact": IMPACT_METRICS,
     "hybrid": METRICS,
 }
@@ -121,15 +127,12 @@ COMPETITION_WEIGHTS: dict[str, dict[str, float]] = {
     "ucl_intl_1.5": {"league": 1.0, "ucl": 1.5, "intl": 1.5},
     "league_only": {"league": 1.0},
 }
-# Claude's call: a stylised imitation of V1's emphasis on goals and assists, not V1's weights.
+# A13 (i): a stylised imitation of V1's emphasis on goals and assists, not V1's weights.
 V1_LIKE_WEIGHTS: dict[str, float] = {
     "goals": 0.30,
+    "np_goals": 0.15,
     "assists": 0.25,
-    "np_zxg": 0.10,
-    "zxa": 0.10,
-    "shots_on_target": 0.08,
-    "shots": 0.05,
-    "fouls_won": 0.02,
+    "on_pitch_gd": 0.20,
     "rapm_offence": 0.05,
     "rapm_defence": 0.05,
 }
@@ -148,9 +151,13 @@ _STAT_IDX = [METRICS.index(m) for m in STAT_METRICS]
 @dataclass(frozen=True)
 class Multiverse:
     """``ranks``: one row per (spec, pool player): spec_id, the eight dimension levels,
-    player_id, segment, score, rank. ``fallbacks``: how often each fallback applied."""
+    player_id, segment, score, rank. ``weights``: one row per (spec, segment with pool
+    players, metric in ``METRICS``): spec_id, segment, metric, weight, the signed weight
+    applied to the normalised metric (absolute values sum to 1; 0 outside the family).
+    ``fallbacks``: how often each fallback applied."""
 
     ranks: pd.DataFrame
+    weights: pd.DataFrame
     fallbacks: dict[str, int]
 
 
@@ -201,16 +208,28 @@ def run_multiverse(
     grid = spec_grid()
     scores = np.full((len(grid), pool_ids.size), np.nan)
     ranks = np.empty(scores.shape, dtype=np.int64)
+    weights = []
     for gk in (False, True):
         members = is_gk == gk
         if members.any():
             rows = ps[(ps["position_group"] == GOALKEEPER) == gk]
-            part = _segment_scores(
+            part, applied = _segment_scores(
                 rows, impact, stabilisation, pool_ids[members], seasons, rng, expert, counts
-            ).reshape(len(grid), -1)
+            )
+            part = part.reshape(len(grid), -1)
             scores[:, members] = part
             ranks[:, members] = rankdata(
                 -np.where(np.isnan(part), -np.inf, part), method="min", axis=1
+            )
+            weights.append(
+                pd.DataFrame(
+                    {
+                        "spec_id": np.repeat(grid["spec_id"].to_numpy(), len(METRICS)),
+                        "segment": "goalkeeper" if gk else "outfield",
+                        "metric": np.tile(METRICS, len(grid)),
+                        "weight": applied.ravel(),
+                    }
+                )
             )
     long = grid.loc[grid.index.repeat(pool_ids.size)].reset_index(drop=True)
     long["player_id"] = np.tile(pool_ids, len(grid))
@@ -229,7 +248,9 @@ def run_multiverse(
         "impact_elo_partialling_not_applied": _n_specs(family="impact", context="elo_partialled"),
         **counts,
     }
-    return Multiverse(ranks=long, fallbacks=fallbacks)
+    return Multiverse(
+        ranks=long, weights=pd.concat(weights, ignore_index=True), fallbacks=fallbacks
+    )
 
 
 def shrink(rates: FloatArray, minutes: FloatArray, k: FloatArray, group: IntArray) -> FloatArray:
@@ -350,9 +371,11 @@ def _segment_scores(
     rng: np.random.Generator,
     expert: FloatArray,
     counts: dict[str, int],
-) -> FloatArray:
-    """Scores (*DIMENSIONS shape, pool players) for one segment."""
+) -> tuple[FloatArray, FloatArray]:
+    """Scores (*DIMENSIONS shape, pool players) and applied weights (*DIMENSIONS shape,
+    metrics) for one segment."""
     out = np.full((*_SHAPE, pool_ids.size), np.nan)
+    applied = np.zeros((*_SHAPE, len(METRICS)))
     group_of = rows.groupby("player_id")["position_group"].first()
     group_code = pd.Series(pd.factorize(group_of)[0], index=group_of.index)
     n_groups = int(group_code.max()) + 1
@@ -401,6 +424,9 @@ def _segment_scores(
                     for ip, position in enumerate(DIMENSIONS["position"]):
                         z = _normalise(x2, g, str(position))
                         w, by_sum = _weights(z, y, folds, sd, expert)
+                        applied[:, :, ip, ix, :, ic, it, ish] = w.reshape(
+                            len(METRICS), _N_FAMILIES, _N_WEIGHTS, 1
+                        ).transpose(1, 2, 3, 0)
                         counts["pc1_sign_by_loading_sum"] += by_sum * _N_AGGREGATIONS
                         s = z @ w
                         pooled = position == "none"
@@ -413,7 +439,7 @@ def _segment_scores(
                         out[:, :, ip, ix, :, ic, it, ish, :] = stacked.reshape(
                             _N_AGGREGATIONS, pool_ids.size, _N_FAMILIES, _N_WEIGHTS
                         ).transpose(2, 3, 0, 1)
-    return out
+    return out, applied
 
 
 def _combine_scopes(rows: pd.DataFrame, weights: Mapping[str, float]) -> pd.DataFrame:

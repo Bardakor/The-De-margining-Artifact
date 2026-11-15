@@ -13,19 +13,21 @@ Scale of the unmeasured component (Claude's derivation). In a position group g,
 write true impact ``T = V + W`` with ``V`` the part the individual statistics
 can see and ``W`` uncorrelated with it. M4's disattenuated share is
 ``sigma_g = 1 - R2_true = Var(W) / Var(T)``, so ``Var(W) = sigma_g / (1 - sigma_g) * Var(V)``.
-Taking a family's score as ``V`` up to scale gives
-``tau^2 = sigma / (1 - sigma) * Var_g(x[s, b])``.
+Taking a box score as ``V`` up to scale gives
+``tau^2 = sigma / (1 - sigma) * Var_g(x[s, b])``; a specification that is only
+partly box uses ``omega * sigma_g`` in place of ``sigma_g``.
 
 - ``sigma_g`` is capped at ``SHARE_CAP`` = 0.95 for this purpose only (the ratio
   diverges at 1). At the cap the unseen SD is 4.4 visible SDs and two players one
   visible SD apart keep their order with probability 0.57, so ranks inside the
   group are already near random and a higher cap changes little.
-- Family ``impact``: ``tau = 0`` (RAPM already contains the unseen part; its noise
-  is in b). Families ``box`` and ``box_zxg``: ``sigma_g``. Family ``hybrid``:
-  ``omega * sigma_g`` with ``omega`` the stat metrics' share of the absolute
-  weights (``HYBRID_STATS_WEIGHT``; exact for equal_z, rapm_ridge and default
-  v1_like; for pc1 M5 does not expose the loadings and the equal-weight value
-  7/9 is used, a stated approximation the caller can replace).
+- ``omega[s, segment]`` (A13 (ii)) is the share of the specification's absolute
+  weights on the box metrics (goals, non-penalty goals, assists), taken exactly
+  from M5's weights on the original data (``stats_weight_share``) and held fixed
+  across replicates. On-pitch goal difference counts with RAPM: as an on-pitch
+  measure it already contains the unseen part. So ``box`` has ``omega = 1``,
+  ``impact`` ``omega = 0`` (``tau = 0``: RAPM's noise is in b), and ``box_gd`` and
+  ``hybrid`` lie in between per their weights (equal_z: 3/4 and 1/2).
 - ``Var_g(x)``: per (s, b), the robust variance ``(1.4826 MAD)^2`` of the finite
   scores of the pool players of group g in the segment (equal to the variance
   under normality). Not the sample variance: a leader's lead would inflate it, so
@@ -59,7 +61,9 @@ Outputs.
   of the draws only through the exact mean.
 - Rank confidence sets at one fixed specification (``rank_confidence_sets``).
 - Stats and impact views: each player's mean rank over the specifications of the
-  stats families (box, box_zxg) and of the impact family, over b and u.
+  box family (the stats view: individual statistics only) and of the impact
+  family, over b and u. ``box_gd`` and ``hybrid`` mix the two kinds of measure, so
+  they enter every other output but neither view.
 
 The median specification (``median_specification``) is the specification whose
 outfield ranking is nearest, in Spearman's footrule (L1 on ranks), to the
@@ -82,21 +86,14 @@ from numpy.typing import NDArray
 from scipy.special import ndtr
 from scipy.stats import rankdata
 
-from footy.players.multiverse import METRICS, STAT_METRICS, V1_LIKE_WEIGHTS, run_multiverse
+from footy.players.multiverse import BOX, V1_LIKE_WEIGHTS, Multiverse, run_multiverse
 
 FloatArray = NDArray[np.float64]
 IntArray = NDArray[np.int64]
 
 SEGMENTS = ("outfield", "goalkeeper")
-STATS_FAMILIES = ("box", "box_zxg")
+STATS_FAMILY = "box"
 IMPACT_FAMILY = "impact"
-HYBRID_FAMILY = "hybrid"
-HYBRID_STATS_WEIGHT: dict[str, float] = {
-    "equal_z": len(STAT_METRICS) / len(METRICS),
-    "pc1": len(STAT_METRICS) / len(METRICS),  # approximation: M5 does not expose PC1 loadings
-    "rapm_ridge": 0.5,
-    "v1_like": sum(V1_LIKE_WEIGHTS[m] for m in STAT_METRICS) / sum(V1_LIKE_WEIGHTS.values()),
-}
 SHARE_CAP = 0.95
 MAD_TO_SD = 1.4826
 N_UNMEASURED = 4
@@ -119,23 +116,25 @@ class Synthesis:
     n_unmeasured: int
 
 
-def multiverse_ranks(
+def multiverse_runs(
     inputs: Iterable[tuple[pd.DataFrame, pd.DataFrame]],
     stabilisation: Mapping[str, float],
     pool: Sequence[int],
     rng: np.random.Generator,
     *,
     expert_weights: Mapping[str, float] = V1_LIKE_WEIGHTS,
-) -> Iterator[pd.DataFrame]:
-    """M5's ranks frame for each (player_season, impact_season) input, lazily.
+) -> Iterator[Multiverse]:
+    """M5's result for each (player_season, impact_season) input, lazily.
 
     Every run gets a generator from the same seed (one draw from ``rng``), so the
     ridge CV folds are identical across inputs with the same players and the
     sampling layer holds only data noise. Pass the original data first::
 
-        frames = multiverse_ranks([original, *replicates], k, pool, rng)
-        point = next(frames)
-        result = synthesise(point, frames, share, groups, rng)
+        runs = multiverse_runs([original, *replicates], k, pool, rng)
+        point = next(runs)
+        omega = stats_weight_share(point.weights)
+        result = synthesise(point.ranks, (r.ranks for r in runs), share, groups, rng,
+                            omega=omega)
     """
     seed = int(rng.integers(2**63))
     for player_season, impact_season in inputs:
@@ -146,7 +145,21 @@ def multiverse_ranks(
             pool,
             np.random.default_rng(seed),
             expert_weights=expert_weights,
-        ).ranks
+        )
+
+
+def stats_weight_share(weights: pd.DataFrame) -> pd.Series:
+    """``omega`` per (spec_id, segment): the box metrics' share of the absolute weights.
+
+    ``weights`` is ``Multiverse.weights`` of the original data (absolute weights sum
+    to 1, so this is the sum of absolute weights on ``BOX``, A13 (ii)); on_pitch_gd
+    counts with RAPM, not as a box metric. Written as a ratio so that box gives
+    exactly 1 and impact exactly 0.
+    """
+    size = weights["weight"].abs()
+    keys = [weights["spec_id"], weights["segment"].astype(str)]
+    box = size.where(weights["metric"].isin(BOX), 0.0).groupby(keys).sum()
+    return (box / size.groupby(keys).sum()).rename("omega")
 
 
 def synthesise(
@@ -156,17 +169,19 @@ def synthesise(
     groups: pd.Series,
     rng: np.random.Generator,
     *,
+    omega: pd.Series,
     n_unmeasured: int = N_UNMEASURED,
-    hybrid_stats_weight: Mapping[str, float] = HYBRID_STATS_WEIGHT,
     fixed_spec: int | None = None,
 ) -> Synthesis:
     """The (s, b, u) mixture (module doc).
 
     ``point`` and each of ``replicates`` are M5 ranks frames (spec_id, family,
-    weights, player_id, segment, score) over the same specifications and pool;
-    ``point`` comes from the original data. ``share`` maps position group to M4's
-    clipped unmeasured share; ``groups`` maps player id to position group.
-    ``fixed_spec`` defaults to the median specification.
+    player_id, segment, score) over the same specifications and pool; ``point``
+    comes from the original data. ``share`` maps position group to M4's clipped
+    unmeasured share; ``groups`` maps player id to position group; ``omega`` maps
+    (spec_id, segment) to the box share of the weights (``stats_weight_share`` of
+    M5's weights on the original data). ``fixed_spec`` defaults to the median
+    specification.
     """
     if n_unmeasured < 1:
         raise ValueError("n_unmeasured must be at least 1")
@@ -185,10 +200,10 @@ def synthesise(
     sigma = np.array([share[g] for g in group], dtype=np.float64)
     if not ((sigma >= 0) & (sigma <= 1)).all():
         raise ValueError("unmeasured shares must lie in [0, 1]")
-    omega = np.where(np.isin(family, STATS_FAMILIES), 1.0, 0.0)
-    hybrid = family == HYBRID_FAMILY
-    omega[hybrid] = [hybrid_stats_weight[w] for w in specs["weights"].astype(str)[hybrid]]
-    eff = omega[:, None] * np.minimum(sigma, SHARE_CAP)[None, :]
+    om = omega.unstack().reindex(index=spec_ids, columns=segment).to_numpy(np.float64)
+    if not ((om >= 0) & (om <= 1)).all():
+        raise ValueError("omega must give every (spec_id, segment) a share in [0, 1]")
+    eff = om * np.minimum(sigma, SHARE_CAP)[None, :]
     ratio = eff / (1.0 - eff)
 
     x_point = _score_table(point, spec_ids, players)
@@ -210,7 +225,7 @@ def synthesise(
     if n_rep < 2:
         raise ValueError("need at least two replicates")
 
-    stats_specs, impact_specs = np.isin(family, STATS_FAMILIES), family == IMPACT_FAMILY
+    stats_specs, impact_specs = family == STATS_FAMILY, family == IMPACT_FAMILY
     rows, pairwise, sets = [], {}, []
     boot = np.array(boot_fixed)
     for s, idx in parts.items():
