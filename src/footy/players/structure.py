@@ -38,7 +38,7 @@ Assumptions, stated so callers and the paper can rely on them:
   between clubs. The ANOVA estimate is not truncated at 0. It is an upper bound
   on the team's causal share: clubs that recruit similar players raise it too.
   The bootstrap resamples clubs with replacement (each drawn copy a distinct
-  club, all its seasons kept) and reports a percentile interval.
+  club, all its seasons kept) and reports the standard interval (A17).
 - A composite is C = sum_k w_k z_k with z_k the z-score of metric k (sample mean,
   sd with ddof=1). Its diagnostics need the Pearson correlation of the same
   metrics: the variance algebra is linear.
@@ -56,6 +56,7 @@ from numpy.typing import NDArray
 from scipy.cluster.hierarchy import leaves_list, linkage
 from scipy.optimize import minimize
 from scipy.spatial.distance import cdist, squareform
+from scipy.special import ndtri
 from scipy.stats import chi2
 
 FloatArray = NDArray[np.float64]
@@ -342,7 +343,12 @@ def team_icc(
     """ICC(1) of each metric between clubs within stratum, with a club bootstrap interval.
 
     Returns one row per metric: ``icc``, ``lo``, ``hi``. ``stratum=None`` is the plain
-    one-way ICC with clubs as groups.
+    one-way ICC with clubs as groups. The interval is the standard bootstrap interval
+    icc +- z sd, sd the SD of the club-bootstrap estimates and z the normal quantile of
+    ``level`` (amendment A17). The club bootstrap sits below the estimate (a club drawn
+    twice adds identical cells, which shrinks the between-club mean square) while the
+    estimate itself is about unbiased, so percentile intervals are shifted low and basic
+    intervals high; the standard interval uses only the bootstrap's spread.
     """
     y = _values(panel[list(metrics)])
     clubs = pd.factorize(panel[club])[0].astype(np.int64)
@@ -361,8 +367,10 @@ def team_icc(
         idx = np.concatenate(drawn)
         copy = np.repeat(np.arange(n_clubs), [len(d) for d in drawn])
         boot[b] = _icc1(y[idx], copy * n_strata + strata[idx], strata[idx])
-    lo, hi = np.quantile(boot, [(1 - level) / 2, (1 + level) / 2], axis=0)
-    return pd.DataFrame({"icc": estimate, "lo": lo, "hi": hi}, index=list(metrics))
+    half = ndtri((1 + level) / 2) * boot.std(axis=0, ddof=1)
+    return pd.DataFrame(
+        {"icc": estimate, "lo": estimate - half, "hi": estimate + half}, index=list(metrics)
+    )
 
 
 # --- 8. Double counting in weighted composites ------------------------------

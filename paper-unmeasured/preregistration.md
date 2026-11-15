@@ -192,3 +192,11 @@ timestamp.
   unchanged. (iii) After H7 was computed: A5 left the test level open; the
   analysis used a one-sided Pearson test at α = 0.05 and simulated power.
   This is recorded here and labelled as not pre-registered.
+- **A17 (2026-11-15), after M2 ran.** A16 (ii) was wrong. On 200 synthetic
+  panels the ICC estimate is about unbiased and it is the club bootstrap that
+  sits below it, so the basic interval mirrors the shift upward (coverage
+  161/200 and 170/200 at nominal 90%, misses mostly above). The team-ICC
+  interval is instead the standard bootstrap interval, estimate ± 1.645 ×
+  bootstrap SD (coverage 175/200 and 176/200, misses on both sides). On the
+  real data the bootstrap's offset is larger (1.2–1.6 bootstrap SEs), so
+  these intervals are reported as approximate. Point estimates are unchanged.

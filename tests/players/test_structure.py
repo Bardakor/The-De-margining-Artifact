@@ -164,6 +164,42 @@ def test_team_icc_recovers_planted_share_within_league_season() -> None:
     assert naive["icc"]["pure_player"] > 0.5
 
 
+def _icc_panel(
+    rng: np.random.Generator, icc: float, clubs: int = 20, seasons: int = 10
+) -> pd.DataFrame:
+    """Every club in every league-season; club-season effect of variance icc, total 1."""
+    cells = seasons * clubs
+    cell = np.repeat(np.arange(cells), rng.integers(4, 30, cells))
+    offset = rng.normal(0, 3, seasons)[cell // clubs]
+    team = rng.normal(0, np.sqrt(icc), cells)[cell]
+    noise = rng.standard_normal((2, len(cell)))
+    return pd.DataFrame(
+        {
+            "club_id": cell % clubs,
+            "league_season": cell // clubs,
+            "planted": offset + team + np.sqrt(1 - icc) * noise[0],
+            "null": offset + noise[1],
+        }
+    )
+
+
+def test_team_icc_interval_covers_planted_value_near_nominal() -> None:
+    # A17. Observed at 90%: planted 0.30 covered in 16/20 panels, null in 20/20 (200
+    # panels: 175 and 176, misses on both sides). The bootstrap sits below the unbiased
+    # estimate, so the standard interval (estimate +- z sd) uses only its spread.
+    rng = np.random.default_rng(11)
+    icc, repeats = 0.3, 20
+    covered = {"planted": 0, "null": 0}
+    for _ in range(repeats):
+        panel = _icc_panel(rng, icc)
+        out = team_icc(panel, list(covered), "club_id", "league_season", rng, n_boot=400, level=0.9)
+        for metric, truth in (("planted", icc), ("null", 0.0)):
+            lo, estimate, hi = out.loc[metric, ["lo", "icc", "hi"]]
+            assert lo <= estimate <= hi
+            covered[metric] += int(lo <= truth <= hi)
+    assert min(covered.values()) >= 15  # P(Bin(20, 0.9) >= 15) = 0.99
+
+
 def test_independent_metrics_are_not_inflated() -> None:
     rng = np.random.default_rng(10)
     data = pd.DataFrame(rng.standard_normal((5000, 4)), columns=list("abcd"))

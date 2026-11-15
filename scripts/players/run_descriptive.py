@@ -557,9 +557,9 @@ def run_structure(out: Path) -> Summary:
                 + (
                     ""
                     if col == "icc"
-                    else f", 90% club-bootstrap {col} (percentile; the club bootstrap sits "
-                    "about 0.01 below the estimate, duplicated clubs shrinking the "
-                    "between-club variance, so the interval is shifted low)"
+                    else f", 90% club-bootstrap {col} (standard interval icc +- 1.645 sd, "
+                    "A17; the club bootstrap sits below the estimate, so only its spread is "
+                    "used: on synthetic panels it covers 87-88% at nominal 90%)"
                 ),
             )
 
