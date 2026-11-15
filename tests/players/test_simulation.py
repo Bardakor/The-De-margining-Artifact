@@ -47,6 +47,31 @@ def test_schedule_is_preserved_exactly(league: League, positions: pd.Series) -> 
     assert set(sim.truth["player_id"]) == set(league.stint_players["player_id"])
 
 
+def test_given_effects_are_planted_as_they_are(league: League, positions: pd.Series) -> None:
+    ids = np.sort(league.stint_players["player_id"].unique())
+    effects = pd.DataFrame(
+        {"player_id": ids, "offence": 0.01 * (ids % 7), "defence": -0.02 * (ids % 3)}
+    )
+    sim = simulate_on_schedule(
+        league.stints, league.stint_players, positions, np.random.default_rng(2), SimParams(),
+        effects=effects.sample(frac=1.0, random_state=0),
+    )  # fmt: skip
+    truth = sim.truth.set_index("player_id").loc[ids]
+    np.testing.assert_array_equal(truth["offence"].to_numpy(), effects["offence"].to_numpy())
+    np.testing.assert_array_equal(truth["defence"].to_numpy(), effects["defence"].to_numpy())
+    goals = ["home_goals", "away_goals"]
+    pd.testing.assert_frame_equal(sim.stints.drop(columns=goals), league.stints.drop(columns=goals))
+    pd.testing.assert_frame_equal(sim.stint_players, league.stint_players)
+    got = sim.player_match.set_index(["game_id", "player_id"]).sort_index()
+    ref = league.player_match.set_index(["game_id", "player_id"]).sort_index()
+    np.testing.assert_array_equal(got["minutes"].to_numpy(), ref["minutes"].to_numpy())
+    with pytest.raises(ValueError, match="every player"):
+        simulate_on_schedule(
+            league.stints, league.stint_players, positions, np.random.default_rng(2), SimParams(),
+            effects=effects.iloc[1:],
+        )  # fmt: skip
+
+
 def test_planted_measurable_share_holds_in_a_large_population() -> None:
     lg = simulate_league(np.random.default_rng(3), n_teams=40, squad_size=25, n_seasons=1)
     ids = np.sort(lg.stint_players["player_id"].unique())

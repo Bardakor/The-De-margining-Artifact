@@ -7,7 +7,9 @@ paper can rely on it:
 
 - Player effects: ``offence ~ N(0, offence_sd[g]^2)`` and
   ``defence ~ N(0, defence_sd[g]^2)``, independent, ``g`` the player's
-  position group. ``component`` names the effect the box score can see:
+  position group; or, if ``simulate_on_schedule`` is given ``effects``, those
+  values exactly (no draw; ``offence_sd`` and ``defence_sd`` still set
+  ``sd_t`` below). ``component`` names the effect the box score can see:
   ``t = offence``, ``defence`` or ``offence + defence`` (``total``, the
   default), with planted SD ``sd_t[g]``.
 - Box-score latent: ``z = sqrt(m[g]) * t / sd_t[g] + sqrt(1 - m[g]) * e``,
@@ -130,13 +132,16 @@ def simulate_on_schedule(
     params: SimParams,
     *,
     group: str | None = None,
+    effects: pd.DataFrame | None = None,
 ) -> Simulated:
     """Plant effects and draw goals and box scores on a given schedule.
 
     ``stints`` and ``stint_players`` are in the M3 schema (``rapm.build_design``);
     ``positions`` maps player id -> position group and must cover every player
     when a position parameter is a mapping. ``group`` names the stints column
-    that keys ``base_rate`` and ``home_advantage``.
+    that keys ``base_rate`` and ``home_advantage``. ``effects`` (player_id,
+    offence, defence), covering every player, replaces the drawn effects;
+    everything else is drawn as without it.
     """
     st = stints.reset_index(drop=True)
     n = len(st)
@@ -146,8 +151,14 @@ def simulate_on_schedule(
     pos = positions.reindex(players).to_numpy()
     n_p = len(players)
 
-    off = _per(params.offence_sd, pos) * rng.standard_normal(n_p)
-    dfn = _per(params.defence_sd, pos) * rng.standard_normal(n_p)
+    if effects is None:
+        off = _per(params.offence_sd, pos) * rng.standard_normal(n_p)
+        dfn = _per(params.defence_sd, pos) * rng.standard_normal(n_p)
+    else:
+        given = effects.set_index("player_id").reindex(players)[["offence", "defence"]]
+        if given.isna().to_numpy().any():
+            raise ValueError("effects must cover every player of stint_players")
+        off, dfn = (given[c].to_numpy(dtype=np.float64) for c in ("offence", "defence"))
     t = {"offence": off, "defence": dfn, "total": off + dfn}[params.component]
     sd_t, m = _component_sd(params, pos), _per(params.measurable_share, pos)
     std = np.divide(t, sd_t, out=np.zeros(n_p), where=sd_t > 0)

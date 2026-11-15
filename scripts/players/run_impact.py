@@ -17,6 +17,9 @@ Design §5 (M3, M4, M9); pre-registration A7, A9-A13. Stages, in order:
   within estimators, player bootstrap and the A7 joint bootstrap; H3 contrast.
 - h3: the A9 parametric bootstrap on the real schedule, calibrated as A13 (iv).
 - robustness: the with-Elo fit (A12) against the primary.
+- h3_assortative (post hoc, exploratory): the A9 bootstrap with the real pooled RAPM
+  as planted effects (rescaled to the calibrated SDs), so the planted quality keeps the
+  real who-plays-with-whom structure; outputs in results/players/construct_gap/assortative/.
 
 Every stage reads what it needs from the files of earlier stages, so it can rerun
 alone. Outputs: results/players/rapm/ and results/players/construct_gap/, each with a
@@ -49,7 +52,7 @@ import time
 import zlib
 from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from typing import Any
 
@@ -74,7 +77,12 @@ from footy.players.rapm import (
     split_half_reliability,
     split_halves,
 )
-from footy.players.simulation import SimParams, parametric_bootstrap_contrast, simulate_on_schedule
+from footy.players.simulation import (
+    STATS,
+    SimParams,
+    parametric_bootstrap_contrast,
+    simulate_on_schedule,
+)
 
 MASTER_SEED = 20261114
 MIN_MINUTES = 900.0
@@ -104,6 +112,7 @@ LEVEL = 0.9
 
 RAPM_DIR = RESULTS / "rapm"
 GAP_DIR = RESULTS / "construct_gap"
+ASSORT_DIR = GAP_DIR / "assortative"
 
 
 # --- data -----------------------------------------------------------------------------
@@ -982,6 +991,224 @@ def stage_h3() -> None:
     print("H3:", entries["h3_verdict"][0], "(clipped);", entries["h3_verdict_raw"][0], "(raw)")
 
 
+# --- post hoc: assortative planting ---------------------------------------------------
+
+
+def a9_params() -> SimParams:
+    p = read_json(GAP_DIR / "h3_params.json")
+    keys = [f.name for f in fields(SimParams)]
+    return SimParams(**{k: p[k] for k in keys})
+
+
+def assortative_effects(params: SimParams) -> pd.DataFrame:
+    """Real pooled RAPM of own-column players, centred and rescaled per group and
+    component to the A9 SDs; every other stint player gets the replacement column's
+    offence and defence, unscaled."""
+    dd, fit = data(), pooled_fit()
+    own = fit.drop(index=REPLACEMENT)
+    grp = dd.positions.reindex(own.index)
+    out = pd.DataFrame(index=own.index)
+    for c, sds in (("offence", params.offence_sd), ("defence", params.defence_sd)):
+        x = own[c].groupby(grp)
+        assert isinstance(sds, dict)
+        out[c] = (own[c] - x.transform("mean")) / x.transform("std", ddof=0) * grp.map(sds)
+    eff = out.reindex(dd.positions.index)
+    for c in ("offence", "defence"):
+        eff[c] = eff[c].fillna(float(fit.loc[REPLACEMENT, c]))
+    return eff.rename_axis("player_id").reset_index()
+
+
+def group_corr(a: np.ndarray, b: np.ndarray, labels: np.ndarray) -> pd.DataFrame:
+    rows = {}
+    for g in sorted({x for x in labels if isinstance(x, str)}):
+        ok = labels == g
+        rows[g] = [float(np.corrcoef(a[ok, k], b[ok, k])[0, 1]) for k in range(3)]
+    return pd.DataFrame.from_dict(rows, orient="index", columns=list(COMPONENTS))
+
+
+def attribution_given(effects: pd.DataFrame, lam_: float, g: np.random.Generator) -> pd.DataFrame:
+    """``rapm.attribution_factor`` with the planted effects given instead of drawn:
+    noiseless fit at lam; full data corr(est, beta)^2, half data the mean over
+    N_ATTRIBUTION_SIMS random game splits of corr(a, beta) corr(b, beta) / corr(a, b)."""
+    d = design()
+    p = d.n_players
+    eff = effects.set_index("player_id")
+    eff.loc[REPLACEMENT] = pooled_fit().loc[REPLACEMENT, ["offence", "defence"]].astype(float)
+    eff = eff.reindex(d.players)
+    beta = np.concatenate([eff["offence"].to_numpy(), eff["defence"].to_numpy()])
+    planted = np.column_stack([beta[:p], beta[p:], beta[:p] + beta[p:]])
+    dn = replace(d, y=np.asarray(d.x[:, : 2 * p] @ beta, dtype=np.float64))
+
+    def est(w: np.ndarray | None) -> np.ndarray:
+        dw = dn if w is None else replace(dn, w=dn.w * w[d.game])
+        return fit_rapm(dw, lam_).players[list(COMPONENTS)].to_numpy()
+
+    full = est(None)
+    n_games = len(d.game_ids)
+    halves = []
+    for _ in range(N_ATTRIBUTION_SIMS):
+        in_a = (g.permutation(n_games) < n_games // 2).astype(np.float64)
+        halves.append((est(in_a), est(1 - in_a)))
+    pos = data().positions.reindex(d.players).to_numpy(dtype=object).copy()
+    pos[d.players == REPLACEMENT] = None
+    frames = []
+    for kind, labels in (("groups", pos), ("pools", pd.Series(pos).map(POOLS).to_numpy())):
+        frames.append(group_corr(full, planted, labels).pow(2).assign(kind=kind, halves=False))
+        ratios = [
+            group_corr(a, planted, labels)
+            * group_corr(b, planted, labels)
+            / group_corr(a, b, labels)
+            for a, b in halves
+        ]
+        frames.append((sum(ratios) / len(ratios)).assign(kind=kind, halves=True))
+    return pd.concat(frames).rename_axis("group").reset_index()
+
+
+def per90(pm: pd.DataFrame) -> pd.DataFrame:
+    g = pm.groupby("player_id")[["minutes", *STATS]].sum()
+    return g[list(STATS)].div(g["minutes"], axis=0) * 90
+
+
+def h3a_chunk(
+    task: tuple[np.random.SeedSequence, int, SimParams, pd.DataFrame, dict[str, float],
+                dict[str, float], float],
+) -> list[dict[str, float]]:  # fmt: skip
+    s, n_sims, params, effects, att_groups, att_pools, lam_ = task
+    dd, g = data(), np.random.default_rng(s)
+    groups = dd.positions[dd.positions.isin(GROUPS)]
+    rows = []
+    for _ in range(n_sims):
+        sim = simulate_on_schedule(
+            dd.stints, dd.stint_players, dd.positions, g, params, group="group", effects=effects
+        )
+        d = build_design(sim.stints, dd.stint_players, group="group", min_minutes=MIN_MINUTES)
+        rapm = fit_rapm(d, lam_).players["total"]
+        halves = split_halves(d, lam_, g, n_repeats=N_REPEATS)
+        splits = Splits(
+            halves.a["total"], halves.b["total"], split_stats(sim.player_match, halves, STATS)
+        )
+        stats = per90(sim.player_match)
+        row = position_contrast(
+            rapm, stats, splits, att_pools, dd.positions, g, n_boot=N_BOOT, level=LEVEL
+        ).to_dict()
+        share = unmeasured_share(rapm, stats, splits, att_groups, groups, g, n_boot=1)
+        for grp, r in share.iterrows():
+            row[f"share_{grp}"], row[f"r2_true_{grp}"] = float(r["share"]), float(r["r2_true"])
+        rows.append(row)
+    return rows
+
+
+def stage_h3_assortative() -> None:
+    lam_, params = lam(), a9_params()
+    effects = assortative_effects(params)
+    to_csv(effects, ASSORT_DIR / "effects.csv")
+
+    # (i) attribution under the planted (real-structure) effects vs independent effects
+    t0 = time.perf_counter()
+    att = attribution_given(effects, lam_, rng("h3_assortative/attribution"))
+    indep = attribution_table()
+    both = att.merge(indep, on=["kind", "halves", "group"], suffixes=("", "_independent"))
+    to_csv(both, ASSORT_DIR / "attribution.csv")
+    print(f"attribution ({time.perf_counter() - t0:.0f} s):\n"
+          f"{both.drop(columns='n_players').round(3).to_string()}", flush=True)  # fmt: skip
+
+    # planted shares: with the effects fixed, R2(t, z) in a group is m r / (m r + 1 - m),
+    # r = Var(t) / sd_t^2 (r = 1 when offence and defence are independent, as in A9)
+    own = design().players
+    own = own[own != REPLACEMENT]
+    eff = effects.set_index("player_id").loc[own]
+    grp = data().positions.reindex(own)
+    t = eff["offence"] + eff["defence"]
+    planted = pd.DataFrame({"n": grp.value_counts(), "var_t": t.groupby(grp).var(ddof=0)})
+    assert isinstance(params.offence_sd, dict) and isinstance(params.defence_sd, dict)
+    assert isinstance(params.measurable_share, dict)
+    planted["sd_t2"] = [
+        params.offence_sd[g] ** 2 + params.defence_sd[g] ** 2 for g in planted.index
+    ]
+    planted["m"] = [params.measurable_share[g] for g in planted.index]
+    planted["r"] = planted["var_t"] / planted["sd_t2"]
+    mr = planted["m"] * planted["r"]
+    planted["r2_planted"] = mr / (mr + 1 - planted["m"])
+    planted["share_planted"] = 1 - planted["r2_planted"]
+    planted["share_planted_a9_definition"] = 1 - planted["m"]
+
+    def pool_share(pool: tuple[str, ...]) -> float:
+        q = planted.loc[list(pool)]
+        v = q["n"] * q["var_t"]
+        return float(1 - (v * q["r2_planted"]).sum() / v.sum())
+
+    planted_contrast = pool_share(("CB", "DM")) - pool_share(("CF", "W"))
+
+    # (ii) S = 200 simulations with these effects, everything else as the A9 run
+    contrast = pd.read_csv(GAP_DIR / "contrast.csv")
+    real = contrast[(contrast["estimator"] == "cross") & (contrast["mode"] == "player")].iloc[0]
+    real = real.drop(["estimator", "mode"]).astype(float)
+    att_groups = attribution_map("groups", True, "total")
+    att_pools = attribution_map("pools", True, "total")
+    sizes = [N_SIMS // N_WORKERS + (i < N_SIMS % N_WORKERS) for i in range(N_WORKERS)]
+    seeds = seed("h3_assortative/bootstrap").spawn(N_WORKERS)
+    tasks = [(s, n, params, effects, att_groups, att_pools, lam_)
+             for s, n in zip(seeds, sizes, strict=True)]  # fmt: skip
+    t0 = time.perf_counter()
+    with ProcessPoolExecutor(max_workers=N_WORKERS) as pool_:
+        sims = pd.DataFrame([row for rows in pool_.map(h3a_chunk, tasks) for row in rows])
+    print(f"assortative bootstrap: {time.perf_counter() - t0:.0f} s", flush=True)
+    sims["error"] = sims["diff"] - planted_contrast
+    sims["error_clipped"] = sims["diff_clipped"] - planted_contrast
+    to_csv(sims, ASSORT_DIR / "sims.csv")
+    summary = contrast_summary(sims, real, planted_contrast)
+    to_csv(summary.rename_axis("kind").reset_index(), ASSORT_DIR / "contrast_summary.csv")
+
+    shares = pd.read_csv(GAP_DIR / "shares.csv")
+    shares = shares[(shares["component"] == "total") & (shares["estimator"] == "cross")
+                    & (shares["mode"] == "player")].set_index("group")  # fmt: skip
+    per = planted.copy()
+    for g in per.index:
+        err = sims[f"share_{g}"] - per.loc[g, "share_planted"]
+        per.loc[g, "mean_error"], per.loc[g, "sd_error"] = err.mean(), err.std(ddof=1)
+        per.loc[g, "p_r2_true_gt1"] = float((sims[f"r2_true_{g}"] > 1).mean())
+        per.loc[g, "share_sim_mean"] = sims[f"share_{g}"].mean()
+    per["share_real_raw"] = shares["share"].reindex(per.index)
+    per["r2_true_real_raw"] = shares["r2_true"].reindex(per.index)
+    per["share_bias_corrected"] = (per["share_real_raw"] - per["mean_error"]).clip(0, 1)
+    per = per.reindex(list(GROUPS))
+    to_csv(per.rename_axis("group").reset_index(), ASSORT_DIR / "groups.csv")
+    pd.set_option("display.width", 250)
+    print(per.round(3).to_string())
+    print(summary.round(4).to_string())
+
+    def verdict(kind: str) -> str:
+        row = summary.loc[kind]
+        return "supported" if row["estimate"] > 0 and row["ci_low"] > 0 else "refuted"
+
+    note = " (post hoc, exploratory: planted effects = real pooled RAPM rescaled to A9 SDs)"
+    entries: dict[str, tuple[Any, str]] = {
+        "verdict_clipped": (verdict("clipped"), "H3 under assortative planting, clipped" + note),
+        "verdict_raw": (verdict("raw"), "H3 under assortative planting, raw" + note),
+        "n_sims": (len(sims), "Simulations" + note),
+        "planted_contrast": (planted_contrast, "Planted CB+DM minus CF+W share" + note),
+    }
+    for kind, row in summary.iterrows():
+        for col, v in row.items():
+            entries[f"contrast_{kind}_{col}"] = (v, f"H3 contrast ({kind}): {col}" + note)
+    for g, row in per.iterrows():
+        for col in ("share_planted", "mean_error", "sd_error", "p_r2_true_gt1", "r",
+                    "share_bias_corrected", "share_real_raw"):  # fmt: skip
+            entries[f"{col}_{g}"] = (row[col], f"{col}, group {g}, total component" + note)
+    for _, row in both.iterrows():
+        sfx = "half" if row["halves"] else "full"
+        entries[f"attribution_{sfx}_total_{row['group']}"] = (
+            row["total"],
+            f"Attribution factor ({sfx} data, total), planted real structure" + note,
+        )
+        entries[f"attribution_{sfx}_total_{row['group']}_independent"] = (
+            row["total_independent"],
+            "Same with independent planted effects (A9)",
+        )
+    record(ASSORT_DIR, entries)
+    print("H3 (assortative):", verdict("clipped"), "(clipped);", verdict("raw"), "(raw)")
+
+
 def stage_robustness() -> None:
     lam_ = lam()
     fit = pooled_fit()
@@ -1021,6 +1248,7 @@ STAGES: dict[str, Callable[[], None]] = {
     "m4": stage_m4,
     "h3": stage_h3,
     "robustness": stage_robustness,
+    "h3_assortative": stage_h3_assortative,
 }
 
 
