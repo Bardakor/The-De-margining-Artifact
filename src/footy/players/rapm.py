@@ -10,7 +10,7 @@ Model. Each stint gives two rows, one per attacking side. In the row where side
 with weight = stint minutes. ``defence`` is therefore goals *prevented* per 90
 (higher is better, like ``offence``) and ``total = offence + defence``. Home
 advantage and intercept are per group (competition-season, pre-registration
-amendment A7: empty stadiums in 2019/20-2020/21 cut home advantage). ``c_s``
+amendment A8: empty stadiums in 2019/20-2020/21 cut home advantage). ``c_s``
 is the per-stint covariate taken from the home side's view (e.g. home Elo minus
 away Elo): ``+c`` in the home-attacking row, ``-c`` in the away-attacking row.
 The response is any pair of per-stint columns (goals by default; zone-xG for
@@ -112,11 +112,14 @@ class Halves:
 @dataclass(frozen=True)
 class RapmBootstrap:
     """``replicates[c]`` has one row per replicate; row ``b`` of ``halves`` is
-    the split of replicate ``b``."""
+    the split of replicate ``b``. ``counts[b, i]`` is how many times replicate
+    ``b`` drew game ``i`` (order ``Design.game_ids``), so other quantities can be
+    resampled with the same games."""
 
     se: pd.DataFrame
     replicates: dict[str, pd.DataFrame]
     halves: Halves
+    counts: NDArray[np.int64]
 
 
 def build_design(
@@ -211,16 +214,18 @@ def bootstrap_rapm(
     fitted whole and on two halves of its games (three fits per replicate)."""
     n_games = _n_games(d)
     reps = np.empty((n_boot, d.n_players, 3))
+    all_counts = np.empty((n_boot, n_games), dtype=np.int64)
     splits = []
     for b in range(n_boot):
         counts = np.bincount(rng.integers(n_games, size=n_games), minlength=n_games)
+        all_counts[b] = counts
         reps[b] = _components(_solve(d, lam, counts[d.game].astype(np.float64)), d.n_players)
         splits.append(_split(d, lam, rng, counts.astype(np.float64)))
     replicates = {
         name: pd.DataFrame(reps[:, :, k], columns=d.players) for k, name in enumerate(COMPONENTS)
     }
     se = pd.DataFrame({name: df.std(ddof=1) for name, df in replicates.items()})
-    return RapmBootstrap(se=se, replicates=replicates, halves=_stack(d, splits))
+    return RapmBootstrap(se=se, replicates=replicates, halves=_stack(d, splits), counts=all_counts)
 
 
 def split_halves(d: Design, lam: float, rng: np.random.Generator, *, n_repeats: int = 20) -> Halves:
@@ -306,13 +311,23 @@ def attribution_factor(
 
 
 def fit_rapm_by_season(
-    d: Design, pooled: RapmFit, season: pd.Series, lam_season: float
+    d: Design,
+    pooled: RapmFit,
+    season: pd.Series,
+    lam_season: float,
+    *,
+    weights: NDArray[np.number] | None = None,
 ) -> pd.DataFrame:
     """Per-season effects shrunk toward the pooled ones.
 
     ``season`` labels each stint (indexed by stint_id); ``pooled`` is
     ``fit_rapm`` on the same design. Returns one row per (player_id, season).
+    ``weights`` multiplies each game's rows (order ``d.game_ids``; e.g. the
+    bootstrap ``counts``) as if the game were repeated that many times;
+    ``minutes`` are then weighted the same way, and a player-season seen only
+    in weight-0 games keeps its pooled estimate.
     """
+    row_weight = None if weights is None else np.asarray(weights, dtype=np.float64)[d.game]
     n, p = len(d.stint_ids), d.n_players
     s_codes, s_labels = pd.factorize(season.reindex(d.stint_ids).to_numpy(), sort=True)
     n_s = len(s_labels)
@@ -336,10 +351,11 @@ def fit_rapm_by_season(
     ds = replace(
         d, x=sp.hstack([block, d.x[:, 2 * p :]]).tocsr(), y=d.y - block @ prior, players=index
     )
-    delta = _solve(ds, lam_season)
+    delta = _solve(ds, lam_season, row_weight)
     est = prior + delta[: 2 * k]
     out = pd.DataFrame(
-        {"minutes": ds.player_minutes(), "offence": est[:k], "defence": est[k:]}, index=index
+        {"minutes": ds.player_minutes(row_weight), "offence": est[:k], "defence": est[k:]},
+        index=index,
     )
     out["total"] = out["offence"] + out["defence"]
     return out

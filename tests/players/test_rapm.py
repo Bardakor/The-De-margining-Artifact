@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 import pandas as pd
@@ -274,3 +274,54 @@ def test_generic_response_columns_and_covariate_sign() -> None:
     assert base.covariate is not None and moved.covariate is not None
     assert moved.covariate - base.covariate == pytest.approx(0.25, abs=1e-6)
     pd.testing.assert_frame_equal(moved.players, base.players, atol=1e-6)
+
+
+def test_bootstrap_counts_reproduce_each_replicate() -> None:
+    lg = simulate_league(np.random.default_rng(12), offence_sd=SD, defence_sd=SD)
+    d = build_design(lg.stints, lg.stint_players)
+    boot = bootstrap_rapm(d, 1e4, np.random.default_rng(13), n_boot=3)
+    n_games = len(d.game_ids)
+    assert boot.counts.shape == (3, n_games)
+    assert (boot.counts.sum(axis=1) == n_games).all()
+    # The halves of a replicate split its own draw.
+    np.testing.assert_array_equal(
+        boot.halves.games_a.to_numpy() + boot.halves.games_b.to_numpy(), boot.counts
+    )
+    for b in range(3):
+        refit = fit_rapm(replace(d, w=d.w * boot.counts[b][d.game]), 1e4)
+        for comp in ("offence", "defence", "total"):
+            np.testing.assert_allclose(
+                refit.players[comp].to_numpy(), boot.replicates[comp].iloc[b].to_numpy(), atol=1e-9
+            )
+
+
+def test_season_game_weights_act_as_duplicated_games(six_seasons: Fitted) -> None:
+    d, st, lg = six_seasons.design, six_seasons.stints, six_seasons.league
+    pooled = fit_rapm(d, six_seasons.lam)
+    season = st.set_index("stint_id")["season"]
+    plain = fit_rapm_by_season(d, pooled, season, 1e4)
+    ones = fit_rapm_by_season(d, pooled, season, 1e4, weights=np.ones(len(d.game_ids)))
+    pd.testing.assert_frame_equal(ones, plain)
+
+    weights = np.random.default_rng(14).integers(0, 3, size=len(d.game_ids))
+    weighted = fit_rapm_by_season(d, pooled, season, 1e4, weights=weights)
+    # The same data written out: weight-0 games dropped, weight-2 games twice.
+    w_of = pd.Series(weights, index=d.game_ids)
+    copies, players = [], []
+    for k in (1, 2):
+        keep = st[st["game_id"].map(w_of) >= k]
+        off = 10**9 * (k - 1)
+        copies.append(keep.assign(stint_id=keep["stint_id"] + off, game_id=keep["game_id"] + off))
+        sp_ = lg.stint_players[lg.stint_players["stint_id"].isin(keep["stint_id"])]
+        players.append(sp_.assign(stint_id=sp_["stint_id"] + off))
+    st2, sp2 = pd.concat(copies, ignore_index=True), pd.concat(players, ignore_index=True)
+    d2 = build_design(st2, sp2, group="season")
+    assert d2.players.equals(d.players)
+    dup = fit_rapm_by_season(d2, pooled, st2.set_index("stint_id")["season"], 1e4)
+    assert set(dup.index) <= set(weighted.index)
+    pd.testing.assert_frame_equal(weighted.loc[dup.index], dup, atol=1e-6)
+    # A player-season seen only in weight-0 games keeps the pooled estimate.
+    unseen = weighted.drop(dup.index)
+    assert (unseen["minutes"] == 0).all()
+    base = pooled.players.loc[unseen.index.get_level_values("player_id")]
+    np.testing.assert_allclose(unseen["offence"].to_numpy(), base["offence"].to_numpy())
