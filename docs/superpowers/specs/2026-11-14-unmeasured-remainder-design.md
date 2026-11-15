@@ -62,18 +62,19 @@ or stints for WC 2022 and Euros 2020/2024 (events only; StatsBomb fills them),
 SA1 only from 2024/25, MLS only from 2025, no 2026 CL/EL final, WC 2026 group
 stage only; latest game 2026-07-06. StatsBomb club seasons are single-team
 samples (Barcelona, PSG, Leverkusen, Inter Miami), only the tournaments are
-complete. **ESPN is on hold**: the Disney Terms of Use forbid automated
-extraction and www.espn.com/robots.txt disallows `/soccer/commentary` and
-`/soccer/lineups`; collection stopped at 5,134 cached summaries pending
-Liam's decision (`docs/unmeasured/data-licences.md`).
+complete. **ESPN is withdrawn** (Liam's decision, 2026-11-15; pre-registration A15):
+the Disney Terms of Use forbid automated extraction and
+www.espn.com/robots.txt disallows `/soccer/commentary` and `/soccer/lineups`.
+The code, the cached summaries and the processed tables were deleted; §4.2
+and every ESPN-based analysis below are kept only as the record of the
+original design (`docs/unmeasured/data-licences.md`).
 
 Unavailable, checked: Understat ("We will come back soon"), FBref (HTTP 403 to
 scripts), ClubElo API (HTTP 502). Team strength is therefore computed in-house
 (§4.3). Claude's call: do not work around blocks on sites that refuse scripts.
 
 Study window (Claude's call): matches dated 2020-01-01 to 2026-08-31 inclusive.
-The end date is the Transfermarkt snapshot; ESPN is cut at the same date so the
-sources agree. The paper says plainly that Sep–Nov 2026 is outside the window.
+The end date is the Transfermarkt snapshot. The paper says plainly that Sep–Nov 2026 is outside the window.
 
 Season label (revised after the data audit): club competitions use
 Transfermarkt's own season id (the 1-July rule mislabels the COVID-extended
@@ -113,7 +114,7 @@ of the whole study. ESPN and StatsBomb ids are linked to them (§4.4).
   tested.
 - `tm_stint_players`: stint_id, player_id, side (`home`/`away`).
 
-### 4.2 ESPN (`footy/players/espn.py`, `commentary.py`)
+### 4.2 ESPN (`footy/players/espn.py`, `commentary.py`) — withdrawn (A15)
 
 - `espn_games`: espn_event_id, league, season, date, home_name, away_name,
   home_score, away_score.

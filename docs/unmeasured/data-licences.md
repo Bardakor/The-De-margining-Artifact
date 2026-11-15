@@ -129,8 +129,11 @@ prohibit automated extraction, and the HTML commentary pages are disallowed
 for crawlers. The commentary text also looks like syndicated Opta-style feed
 text, so third-party rights may apply to the raw strings.
 
-This is a design decision for Liam, not something this document can settle.
-The options, from most to least conservative:
+**Decision (Liam, 2026-11-15): option 1, ESPN dropped** (pre-registration
+A15). The ESPN code, the 5,217 cached files and the processed `espn_*` tables
+were deleted; nothing from ESPN enters the paper.
+
+The options that were considered, from most to least conservative:
 
 1. Drop ESPN. Zone-xG, zone-xA, fouls won and offsides then come only from
    StatsBomb (a narrow sample). H8 and the zone-xG analyses would need
@@ -151,9 +154,7 @@ automated access.
 > (github.com/dcaribou/transfermarkt-datasets, CC0-1.0, snapshot 2026-09-05),
 > derived from Transfermarkt (transfermarkt.com). Event data with locations:
 > StatsBomb open data (github.com/statsbomb/open-data), used under the
-> StatsBomb Public Data User Agreement; [StatsBomb logo]. [If retained:]
-> Shot-level commentary: ESPN public match data (espn.com), used for
-> non-commercial research; ESPN content is not redistributed. Ballon d'Or
+> StatsBomb Public Data User Agreement; [StatsBomb logo]. Ballon d'Or
 > results: compiled by hand from the sources listed in
 > paper-unmeasured/data/. No raw third-party data is redistributed with this
 > paper; the code reproduces every number from the public sources.

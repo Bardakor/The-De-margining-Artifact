@@ -6,10 +6,10 @@ is a key in `paper-unmeasured/refs.bib`; summaries and verification links are in
 
 **Measurability tiers**
 
-- **Box score**: counted per player-match in Transfermarkt or ESPN rosters
-  (goals, assists, minutes, cards, fouls, offsides).
+- **Box score**: counted per player-match in Transfermarkt (goals, assists,
+  minutes, cards).
 - **Public event data**: needs located on-ball events, which our data has only
-  through StatsBomb open data and ESPN shot commentary.
+  through StatsBomb open data (a subset of matches).
 - **Tracking or proprietary only**: needs positions of all 22 players, or a
   paid feed.
 - **Not measurable today**: no instrument records it at scale.
@@ -19,8 +19,8 @@ is a key in `paper-unmeasured/refs.bib`; summaries and verification links are in
 - **TM**: Transfermarkt lineups, positions, captain flag, minutes, goals and
   assists with minute, substitutions, cards, valuations, date of birth,
   citizenship.
-- **ESPN**: text commentary. Shots with zone, body part, assister and assist
-  type, plus fouls, offsides and penalties.
+- **ESPN**: withdrawn on 2026-11-15 (terms of use; pre-registration A15). No
+  ESPN data is used, so shots, fouls won and offsides exist only on the SB subset.
 - **SB**: StatsBomb open events.
 
 **StatsBomb coverage caveat** (checked against the open-data
@@ -42,34 +42,34 @@ tournament-plus-three-clubs sample, not a league sample.
 
 | Variable | What it is | Tier | Best proxy in our data | What the literature says (size / importance) | Module |
 |---|---|---|---|---|---|
-| Runs in behind / depth | Off-ball runs that stretch the line or receive behind it | Tracking only | Weak: ESPN offsides; shots after `through_ball` assists | Measured only with tracking (`fernandez2018wide`, `spearman2018beyond`). No league-wide estimate of its share of player value found. **Evidence thin.** | M4 (residual) |
+| Runs in behind / depth | Off-ball runs that stretch the line or receive behind it | Tracking only | Weak: SB through-ball passes (subset) | Measured only with tracking (`fernandez2018wide`, `spearman2018beyond`). No league-wide estimate of its share of player value found. **Evidence thin.** | M4 (residual) |
 | Space creation for teammates | Dragging defenders to open space for others | Tracking only | None | `fernandez2018wide` quantifies it from tracking with single-match examples. No population effect size. | M4 (residual) |
-| Getting into scoring positions | Being where the next shot is likely (off-ball scoring opportunity) | Tracking for the full quantity; its *outcome* is in public data | Shots per 90 and np zone-xG per 90 (ESPN); SB touches in box (subset) | `spearman2018beyond` builds OBSO as a leading indicator from tracking. Our proxies see only the occasions that ended in a shot. | M2, M4, H8 |
-| Drawing fouls / penalties | Being fouled, winning penalties | Box score | `fouls_won`, `penalties_won` (ESPN commentary) | No verified estimate of its value or stability. **Evidence thin.** | M2, M5 |
+| Getting into scoring positions | Being where the next shot is likely (off-ball scoring opportunity) | Tracking for the full quantity; its *outcome* is in public data | TM goals as the outcome; SB shots, np xG and touches in box (subset) | `spearman2018beyond` builds OBSO as a leading indicator from tracking. Our proxies see only the occasions that ended in a shot. | M1, M7a |
+| Drawing fouls / penalties | Being fouled, winning penalties | Box score | None in TM; SB fouls won (subset) | No verified estimate of its value or stability. **Evidence thin.** | none |
 | Making oneself available (receiving options) | Positioning that gives the passer a safe or valuable option | Tracking only | None | `power2017passes` and `fernandez2021epv` model pass options only from tracking. | Tax |
 
 ## B. Defensive prevention
 
 | Variable | What it is | Tier | Best proxy in our data | What the literature says (size / importance) | Module |
 |---|---|---|---|---|---|
-| Positional defending (prevention without an event) | Shots and passes that never happen because of positioning | Tracking only | Defensive RAPM on goals / zone-xG against (M3) | Defensive plus-minus is estimable (`hvattum2020offdef`). Event metrics mostly ignore defending (`merhej2021defensive`). Event statistics explain only 22–38% of plus-minus variance by position (`gelade2020events`), so the residual is large. | M3, M4, H3 |
-| On-ball defensive actions | Tackles, interceptions, blocks, clearances | Public event data | SB counts (subset only); none in TM/ESPN | `merhej2021defensive` values them by threat stopped, and `vanroy2020xtvaep` notes xT cannot value them at all. Counts depend on opponent possession (`lago2009possession`), so volume partly measures opportunity, not skill. | M7a, M2 |
+| Positional defending (prevention without an event) | Shots and passes that never happen because of positioning | Tracking only | Defensive RAPM on goals against (M3) | Defensive plus-minus is estimable (`hvattum2020offdef`). Event metrics mostly ignore defending (`merhej2021defensive`). Event statistics explain only 22–38% of plus-minus variance by position (`gelade2020events`), so the residual is large. | M3, M4, H3 |
+| On-ball defensive actions | Tackles, interceptions, blocks, clearances | Public event data | SB counts (subset only); none in TM | `merhej2021defensive` values them by threat stopped, and `vanroy2020xtvaep` notes xT cannot value them at all. Counts depend on opponent possession (`lago2009possession`), so volume partly measures opportunity, not skill. | M7a, M2 |
 | Pressing / counterpressing | Pressure on the ball carrier; regaining after loss | Public event (counts); tracking (coordination) | SB `pressures` (subset) | `bauer2021counterpressing` needs positional data to detect counterpressing reliably. | M7a |
-| Aerial duels | Winning headers in either box | Public event data | None in TM/ESPN (SB duels not in our contract) | No verified effect size. **Evidence thin.** | none |
-| Goalkeeper shot-stopping | Goals prevented given shots faced | Box score + shot quality | Goals conceded versus zone-xG faced (ESPN saves, shots faced) | No verified academic estimate in this list. Zone-xG ignores shot placement, so it is coarse. **Evidence thin.** GKs are ranked separately (design §6). | GK ranking |
-| Fouls, cards, penalties conceded | Defensive discipline | Box score | TM yellow/red; ESPN `fouls_committed`, `penalties_conceded` | Card rates depend on refereeing and crowd context, not only the player (`bryson2021crowd`). | M2 |
+| Aerial duels | Winning headers in either box | Public event data | None in TM (SB duels not in our contract) | No verified effect size. **Evidence thin.** | none |
+| Goalkeeper shot-stopping | Goals prevented given shots faced | Box score + shot quality | Goals conceded only (TM); SB xG faced on the subset | No verified academic estimate in this list. **Evidence thin.** GKs are ranked separately (design §6). | GK ranking |
+| Fouls, cards, penalties conceded | Defensive discipline | Box score | TM yellow/red | Card rates depend on refereeing and crowd context, not only the player (`bryson2021crowd`). | M2 |
 
 ## C. On-ball decision quality
 
 | Variable | What it is | Tier | Best proxy in our data | What the literature says (size / importance) | Module |
 |---|---|---|---|---|---|
-| Finishing skill | Converting chances above their expected value | Box score + shot quality | np goals − np zone-xG (ESPN); SB xG on subset | About half of goals involve chance (`lames2018chance`, `wunderlich2021randomness`, ~46%). Player-level finishing effects persist in Bayesian xG (`scholtes2024bayesxg`), but goals−xG is biased and needs high volume (`davis2024finishing`). | M1, M4, H8 |
-| Shot selection / shot quality | Taking good shots rather than many | Public event (location) | Zone-xG per shot (ESPN); SB xG per shot | Location is the dominant xG feature (`robberechts2020xg`, `pollard1997strategies`, `rathke2017xg`). Tracking-based xG is more accurate (`anzer2021xg`), so coarse zones lose information at shot level. | H8, M2 |
-| Chance creation | Passes that lead to shots and goals | Box score / public event | TM assists; ESPN assister + zone-xA; SB key passes and xA | Action-value models credit creation beyond assists (`decroos2019vaep`, `pappalardo2019playerank`). Assists also carry the teammate's finishing luck. | M2, M4 |
+| Finishing skill | Converting chances above their expected value | Box score + shot quality | np goals − SB np xG (subset only) | About half of goals involve chance (`lames2018chance`, `wunderlich2021randomness`, ~46%). Player-level finishing effects persist in Bayesian xG (`scholtes2024bayesxg`), but goals−xG is biased and needs high volume (`davis2024finishing`). | M1 |
+| Shot selection / shot quality | Taking good shots rather than many | Public event (location) | SB xG per shot (subset) | Location is the dominant xG feature (`robberechts2020xg`, `pollard1997strategies`, `rathke2017xg`). Tracking-based xG is more accurate (`anzer2021xg`). | M1 (SB subset) |
+| Chance creation | Passes that lead to shots and goals | Box score / public event | TM assists; SB key passes and xA (subset) | Action-value models credit creation beyond assists (`decroos2019vaep`, `pappalardo2019playerank`). Assists also carry the teammate's finishing luck. | M2, M4 |
 | Ball progression | Passes and carries that move the ball toward goal | Public event data | SB progressive passes and carries, xT added (subset) | xT and VAEP rank players differently (`vanroy2020xtvaep`). xT values zones (`singh2019xt`). EPV needs tracking (`fernandez2021epv`). | M7a |
 | Pass choice versus options | Choosing the right pass given what was on | Tracking only | None | Only estimable with all player positions (`power2017passes`, `fernandez2021epv`). | none |
 | Dribbling / ball retention | Keeping the ball under pressure | Public event data | SB dribbles completed (subset) | No verified estimate of its stability. **Evidence thin.** | M7a |
-| Set pieces and penalties | Taking dead balls; penalty conversion | Box score | TM `penalty_goals`; ESPN penalty flag | Shootout outcomes depend on pressure framing (`jordet2008avoidance`). Penalty volume is role-allocated, hence the np-versus-all choice in M5. | M5 |
+| Set pieces and penalties | Taking dead balls; penalty conversion | Box score | TM `penalty_goals` | Shootout outcomes depend on pressure framing (`jordet2008avoidance`). Penalty volume is role-allocated, hence the np-versus-all choice in M5. | M5 |
 
 ## D. Physical / availability
 
@@ -106,7 +106,7 @@ tournament-plus-three-clubs sample, not a league sample.
 |---|---|---|---|---|---|
 | Nominal position | Lineup slot | Box score | TM lineup position → 8 groups (design §4.4) | Nominal and actual roles differ (`aalbers2019roles`, `bialkowski2014roles`). | M2, M4 (H3 groups), M5 |
 | Actual role in the system | e.g. false 9, inverted full-back, deep playmaker | Public event (partly); tracking | None (SB subset could cluster roles) | Roles are recoverable from events (`aalbers2019roles`) or tracking (`bialkowski2014roles`). | none |
-| Usage / opportunity share | Share of team shots, set pieces and penalties allocated to the player | Box score | Player's share of team shots (ESPN); penalties (TM/ESPN) | Event counts depend on context such as possession, score and opponent (`lago2009possession`). Usage inflates counting stats independently of skill. | M2 (team ICC), M5 |
+| Usage / opportunity share | Share of team shots, set pieces and penalties allocated to the player | Box score | Penalties (TM); share of team shots on the SB subset | Event counts depend on context such as possession, score and opponent (`lago2009possession`). Usage inflates counting stats independently of skill. | M2 (team ICC), M5 |
 
 ## H. Context (team, coach, league, opponents)
 
@@ -124,9 +124,9 @@ tournament-plus-three-clubs sample, not a league sample.
 
 | Variable | What it is | Tier | Best proxy in our data | What the literature says (size / importance) | Module |
 |---|---|---|---|---|---|
-| Shot-outcome luck | Goals scored or conceded beyond chance quality | Box score + xG | Goals − zone-xG (player and team) | About 46–47% of goals involve chance markers (`lames2018chance`, `wunderlich2021randomness`). Short-run results mislead (`brechot2020randomness`). | M1, M8 |
+| Shot-outcome luck | Goals scored or conceded beyond chance quality | Box score + xG | Goals − SB xG (subset) | About 46–47% of goals involve chance markers (`lames2018chance`, `wunderlich2021randomness`). Short-run results mislead (`brechot2020randomness`). | M1, M8 |
 | Match-outcome noise | The better team not winning | Box score | Match results | Typical scorelines are weak evidence of the better team (`skinner2009experiments`). Luck is large in football leagues (`aoki2017luck`). Goals are near-Poisson (`heuer2010poisson`). | M9, M3 |
-| Refereeing decisions | Penalties, cards, offsides given | Box score | ESPN penalties and offsides; TM cards | Referee behaviour shifts with crowd presence (`bryson2021crowd`). | M2 |
+| Refereeing decisions | Penalties, cards, offsides given | Box score | TM cards and penalty goals | Referee behaviour shifts with crowd presence (`bryson2021crowd`). | M2 |
 | Sampling noise in rates | Finite-minutes error in any per-90 statistic | Box score | Split-half reliability (M1) | Metrics differ greatly in stability (`franks2016metaanalytics`). Interactive-sport indicators are intrinsically unstable (`lames2007reliable`). Physical rates have CVs of 16–31% (`gregson2010variability`). | M1, M8 |
 
 ---

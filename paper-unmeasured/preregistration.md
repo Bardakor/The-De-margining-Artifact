@@ -174,3 +174,9 @@ timestamp.
   A3) and log market value at the last valuation on or before 30 June of
   the edition year. Players without a per-season RAPM estimate are dropped
   and counted.
+- **A15 (2026-11-15).** ESPN is withdrawn (terms of use; see
+  `docs/unmeasured/data-licences.md`). Its code, cache and tables are
+  deleted before any analysis used them. Consequences, by the rules already
+  stated: H8 is reported as not tested (A6); A4's secondary zone-xG metric
+  and A11's ESPN-based secondary analyses are not run. Shots, fouls won and
+  shot quality appear only on the StatsBomb subset, as exploratory analyses.
