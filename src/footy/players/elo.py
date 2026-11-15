@@ -16,7 +16,7 @@ so every game's two rating changes sum to zero. Assumptions (stated, not hidden)
 - Clubs and national teams are separate pools, each with its own K and H, chosen by
   grid search minimising the mean squared error of E_home against S_home over the
   pool's calibration games only, then frozen for every later game. The objective is
-  squared error per the task brief; design §4.3 says log loss (flagged in the report).
+  squared error, as design §4.3 states.
 - The no-skill baseline predicts the calibration period's mean home score for every game.
 """
 

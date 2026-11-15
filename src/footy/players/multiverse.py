@@ -71,7 +71,8 @@ Fallbacks for combinations that are undefined or circular (counted in
   only; the impact block gets the RAPM-total weights; each block carries half the
   weight.
 - shrinkage ``eb`` and context ``elo_partialled`` are not applied to RAPM metrics:
-  RAPM is already ridge-shrunk and adjusted for team-mates, opponents and Elo (M3).
+  RAPM is already ridge-shrunk and adjusted for team-mates and opponents (M3; A12
+  fits it without an Elo covariate).
   ``impact × eb`` and ``impact × elo_partialled`` are therefore duplicates.
 - pc1 sign without a usable goals loading (impact family, goalkeepers): the sign is set
   so the loadings sum to a positive number (counted per spec × segment).

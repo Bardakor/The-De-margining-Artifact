@@ -24,7 +24,7 @@ For the players of one position group:
    Shared match noise inflates ``R2_obs`` and biases the share down.
 4. ``R2_true = R2_obs / (rel_RAPM * rel_pred)``; ``share = 1 - R2_true``; both
    reported raw and clipped to [0, 1].
-5. Joint bootstrap (amendment A8): each draw resamples players with
+5. Joint bootstrap (amendment A7): each draw resamples players with
    replacement within each group (copies of one player stay in one fold) and
    re-estimates everything above, both reliabilities included. With RAPM
    bootstrap replicates, draw ``b`` uses replicate ``b`` and the split of its

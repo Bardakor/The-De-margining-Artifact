@@ -38,7 +38,7 @@ Assumptions (Claude's calls)
 - McFadden pseudo-R² = 1 - LL(beta_hat) / LL(0), where LL(0) is the uniform model over the
   same universes.
 - The bootstrap resamples players (each player is a cluster of all his editions), not
-  editions. Five editions are too few clusters for an edition bootstrap, and a player's
+  editions. Six editions are too few clusters for an edition bootstrap, and a player's
   residual persists from one edition to the next. A player drawn twice in an edition ties
   with himself.
 - A positive residual means the vote rewarded the player beyond what all the blocks
