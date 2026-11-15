@@ -130,3 +130,32 @@ timestamp.
   estimated (the with-Elo fit is reported as robustness); λ by 5-fold
   game-grouped CV; B = 200 game bootstrap; master seed 20261114 for every
   analysis.
+- **A13 (2026-11-15).** Implementation choices that A9, A11 and M8 leave
+  open, fixed before any real-data RAPM, M4, M5 or M8 result exists.
+  (i) *M5 under A11.* Box = per-90 goals, non-penalty goals, assists;
+  box + GD adds raw on-pitch goal difference per 90 (minutes in matches with
+  stints only); impact = per-season RAPM offence and defence; hybrid = box +
+  GD + impact. V1-like weights: goals 0.30, non-penalty goals 0.15, assists
+  0.25, on-pitch GD 0.20, RAPM offence 0.05, RAPM defence 0.05 (a stylised
+  imitation, as before; on-pitch GD stands in for V1's team-results
+  component). (ii) *M8 unmeasured draw.* The share ω of a specification's
+  score that sees only individual statistics is the share of its absolute
+  weights on the box metrics, taken exactly from M5's weights on the
+  original data; on-pitch GD counts with RAPM as an on-pitch measure. The
+  share σ per position group is M4's cross-half estimate for the total
+  component, clipped to [0, 1]. U = 4 draws per (specification, replicate);
+  pairwise probabilities and expected ranks are computed exactly.
+  (iii) *M8 replicates.* B = 200 match bootstraps; in each, the same
+  resample of games drives pooled RAPM, per-season RAPM and the
+  player-season statistics, and M5 is rerun on it. (iv) *A9 calibration.*
+  Planted offence and defence SDs per position group are set so that the
+  simulated RAPM's split-half covariance per group matches the real one
+  (multiplicative updates, a few simulations each); measurable share per
+  group = M4's cross estimate (total, clipped); intercept and home term per
+  competition-season = the real fit's; no match shock. The simulated box
+  score's per-90 rate has the real group mean of non-penalty goals plus
+  assists and an SD chosen so that its full-window reliability at the
+  group's median minutes equals the real reliability of M4's statistics
+  prediction in that group; S = 200, five splits per simulation.
+  (v) *Recognition view* for Kendall's W: Ballon d'Or points summed over
+  the 2021–2026 editions, 0 for unranked pool players.
