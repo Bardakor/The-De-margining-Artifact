@@ -194,7 +194,7 @@ def test_team_icc_interval_covers_planted_value_near_nominal() -> None:
         panel = _icc_panel(rng, icc)
         out = team_icc(panel, list(covered), "club_id", "league_season", rng, n_boot=400, level=0.9)
         for metric, truth in (("planted", icc), ("null", 0.0)):
-            lo, estimate, hi = out.loc[metric, ["lo", "icc", "hi"]]
+            lo, estimate, hi = out.loc[metric, ["lo", "icc", "hi"]].to_numpy(np.float64)
             assert lo <= estimate <= hi
             covered[metric] += int(lo <= truth <= hi)
     assert min(covered.values()) >= 15  # P(Bin(20, 0.9) >= 15) = 0.99

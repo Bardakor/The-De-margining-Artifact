@@ -2422,16 +2422,26 @@ evidence against a big-game trait; it is only no evidence for one.
 \paragraph{(e) M6 with curated team honours.}
 \emph{Motivation.} The team-success block is measured with gaps
 (Section~\ref{sec:r-m6}) that bias it down, toward refuting H6.
-\emph{Analysis.} We refit M6 with team honours curated from published records:
-league champions including titles decided by play-offs, and the finals missing
-from the data. The curation changes the team-success indicators of
-\CuratedNChanged{} candidate-editions. \emph{Reading.} The OLS Shapley share of
-team success becomes \CuratedShapleyTeamOls{} and that of individual statistics
-\CuratedShapleyStatsOls{}; H6 with curated honours: \CuratedVerdictHSix{}
-(Table~\ref{tab:recognition-curated}).
-% RESULTS-PROSE (pending results/players/recognition/curated/): one or two
-% sentences saying whether the curated honours reverse the order of the team and
-% statistics shares, and so whether H6's refutation survives the data gaps.
+\emph{Analysis.} We refit M6 with team honours curated from published records,
+each fact checked against two sources (\texttt{paper-unmeasured/data/team\_honours\_sources.md}):
+official league champions, including titles decided by play-offs or a cup final
+(MLS); the 2025/26 Champions League final; and the international tournaments
+missing from the data (Copa Am\'erica 2021, the 2021 and 2023 Africa Cups of
+Nations, the UEFA Nations League finals of 2021, 2023 and 2025, the 2025
+CONCACAF Nations League and Gold Cup, and the knockout rounds of the 2026 World
+Cup). A player counts for a tournament only if he is in the winning squad. The
+curation changes \CuratedNChanged{} team-success indicators, every one from 0
+to 1. \emph{Reading.} The OLS Shapley share of team success rises to
+\CuratedShapleyTeamOls{} and that of individual statistics is
+\CuratedShapleyStatsOls{}; team success exceeds statistics in
+\CuratedTeamAboveStatsBoot{} of the bootstrap replicates, and H6 with curated
+honours is \CuratedVerdictHSix{} (Table~\ref{tab:recognition-curated}). The
+data gaps therefore narrow the gap between the two blocks without reversing
+it. The verdict is nonetheless fragile: under the per-90 reading of the
+statistics block (itself post hoc, Section~\ref{sec:r-m6}), the curated shares
+are \CuratedPerNinetyTeamOls{} for team success and \CuratedPerNinetyStatsOls{}
+for statistics, so which block leads depends on how the statistics are
+counted.
 
 \begin{table}[htbp]
   \centering
