@@ -200,3 +200,16 @@ timestamp.
   bootstrap SD (coverage 175/200 and 176/200, misses on both sides). On the
   real data the bootstrap's offset is larger (1.2–1.6 bootstrap SEs), so
   these intervals are reported as approximate. Point estimates are unchanged.
+- **A18 (2026-11-16), after H3 was computed.** A code review found that the
+  A9 parametric bootstrap compared each simulated estimate with the wrong
+  planted value. It used the variance-weighted average of the groups'
+  planted shares, but M4 on a pool fits one model across its groups, whose
+  box-score means differ for reasons unrelated to impact; the pooled
+  estimand is therefore larger for each pool, and the contrast smaller,
+  than that average. The planted value of each pool in each simulation is
+  now the population value of M4's own estimand under the generator:
+  1 − R² of the planted component on the true expected statistics, over the
+  pool's M4 players, from an OLS with intercept. The basic interval is
+  recomputed from these errors. The post-hoc assortative robustness uses the
+  same definition. Recorded here and labelled as a correction made after
+  the result.
