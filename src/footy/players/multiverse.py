@@ -15,7 +15,8 @@ to the pool.
 2. min_minutes: a player-season qualifies if ``raw_minutes`` >= the threshold.
 3. shrinkage: empirical Bayes, ``mean_g + r (x - mean_g)`` with ``r = m / (m + k)``,
    ``m = raw_minutes``, ``mean_g`` the minutes-weighted mean of the player's position
-   group (all seasons pooled), ``k`` the metric's stabilisation constant from M1.
+   group (all seasons pooled), ``k`` the metric's stabilisation constant from M1: one
+   per metric, or one per (metric, position group) (A16 (i)).
 4. context: within each position group, each metric minus its OLS slope on team Elo
    times the centred Elo (the group mean is kept, so only the within-group Elo
    effect is removed).
@@ -99,6 +100,8 @@ from scipy.stats import rankdata
 
 FloatArray = NDArray[np.float64]
 IntArray = NDArray[np.intp]
+# metric -> k in minutes, or metric -> {position group -> k}
+Stabilisation = Mapping[str, float | Mapping[str, float]]
 
 SCOPES = ("league", "ucl", "intl")
 GOALKEEPER = "GK"
@@ -174,7 +177,7 @@ def spec_grid() -> pd.DataFrame:
 def run_multiverse(
     player_season: pd.DataFrame,
     impact_season: pd.DataFrame,
-    stabilisation: Mapping[str, float],
+    stabilisation: Stabilisation,
     pool: Sequence[int],
     rng: np.random.Generator,
     *,
@@ -258,14 +261,15 @@ def shrink(rates: FloatArray, minutes: FloatArray, k: FloatArray, group: IntArra
     """Empirical-Bayes rates: ``mean_g + r (x - mean_g)`` with ``r = m / (m + k)``.
 
     ``rates`` is (rows × metrics), ``k`` the metrics' stabilisation constants in
-    minutes, ``mean_g`` the minutes-weighted mean rate of the row's group.
+    minutes, (metrics,) or (rows × metrics), ``mean_g`` the minutes-weighted mean rate
+    of the row's group.
     """
     _, codes = np.unique(group, return_inverse=True)
     n_groups = int(codes.max()) + 1
     total = np.zeros((n_groups, rates.shape[1]))
     np.add.at(total, codes, rates * minutes[:, None])
     mean = (total / np.bincount(codes, weights=minutes, minlength=n_groups)[:, None])[codes]
-    r = minutes[:, None] / (minutes[:, None] + k[None, :])
+    r = minutes[:, None] / (minutes[:, None] + k)
     return mean + r * (rates - mean)
 
 
@@ -366,7 +370,7 @@ def variance_indices(ranks: pd.DataFrame) -> pd.DataFrame:
 def _segment_scores(
     rows: pd.DataFrame,
     impact: pd.DataFrame,
-    stabilisation: Mapping[str, float],
+    stabilisation: Stabilisation,
     pool_ids: NDArray[np.int64],
     seasons: list[str],
     rng: np.random.Generator,
@@ -378,14 +382,15 @@ def _segment_scores(
     out = np.full((*_SHAPE, pool_ids.size), np.nan)
     applied = np.zeros((*_SHAPE, len(METRICS)))
     group_of = rows.groupby("player_id")["position_group"].first()
-    group_code = pd.Series(pd.factorize(group_of)[0], index=group_of.index)
+    codes, labels = pd.factorize(group_of)
+    group_code = pd.Series(codes, index=group_of.index)
     n_groups = int(group_code.max()) + 1
     pool_index, season_index = pd.Index(pool_ids), pd.Index(seasons)
     pool_group = group_code.loc[pool_index].to_numpy()
     fold_of = pd.Series(
         rng.permutation(len(group_of)) % min(CV_FOLDS, len(group_of)), index=group_of.index
     )
-    k = np.array([stabilisation[m] for m in STAT_METRICS], dtype=np.float64)
+    k = _group_constants(stabilisation, list(labels))
     years = np.array([int(s[:4]) for s in seasons], dtype=np.float64)
     # specifications sharing one (competition, threshold, aggregation) triple
     inner = _n_specs(competition="", min_minutes="", aggregation="")
@@ -418,7 +423,7 @@ def _segment_scores(
             for ish, shrinkage in enumerate(DIMENSIONS["shrinkage"]):
                 x1 = x0.copy()
                 if shrinkage == "eb":
-                    x1[:, _STAT_IDX] = shrink(x0[:, _STAT_IDX], raw_minutes, k, g)
+                    x1[:, _STAT_IDX] = shrink(x0[:, _STAT_IDX], raw_minutes, k[g], g)
                 for ix, context in enumerate(DIMENSIONS["context"]):
                     x2 = x1 if context == "none" else _partial_elo(x1, elo, g)
                     sd = x2.std(axis=0)
@@ -441,6 +446,15 @@ def _segment_scores(
                             _N_AGGREGATIONS, pool_ids.size, _N_FAMILIES, _N_WEIGHTS
                         ).transpose(2, 3, 0, 1)
     return out, applied
+
+
+def _group_constants(stabilisation: Stabilisation, labels: list[str]) -> FloatArray:
+    """(groups × STAT_METRICS) constants: the metric's k, or its k for each group."""
+    table = np.empty((len(labels), len(STAT_METRICS)))
+    for j, metric in enumerate(STAT_METRICS):
+        k = stabilisation[metric]
+        table[:, j] = [k[g] for g in labels] if isinstance(k, Mapping) else float(k)
+    return table
 
 
 def _combine_scopes(rows: pd.DataFrame, weights: Mapping[str, float]) -> pd.DataFrame:

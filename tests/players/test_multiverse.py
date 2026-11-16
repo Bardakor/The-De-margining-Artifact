@@ -8,6 +8,7 @@ import pytest
 from numpy.typing import NDArray
 
 from footy.players.multiverse import (
+    BOX,
     DIMENSIONS,
     METRICS,
     STAT_METRICS,
@@ -276,3 +277,48 @@ def test_empirical_bayes_moves_rate_toward_group_mean_by_exact_factor() -> None:
         factor = 1 - minutes[row] / (minutes[row] + k[0])
         moved = out[row, 0] - rates[row, 0]
         assert moved == pytest.approx(factor * (mean - rates[row, 0]), rel=1e-12)
+
+
+def test_per_group_stabilisation_shrinks_each_group_by_its_own_factor() -> None:
+    """A16 (i): a constant per (metric, group) moves each row by r = m / (m + k_g)."""
+    rng = np.random.default_rng(8)
+    n = 40
+    group = np.where(np.arange(n) % 2 == 0, "CF", "CB")
+    ps = pd.DataFrame(
+        {
+            "player_id": np.arange(1, n + 1),
+            "season": "2023/24",
+            "scope": "league",
+            "position_group": group,
+            "minutes": rng.uniform(900.0, 3300.0, n),
+            "team_elo": 1600.0,
+        }
+    )
+    for metric in STAT_METRICS:
+        ps[metric] = rng.gamma(2.0, 0.2, n)
+    impact = ps[["player_id", "season"]].assign(
+        rapm_offence=0.05 * rng.standard_normal(n),
+        rapm_defence=0.03 * rng.standard_normal(n),
+        rapm_total_pooled=0.02 * rng.standard_normal(n),
+    )
+    k = {m: {"CF": 300.0 * (j + 1), "CB": 5000.0} for j, m in enumerate(STAT_METRICS)}
+    pool = list(range(1, 11))
+
+    result = run_multiverse(ps, impact, k, pool, np.random.default_rng(9))
+
+    grid = spec_grid()
+    levels = {"family": "box", "weights": "equal_z", "position": "none", "context": "none",
+              "aggregation": "peak", "competition": "equal", "min_minutes": 900,
+              "shrinkage": "eb"}  # fmt: skip
+    spec = grid[np.logical_and.reduce([grid[d] == v for d, v in levels.items()])]["spec_id"]
+    x = ps[list(BOX)].to_numpy(np.float64)
+    m = ps["minutes"].to_numpy()[:, None]
+    shrunk = np.empty_like(x)
+    for g in ("CF", "CB"):
+        rows = group == g
+        mean = (x[rows] * m[rows]).sum(axis=0) / m[rows].sum()
+        r = m[rows] / (m[rows] + np.array([k[c][g] for c in BOX]))
+        shrunk[rows] = mean + r * (x[rows] - mean)
+    z = (shrunk - shrunk.mean(axis=0)) / shrunk.std(axis=0)
+    got = result.ranks[result.ranks["spec_id"] == spec.item()].set_index("player_id")["score"]
+    np.testing.assert_allclose(got.loc[pool], z[: len(pool)].mean(axis=1), rtol=1e-9)
