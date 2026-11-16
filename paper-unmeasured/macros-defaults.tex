@@ -455,6 +455,68 @@
 \providecommand{\CuratedPerNinetyTeamOls}{\TBD}
 
 % ---------------------------------------------------------------------------
+% Referee-report additions (2026-11-16; the generator must add them)
+% ---------------------------------------------------------------------------
+% M3: penalty on per-season deviations chosen by CV, printed as an integer with {,} (e.g. 100{,}000); results/players/rapm/cv_season.json lam_season
+\providecommand{\RapmLambdaSeason}{\TBD}
+% M3: within-player SD of per-season RAPM total (goals per 90): players with own columns (rapm/rapm_pooled.csv) and >= 2 seasons in rapm/rapm_season.csv, player_id != -1; sqrt of the mean over players of the population variance (ddof 0) of their season totals
+\providecommand{\RapmSeasonWithinSd}{\TBD}
+% M3: between-player SD (ddof 1) of the same players' mean per-season RAPM total; same file and players
+\providecommand{\RapmSeasonBetweenSd}{\TBD}
+% M5: distinct outfield pool rankings among the 1,440 impact-family specifications; multiverse/point_ranks.csv.gz joined with multiverse/spec_grid.csv on spec_id, family == impact, segment outfield, unique rank vectors
+\providecommand{\NDistinctRankingsImpact}{\TBD}
+% M5: share of hybrid-family specifications ranking the M8 P(#1) leader first; synthesis/firsts_by_dimension.csv (leader's row, family = hybrid)
+\providecommand{\TopFirstHybrid}{\TBD}
+% M8: outfield players with P(#1) >= 0.01; synthesis/players.csv (segment outfield, p_first >= 0.01, count)
+\providecommand{\NLeaders}{\TBD}
+% M8: of those, players whose share_specification >= max(share_sampling, share_unmeasured); synthesis/players.csv
+\providecommand{\NLeadersSpecLargest}{\TBD}
+% H4: players of the median specification's top ten (multiverse/point_ranks.csv.gz, spec_id = synthesis/summary.json median_spec_id, segment outfield, rank <= 10) with var_specification > var_sampling in synthesis/players.csv (count)
+\providecommand{\HFourNSpecAbove}{\TBD}
+% H4: median over the same players of var_specification / var_sampling; synthesis/players.csv
+\providecommand{\HFourMedianRatio}{\TBD}
+% Data: first-tier domestic leagues of the panel (panel.py scope "league") whose first season in coverage/tm_coverage.csv is 2024/25 or later (count)
+\providecommand{\NLeaguesLateStart}{\TBD}
+% Data: first-tier domestic leagues of the panel (panel.py scope "league") present in coverage/tm_coverage.csv (count)
+\providecommand{\NLeaguesPanel}{\TBD}
+% Data: pool players with at least one season whose club league is (partly) absent; coverage/pool_coverage_summary.json n_players_with_structural_hole
+\providecommand{\NPoolStructuralHole}{\TBD}
+% Data: pool player-seasons with an absent continental championship or WC 2026 knockout; coverage/pool_coverage_summary.json n_intl_hole_seasons
+\providecommand{\NPoolIntlHoleSeasons}{\TBD}
+% M4: clipped cross-half unmeasured share of RAPM total, GK; construct_gap/summary.json m4_cross_total_GK_share_clipped
+\providecommand{\ShareGK}{\TBD}
+% M4: lower bound of its 90% player-bootstrap interval, clipped; construct_gap/summary.json m4_cross_total_GK_ci_low_clipped
+\providecommand{\ShareGKLo}{\TBD}
+% M4: upper bound of the same; construct_gap/summary.json m4_cross_total_GK_ci_high_clipped
+\providecommand{\ShareGKHi}{\TBD}
+% H3 (A18 rerun): share of the S = 200 parametric simulations in which either pool's share is clipped (diff != diff_clipped); construct_gap/h3_sims.csv
+\providecommand{\HThreeSimClipped}{\TBD}
+% H3 (A18 rerun): share of simulations whose raw contrast is >= the real raw contrast; construct_gap/h3_sims.csv diff vs construct_gap/h3_summary.csv (kind raw, estimate)
+\providecommand{\HThreeSimReachReal}{\TBD}
+% H3: M4 players in the CB+DM pool (player and parametric rows); construct_gap/summary.json m4_cross_total_CB+DM_n
+\providecommand{\NHThreeHigh}{\TBD}
+% H3: CB+DM players in the A7 joint bootstrap (present in every RAPM replicate's split, construct_gap.py _estimate ids); to be written by run_impact.py into construct_gap/summary.json (e.g. m4_cross_total_CB+DM_a7_n)
+\providecommand{\NHThreeHighJoint}{\TBD}
+% H7: lower bound of the player-bootstrap interval of r divided by the attenuation; clutch/summary.json h7_ci_low / attenuation
+\providecommand{\ClutchRDisattLo}{\TBD}
+% H7: upper bound of the same (not clipped to 1); clutch/summary.json h7_ci_high / attenuation
+\providecommand{\ClutchRDisattHi}{\TBD}
+% (a) Share of simulations whose M4 player-bootstrap interval of the raw contrast covers its planted contrast, assortative planting; construct_gap/assortative/summary.json contrast_raw_coverage_m4
+\providecommand{\AssortCoverageRaw}{\TBD}
+% (f) Leader (name) of M8 with leakage propagated, independent-planting A_g; synthesis/leakage_independent/summary.json TopPlayerName
+\providecommand{\LeakIndepTopName}{\TBD}
+% (f) His P(#1); synthesis/leakage_independent/summary.json TopPlayerPFirst
+\providecommand{\LeakIndepTopPFirst}{\TBD}
+% (f) Share of outfield pairs decided; synthesis/leakage_independent/summary.json SharePairsDecided
+\providecommand{\LeakIndepSharePairsDecided}{\TBD}
+% (f) Leader (name) with assortative-planting A_g; synthesis/leakage_assortative/summary.json TopPlayerName
+\providecommand{\LeakAssortTopName}{\TBD}
+% (f) His P(#1); synthesis/leakage_assortative/summary.json TopPlayerPFirst
+\providecommand{\LeakAssortTopPFirst}{\TBD}
+% (f) Share of outfield pairs decided; synthesis/leakage_assortative/summary.json SharePairsDecided
+\providecommand{\LeakAssortSharePairsDecided}{\TBD}
+
+% ---------------------------------------------------------------------------
 % Section 7.11, hypothesis verdicts (text: "supported", "refuted" or, for H7
 % only, "inconclusive (underpowered)"), from synthesis.verdicts and the M4,
 % M5, M6, M7b outputs. H8 has no macro: it is not tested (A6, A11, A15).

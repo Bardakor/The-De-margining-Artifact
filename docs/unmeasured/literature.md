@@ -46,7 +46,7 @@ Data = data sources.
 | `shrout1979icc` | The standard forms of the intraclass correlation and when to use each. | M2 (team ICC), M1 | https://doi.org/10.1037/0033-2909.86.2.420 |
 | `efron1979bootstrap` | The bootstrap. | M1, M3, M8 | https://doi.org/10.1214/aos/1176344552 |
 | `efron1975stein` | Stein / empirical-Bayes shrinkage of many means toward a common value, illustrated on batting averages. | M5 (shrinkage dimension) | https://doi.org/10.1080/01621459.1975.10479864 |
-| `gregson2010variability` | Tracking data on 485 Premier League outfield players. Match-to-match CV is about 16% for high-speed running and about 31% for sprint distance, higher for central players. Physical outputs are noisy per match. Publisher metadata lists the 4th author as "V. Salvo". | Tax, M1 | https://doi.org/10.1055/s-0030-1247546 |
+| `gregson2010variability` | Tracking data on 485 Premier League outfield players. Match-to-match CV is about 16% for high-speed running and about 31% for sprint distance, higher for central players. Physical outputs are noisy per match. Publisher metadata lists the 4th author as "V. Salvo"; the author is Valter Di Salvo, and refs.bib uses that name. | Tax, M1 | https://doi.org/10.1055/s-0030-1247546 |
 
 ## 3. Plus-minus and RAPM
 
@@ -79,7 +79,7 @@ Data = data sources.
 | `spearman2018beyond` | Off-ball scoring opportunity (OBSO): a physics-based pitch-control model on tracking data that credits players for being in dangerous positions they never receive the ball in. | Tax | https://www.researchgate.net/publication/327139841_Beyond_Expected_Goals (author-uploaded PDF; also cited in arXiv:2011.09426) |
 | `fernandez2018wide` | Measures space occupation and space generation (dragging defenders) from tracking data, with examples from one La Liga match. The proceedings PDF is anonymised. The Sloan page lists Fernández, and the co-author Bornn is given in the authors' own arXiv:2011.09426 reference list. | Tax | https://sloansportsconference.com/research-papers/wide-open-spaces-a-statistical-technique-for-measuring-space-creation-in-professional-soccer |
 | `power2017passes` | Values passes by risk and reward from tracking data, so pass choice can be judged relative to the options available. | Tax | https://doi.org/10.1145/3097983.3098051 |
-| `vanroy2020xtvaep` | xT and VAEP rank players differently. xT leans to playmaking and VAEP to shooting, both differ from goals/assists, and xT cannot value defensive actions. | M7a, M5 | https://dtai.cs.kuleuven.be/sports/blog/valuing-on-the-ball-actions-in-soccer-a-critical-comparison-of-xt-and-vaep |
+| `vanroy2020xtvaep` | **Blog post** (the AAAI-20 workshop version was not verified; cited as the DTAI blog post). xT and VAEP rank players differently. xT leans to playmaking and VAEP to shooting, both differ from goals/assists, and xT cannot value defensive actions. | M7a, M5 | https://dtai.cs.kuleuven.be/sports/blog/valuing-on-the-ball-actions-in-soccer-a-critical-comparison-of-xt-and-vaep |
 | `merhej2021defensive` | DAxT values tackles and interceptions by the threat they stop. It starts from the observation that event metrics mostly value attacking play. | Tax, M7a | https://doi.org/10.1145/3447548.3467090 |
 | `bauer2021counterpressing` | Detects counterpressing from synchronised positional and event data, then quantifies its success drivers over six Bundesliga seasons. | Tax | https://doi.org/10.1007/s10618-021-00763-7 |
 | `pappalardo2019playerank` | PlayeRank: a role-aware, multi-dimensional player rating from event logs, validated against professional scouts' judgements. | M2, M6, Tax | https://doi.org/10.1145/3343172 |
@@ -94,7 +94,7 @@ Data = data sources.
 | `rathke2017xg` | Shot-location xG on one Bundesliga and one Premier League season. xG tracks mid-table teams well, while top teams over-achieve and bottom teams under-achieve. | H8, M1 | https://doi.org/10.14198/jhse.2017.12.Proc2.05 |
 | `robberechts2020xg` | How much and which data xG needs: location is among the strongest features, complex models need about five seasons, old data loses little, and mixing data providers should be avoided. Relevant to zone-xG versus StatsBomb xG (H8). | H8, Data | https://doi.org/10.1007/978-3-030-64912-8_2 |
 | `anzer2021xg` | xG from synchronised positional and event data on 105,627 Bundesliga shots, more accurate than prior published models. Sets the tracking-data ceiling on what coarse zones lose. | H8, Tax | https://doi.org/10.3389/fspor.2021.624475 |
-| `mead2023xg` | Adds player/team-ability and psychological features to xG. xG predicts future team success better than traditional statistics. The closest thing to a review we could verify (see "Not found"). | H8, M1 | https://doi.org/10.1371/journal.pone.0282295 |
+| `mead2023xg` | Adds player/team-ability and psychological features to xG, which add information. xG predicts future team success better than traditional statistics. The closest thing to a review we could verify (see "Not found"). | H8, M1 | https://doi.org/10.1371/journal.pone.0282295 |
 | `scholtes2024bayesxg` | Bayesian hierarchical xG on public StatsBomb shots. Position effects fade once richer features enter, but player-level finishing effects persist. | M1, M4, Tax | https://doi.org/10.3389/fspor.2024.1348983 |
 | `davis2024finishing` | **Preprint.** "Goals minus xG" is a poor finishing measure because of outcome variance, small samples and xG model bias. Consistently beating xG needs both volume and skill, and standard xG understates elite finishers. | M1, M4, Tax | https://arxiv.org/abs/2401.09940 |
 
@@ -179,8 +179,8 @@ Data = data sources.
 | `ingersoll2017diversity` | Champions League 2003–2012: more linguistically diverse squads outperform less diverse ones after controlling for talent. | Tax | https://doi.org/10.3233/JSA-170052 |
 | `muehlheusser2018managers` | Bundesliga manager turnover: managers from the top of the ability distribution gain considerably more points than those at the bottom. Managers also shape playing style. | Tax, M3 | https://doi.org/10.1177/1527002516674760 |
 | `lago2009possession` | Possession depends on match location, opponent quality and current score. Event counts are context-dependent. | Tax, M2 | https://doi.org/10.1080/02640410903131681 |
-| `fischer2021ghost` | German ghost games (2019/20): home advantage fell in the top division, and the fall tracks lost stadium occupancy. | M3, Tax | https://doi.org/10.1177/15270025211026552 |
-| `bryson2021crowd` | Covid-19 empty stadiums: referees gave away teams fewer yellow cards, reducing home advantage. | M3, Tax | https://doi.org/10.1016/j.econlet.2020.109664 |
+| `fischer2021ghost` | German ghost games at the end of 2019/20: home advantage fell in the top division only (not in the second and third), and the fall tracks lost stadium occupancy. Does not cover 2020/21. | M3, Tax | https://doi.org/10.1177/15270025211026552 |
+| `bryson2021crowd` | Covid-19 empty stadiums (2019/20 only): referees gave away teams fewer yellow cards, narrowing the home–away card gap; no significant change in home wins, goal difference or total goals. | M3, Tax | https://doi.org/10.1016/j.econlet.2020.109664 |
 
 ## 12. Physical output, availability, age
 
@@ -189,7 +189,7 @@ Data = data sources.
 | `hagglund2013injuries` | 24 European clubs over 11 seasons: lower injury burden and higher match availability go with higher league rank, more points per match and better European results. | Tax | https://doi.org/10.1136/bjsports-2013-092215 |
 | `bradley2009hir` | Describes high-intensity running in Premier League matches and how it varies with playing position. | Tax | https://doi.org/10.1080/02640410802512775 |
 | `carling2013physical` | Argues that physical match outputs (distances, high-speed running) are hard to interpret on their own and must be read in tactical and match context. | Tax | https://doi.org/10.1007/s40279-013-0055-8 |
-| `dendir2016peak` | WhoScored ratings (2010/11–2014/15, four leagues): by citing papers' summaries, peak about 25–27, forwards earlier than defenders. | M5 (time aggregation), Tax | https://doi.org/10.3233/JSA-160021 |
+| `dendir2016peak` | WhoScored ratings (2010/11–2014/15, four top leagues). Per the abstract, forwards peak at about 25 and defenders at about 27. | M5 (time aggregation), Tax | https://doi.org/10.3233/JSA-160021 |
 
 ## 13. Elo
 
