@@ -314,6 +314,8 @@ def macros_m3() -> dict[str, str]:
         # Domestic leagues: the run's own empty-stadium comparison.
         "HomeTermEmpty": num(s["home_league_empty"]),
         "HomeTermOther": num(s["home_league_other"]),
+        "PoolTopRapm": num(s["pool_top_total"]),
+        "PoolTopRapmSe": num(s["pool_top_se"]),
     }
     # The all-player attribution factor is not among M3's outputs yet.
     if "attribution_full_total_ALL" in s:
@@ -380,12 +382,128 @@ def macros_m7b() -> dict[str, str]:
         "ClutchPower": num(s["power_at_03"]),
         "ClutchPlaceboR": num(s["placebo_r_mean"]),
         "VerdictHSeven": tex(s["h7_verdict"]),
+        "ClutchAttenuation": num(s["attenuation"]),
+        "ClutchRDisatt": num(s["h7_r_disattenuated"]),
+        # Post hoc (d): knockouts of continental and international competitions only.
+        "NPlayersClutchMajor": count(s["h7_major_n"]),
+        "ClutchMajorR": num(s["h7_major_r"]),
+        "ClutchMajorRLo": num(s["h7_major_ci_low"]),
+        "ClutchMajorRHi": num(s["h7_major_ci_high"]),
+        "ClutchMajorP": num(s["h7_major_p_value"], 3),
     }
     # The run states its test level only in the description of the power.
     level = re.search(r"alpha (\d*\.\d+)", descriptions("clutch")["power_at_03"])
     if level:
         out["HSevenAlpha"] = num(float(level.group(1)))
     return out
+
+
+def _and_list(names: list[str]) -> str:
+    """'A, B and C'."""
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+
+
+def macros_m8_views() -> dict[str, str]:
+    """Names and shares the results prose quotes from M5 and M8 outputs."""
+    firsts = csv(RESULTS / "synthesis" / "firsts_by_dimension.csv")
+    probs = csv(RESULTS / "multiverse" / "rank_probabilities.csv").set_index("player_id")
+    players = synthesis_players("outfield")
+    pool = csv(POOL)
+    leader = firsts.loc[firsts["m8_p_first"].idxmax(), "player_id"]
+    lead = firsts[(firsts["player_id"] == leader) & (firsts["aggregation"] == "all")]
+    lead = lead.set_index("family")["share_first"]
+    quinones = pool.loc[pool["player"] == "Julián Quiñones", "tm_player_id"].item()
+    points = recognition_view()
+    return {
+        "TopFirstImpact": num(lead["impact"]),
+        "TopFirstBox": num(lead["box"]),
+        "QuinonesSpecShare": num(probs.loc[quinones, "p_first"]),
+        "StatsViewTopName": tex(players.loc[players["stats_view"].idxmin(), "player"]),
+        "ImpactViewTopName": tex(players.loc[players["impact_view"].idxmin(), "player"]),
+        "RecognitionTopName": tex(
+            pool.set_index("tm_player_id").loc[points.idxmax(), "player"]  # type: ignore[call-overload]
+        ),
+    }
+
+
+def macros_m6_extra() -> dict[str, str]:
+    s = summary("recognition")
+    return {
+        "NBdoDroppedValuation": count(s["count_dropped_no_market_value"]),
+        "PerNinetyStatsOls": num(s["per90_reading_ols_stats"]),
+        "PerNinetyTeamOls": num(s["per90_reading_ols_team"]),
+    }
+
+
+def macros_assortative() -> dict[str, str]:
+    """Post hoc (a) and the bias-corrected shares of (b)."""
+    a = summary("construct_gap/assortative")
+    attr = csv(RESULTS / "construct_gap" / "assortative" / "attribution.csv")
+    attr = attr[(attr["kind"] == "groups") & ~attr["halves"] & attr["group"].isin(OUTFIELD)]
+    return {
+        "AssortAttrLo": num(attr["total"].min()),
+        "AssortAttrHi": num(attr["total"].max()),
+        "AssortPlanted": num(a["contrast_raw_planted"]),
+        "AssortMeanErrorRaw": num(a["contrast_raw_mean_error"]),
+        "AssortRawLo": num(a["contrast_raw_ci_low"]),
+        "AssortRawHi": num(a["contrast_raw_ci_high"]),
+        "AssortClippedLo": num(a["contrast_clipped_ci_low"]),
+        "AssortClippedHi": num(a["contrast_clipped_ci_high"]),
+        "AssortCoverageClipped": num(a["contrast_clipped_coverage_m4"]),
+        "BiasShareCF": num(a["share_bias_corrected_CF"]),
+        "BiasShareOtherLo": num(
+            min(float(a[f"share_bias_corrected_{g}"]) for g in OUTFIELD if g != "CF")  # type: ignore[arg-type]
+        ),
+    }
+
+
+def macros_bias_corrected() -> dict[str, str]:
+    s = summary("synthesis/bias_corrected")
+    return {
+        "BiasSharePairsDecided": num(s["SharePairsDecided"]),
+        "BiasTopPlayerVarUnm": num(s["TopPlayerVarUnm"]),
+    }
+
+
+def macros_europe() -> dict[str, str]:
+    s = summary("synthesis/europe")
+    lost = csv(RESULTS / "synthesis" / "europe" / "lost_seasons.csv")
+    names = lost.loc[lost["lost_qualifying_900"], "player"].drop_duplicates().tolist()
+    return {
+        "NPoolLostSeasons": count(s["n_pool_players_lost_qualifying_900"]),
+        "EuropeLostPlayers": _and_list([tex(n) for n in names]),
+    }
+
+
+TEAM_INDICATORS = ("league_title", "ucl_winner", "ucl_finalist", "intl_winner")
+
+
+def curated_changed_editions() -> int:
+    """Candidate-editions with at least one team-success indicator changed by the
+    curated honours (the summary's changed_total counts indicators instead)."""
+    keys = ["edition", "player"]
+    primary = csv(RESULTS / "recognition" / "universe.csv")[[*keys, *TEAM_INDICATORS]]
+    curated = csv(RESULTS / "recognition" / "curated" / "universe.csv")[[*keys, *TEAM_INDICATORS]]
+    both = primary.merge(curated, on=keys, suffixes=("", "_curated"))
+    changed = np.zeros(len(both), dtype=bool)
+    for c in TEAM_INDICATORS:
+        changed |= (both[c] != both[f"{c}_curated"]).to_numpy()
+    return int(changed.sum())
+
+
+def macros_curated() -> dict[str, str]:
+    """Post hoc (e): M6 refitted with curated team honours."""
+    s = summary("recognition/curated")
+    return {
+        # Indicators, as the paragraph counts them (not candidate-editions).
+        "CuratedNChanged": count(s["changed_total"]),
+        "CuratedShapleyTeamOls": num(s["ShapleyTeamOls"]),
+        "CuratedShapleyStatsOls": num(s["ShapleyStatsOls"]),
+        "CuratedVerdictHSix": tex(s["VerdictHSix"]),
+        "CuratedTeamAboveStatsBoot": num(s["ShapleyTeamAboveStatsBoot"]),
+        "CuratedPerNinetyStatsOls": num(s["per90_reading_ols_stats"]),
+        "CuratedPerNinetyTeamOls": num(s["per90_reading_ols_team"]),
+    }
 
 
 def macros_named(declared: set[str], done: set[str]) -> dict[str, str]:
@@ -650,7 +768,8 @@ def table_rapm_reliability() -> str:
     ]
     note = (
         r"\par\smallskip{\footnotesize Per split: mean number of players with at least "
-        r"900 minutes in both halves. Attributed reliability: split-half reliability of "
+        + count(s["rel_half_minutes"])
+        + r" minutes in each half. Attributed reliability: split-half reliability of "
         r"the total times $A_g$.\par}"
     )
     return tabular("@{}lrrrrrrrr@{}", header, body) + note + "\n"
@@ -1763,8 +1882,9 @@ def figure_recovery(width: float) -> Figure:
 
 
 def table_robustness() -> str:
-    """Post-hoc robustness, not a main.tex slot: the M8 headline numbers under each
-    alternative synthesis next to the primary, and H3 under assortative planting."""
+    """Post-hoc robustness: the M8 headline numbers under each alternative synthesis
+    next to the primary; H3 under assortative planting, by the raw contrast (the
+    clipped contrast's error is not pivotal there); M6 with curated honours."""
     variants = {"Primary": RESULTS / "synthesis"}
     for name, label in (
         ("bias_corrected", r"Bias-corrected $\sigma_g$"),
@@ -1797,30 +1917,120 @@ def table_robustness() -> str:
         [row(["M8 synthesis", *labels])],
         body,
     )
-    path = RESULTS / "construct_gap" / "assortative" / "summary.json"
-    if path.exists():
+    blocks: list[tuple[str, list[tuple[str, str]], str]] = []
+    if (RESULTS / "construct_gap" / "assortative" / "summary.json").exists():
         a = summary("construct_gap/assortative")
         h3 = [
-            ("Planted contrast $D_0$", num(a["contrast_clipped_planted"])),
-            (r"Clipped estimate and 90\% basic interval",
-             num(a["contrast_clipped_estimate"]) + " "
-             + interval(a["contrast_clipped_ci_low"], a["contrast_clipped_ci_high"])),
+            ("Planted contrast $D_0$", num(a["contrast_raw_planted"])),
+            (r"Raw contrast and its 90\% basic interval",
+             num(a["contrast_raw_estimate"]) + " "
+             + interval(a["contrast_raw_ci_low"], a["contrast_raw_ci_high"])),
+            ("Mean error of the raw contrast", num(a["contrast_raw_mean_error"])),
             ("Leave-one-out coverage; player-bootstrap coverage of $D_0$",
-             num(a["contrast_clipped_coverage_loo"]) + "; "
-             + num(a["contrast_clipped_coverage_m4"])),
-            ("H3 verdict (clipped)", tex(a["verdict_clipped"])),
+             num(a["contrast_raw_coverage_loo"]) + "; " + num(a["contrast_raw_coverage_m4"])),
+            ("H3 verdict (raw contrast)", tex(a["verdict_raw"])),
         ]  # fmt: skip
+        note = (
+            r"Clipped contrast "
+            + num(a["contrast_clipped_estimate"])
+            + r", basic interval "
+            + interval(a["contrast_clipped_ci_low"], a["contrast_clipped_ci_high"])
+            + r": under this planting the clipped error is not pivotal, so the raw "
+            r"interval is the one read."
+        )
+        blocks.append(
+            (r"H3 with planted effects on the real teammate structure (assortative)", h3, note)
+        )
+    if (RESULTS / "recognition" / "curated" / "summary.json").exists():
+        c = summary("recognition/curated")
+        m6 = [
+            ("OLS Shapley shares, team success vs statistics",
+             num(c["ShapleyTeamOls"]) + " vs " + num(c["ShapleyStatsOls"])),
+            ("H6 verdict", tex(c["VerdictHSix"])),
+        ]  # fmt: skip
+        blocks.append(("M6 with curated team honours", m6, ""))
+    for title, lines, note in blocks:
         out += "\\par\\medskip\n" + tabular(
             "@{}>{\\raggedright\\arraybackslash}p{7.8cm}l@{}",
-            [row([r"H3 with planted effects on the real teammate structure (assortative)", ""])],
-            [row([label, value]) for label, value in h3],
+            [row([title, ""])],
+            [row([label, value]) for label, value in lines],
         )
+        if note:
+            out += "\\par\\smallskip{\\footnotesize " + note + "\\par}\n"
     return out + "\\par}\n"
 
 
+def table_recognition_curated() -> str:
+    """Post hoc (e): M6 with curated team honours beside the primary fit."""
+    shares = {
+        "Primary": csv(RESULTS / "recognition" / "shares.csv").set_index("block"),
+        "Curated honours": csv(RESULTS / "recognition" / "curated" / "shares.csv").set_index(
+            "block"
+        ),
+    }
+    sums = {"Primary": summary("recognition"), "Curated honours": summary("recognition/curated")}
+    body: list[str] = []
+    for model, label in (("ols", r"OLS, $\log(1 + \text{points})$"), ("pl", "Plackett--Luce")):
+        body.append(rf"  \multicolumn{{3}}{{@{{}}l}}{{\textit{{{label}: Shapley share "
+                    r"[90\% interval]}} \\")  # fmt: skip
+        for block in shares["Primary"].index:
+            body.append(
+                row(
+                    [
+                        r"\quad " + BLOCK_LABEL[block],
+                        *(
+                            num(t.loc[block, model])
+                            + " "
+                            + interval(t.loc[block, f"{model}_lo"], t.loc[block, f"{model}_hi"])
+                            for t in shares.values()
+                        ),
+                    ]
+                )
+            )
+    body.append(r"  \midrule")
+    for label, key, fmt in (
+        (r"OLS within-edition $R^2$", "OlsRTwo", num),
+        (r"OLS leave-one-edition-out $R^2$", "OlsRTwoLoeo", num),
+        (r"Plackett--Luce McFadden pseudo-$R^2$", "PlPseudoRTwo", num),
+        ("Bootstrap replicates with team share above statistics share (OLS)",
+         "ShapleyTeamAboveStatsBoot", num),
+        ("H6 verdict", "VerdictHSix", tex),
+    ):  # fmt: skip
+        body.append(row([label, *(fmt(s[key]) for s in sums.values())]))
+    c = sums["Curated honours"]
+    by_type = ", ".join(
+        f"{label} {count(c[f'changed_{key}'])}"
+        for key, label in zip(
+            TEAM_INDICATORS,
+            ("league title", "Champions League winner", "Champions League finalist",
+             "international title"),
+            strict=True,
+        )
+    )  # fmt: skip
+    note = (
+        r"\par\smallskip{\footnotesize\raggedright The curated honours change "
+        + count(c["changed_total"])
+        + " team-success indicators in "
+        + count(curated_changed_editions())
+        + " candidate-editions: "
+        + by_type
+        + r".\par}"
+    )
+    return (
+        "{\\setlength{\\tabcolsep}{4pt}\n"
+        + tabular(
+            "@{}>{\\raggedright\\arraybackslash}p{6.6cm}cc@{}",
+            [row(["", *shares])],
+            body,
+        )
+        + note
+        + "\\par}\n"
+    )
+
+
 def table_firsts_by_dimension() -> str:
-    """Post hoc, not a main.tex slot: for M8's leaders, the share of M5's
-    specifications ranking each first, by family and by time aggregation."""
+    """Post hoc: for M8's leaders, the share of M5's specifications ranking each
+    first, by family and by time aggregation."""
     frame = csv(RESULTS / "synthesis" / "firsts_by_dimension.csv")
     grid = csv(RESULTS / "multiverse" / "spec_grid.csv")
     families = grid["family"].drop_duplicates().tolist()
@@ -1857,12 +2067,6 @@ def table_firsts_by_dimension() -> str:
     )
 
 
-# Post-hoc robustness tables: written when their source exists, not yet main.tex slots.
-EXTRA_TABLES: dict[str, Callable[[], str]] = {
-    "tab-robustness": table_robustness,
-    "tab-firsts-by-dimension": table_firsts_by_dimension,
-}
-
 TABLES: dict[str, Callable[[], str]] = {
     "tab-coverage": table_coverage,
     "tab-reliability": table_reliability,
@@ -1881,6 +2085,9 @@ TABLES: dict[str, Callable[[], str]] = {
     "tab-recovery": table_recovery,
     "tab-v1": table_v1,
     "tab-verdicts": table_verdicts,
+    "tab-robustness": table_robustness,
+    "tab-firsts-by-dimension": table_firsts_by_dimension,
+    "tab-recognition-curated": table_recognition_curated,
     "tab-pool": table_pool,
 }
 FIGURES: dict[str, Callable[[float], Figure]] = {
@@ -1910,6 +2117,12 @@ MACRO_SOURCES: tuple[Callable[[], dict[str, str]], ...] = (
     macros_m4,
     macros_m7a,
     macros_m7b,
+    macros_m8_views,
+    macros_m6_extra,
+    macros_assortative,
+    macros_bias_corrected,
+    macros_europe,
+    macros_curated,
 )
 
 
@@ -1948,17 +2161,11 @@ def main() -> None:
                 fig.savefig(GENERATED / f"{name}.pdf", format="pdf")
                 plt.close(fig)
             else:
-                pending[name] = "no renderer yet (ranking-stage result files)"
+                pending[name] = "no renderer for this slot"
                 continue
             print(f"wrote generated/{name}")
         except FileNotFoundError as error:
             pending[name] = _missing(error)
-    for name, render in EXTRA_TABLES.items():
-        try:
-            (GENERATED / f"{name}.tex").write_text(render())
-            print(f"wrote generated/{name} (post hoc; main.tex has no slot for it)")
-        except FileNotFoundError as error:
-            pending[name] = f"post hoc, {_missing(error)}"
 
     missing = [m for m in declared if m not in macros]
     print(f"\npending macros ({len(missing)}): {', '.join(missing) or 'none'}")
