@@ -13,6 +13,12 @@ Design §5 (M5, M6, M8, M9); pre-registration A1, A11-A14, A16 (i). Stages, in o
   exploratory comparison with V1.
 - synthesis_bias (post hoc, robustness): the same with the bias-corrected shares of
   results/players/construct_gap/assortative/summary.json, if that file exists.
+- synthesis_europe (post hoc, exploratory): M5 + M8 as the primary after dropping the
+  league rows of leagues outside UEFA (results/players/multiverse/europe/,
+  results/players/synthesis/europe/). Motivated by the primary result that a 2025/26
+  Saudi league season puts Julian Quinones first in 896 of 5,760 specifications: the
+  factorial has no league-strength dimension and the context dimension partials out
+  own-team Elo, not opposition strength.
 - recognition: M6 on A14's universe and features; H6 by the OLS shares (A1).
 - recovery: M9's rank recovery on the real schedule (exploratory).
 
@@ -54,6 +60,13 @@ Choices the pre-registration does not fix (post hoc, Claude's calls):
   Every national-team competition with a final in tm_games counts as a senior
   tournament. A missing final gives no indicator (counted, reported). Market value:
   candidate-editions without a valuation on or before 30 June are dropped and counted.
+- synthesis_europe: UEFA leagues = domestic leagues whose Transfermarkt confederation is
+  "europa" (Russia included: still a UEFA member); every other league-scope row gets
+  weight 0 in the point run and every replicate (ucl and intl rows unchanged; UEL and
+  UECL are scope "other", which M5 never uses). RAPM inputs unchanged (fitted on every
+  game). Same sigma, U and task seeds as the primary; omega from this run's weights.
+  firsts_by_dimension.csv: the top 8 by M8 P(#1), share of specifications ranking each
+  first per (family, aggregation) cell and margin.
 - M9: pool = outfield pool players with at least 900 stint minutes (others dropped and
   counted); positions as M3 (unknown group for the few stint players without one);
   simulations split over worker processes with spawned seeds; gap bins recomputed on
@@ -152,9 +165,11 @@ RAPM_DIR = RESULTS / "rapm"
 GAP_DIR = RESULTS / "construct_gap"
 REL_DIR = RESULTS / "reliability"
 M5_DIR = RESULTS / "multiverse"
-REP_DIR = M5_DIR / "replicates_parts"
+M5_EU_DIR = M5_DIR / "europe"
 M8_DIR = RESULTS / "synthesis"
 M8_BIAS_DIR = M8_DIR / "bias_corrected"
+M8_EU_DIR = M8_DIR / "europe"
+N_FIRSTS = 8  # players in firsts_by_dimension.csv
 M6_DIR = RESULTS / "recognition"
 M9_DIR = RESULTS / "recovery"
 
@@ -228,13 +243,23 @@ class Panel:
     unit: np.ndarray  # panel row -> unit
     game: np.ndarray  # panel row -> column of the bootstrap counts, -1 outside the design
     values: np.ndarray  # panel rows x SUM_COLUMNS
+    non_uefa_league: np.ndarray  # panel row is a league row outside UEFA (synthesis_europe)
     counts: dict[str, int]
 
 
 @functools.cache
+def uefa_leagues() -> list[str]:
+    """Domestic-league competition ids of UEFA member associations (Transfermarkt's
+    confederation "europa")."""
+    c = pd.read_csv(RAW / "transfermarkt" / "competitions.csv.gz")
+    c = c[(c["type"] == "domestic_league") & (c["confederation"] == "europa")]
+    return sorted(c["competition_id"])
+
+
+@functools.cache
 def panel() -> Panel:
-    cols = ["game_id", "player_id", "season", "scope", "position_group", "minutes", *BOX,
-            "on_pitch_gf", "on_pitch_ga", "team_elo"]  # fmt: skip
+    cols = ["game_id", "player_id", "season", "competition_id", "scope", "position_group",
+            "minutes", *BOX, "on_pitch_gf", "on_pitch_ga", "team_elo"]  # fmt: skip
     pm = pd.read_csv(PROCESSED / "panel_player_match.csv.gz", usecols=cols)
     pm = pm[pm["scope"].isin(SCOPES)]
     pseudo, no_group = pm["player_id"] < 0, pm["position_group"].isna()
@@ -256,7 +281,8 @@ def panel() -> Panel:
         [m, *(pm[c].to_numpy(np.float64) for c in BOX), np.where(stint, gd, 0.0),
          np.where(stint, m, 0.0), m * pm["team_elo"].to_numpy(np.float64)]
     )  # fmt: skip
-    return Panel(frame, np.asarray(unit), game, values, counts)
+    non_uefa = (pm["scope"] == "league") & ~pm["competition_id"].isin(uefa_leagues())
+    return Panel(frame, np.asarray(unit), game, values, non_uefa.to_numpy(), counts)
 
 
 def player_season(weights: np.ndarray) -> tuple[pd.DataFrame, int]:
@@ -337,10 +363,20 @@ def boot_arrays() -> dict[str, Any]:
     }  # fmt: skip
 
 
-def replicate_inputs(b: int) -> tuple[pd.DataFrame, pd.DataFrame]:
-    z, p = boot_arrays(), panel()
-    w = np.where(p.game >= 0, z["counts"][b][np.maximum(p.game, 0)], 1).astype(np.float64)
-    ps, _ = player_season(w)
+def row_weights(b: int | None, europe: bool) -> np.ndarray:
+    """Panel row weights: 1 (original data) or replicate b's game counts (1 outside the
+    RAPM design); 0 for league rows outside UEFA when ``europe``."""
+    p = panel()
+    w = np.ones(len(p.unit))
+    if b is not None:
+        counts = boot_arrays()["counts"][b]
+        w = np.where(p.game >= 0, counts[np.maximum(p.game, 0)], 1).astype(np.float64)
+    return np.where(europe & p.non_uefa_league, 0.0, w)
+
+
+def replicate_inputs(b: int, europe: bool = False) -> tuple[pd.DataFrame, pd.DataFrame]:
+    z = boot_arrays()
+    ps, _ = player_season(row_weights(b, europe))
     season = pd.DataFrame(
         {"offence": z["season_offence"][b].astype(np.float64),
          "defence": z["season_defence"][b].astype(np.float64)}, index=z["season_keys"],
@@ -353,8 +389,8 @@ def replicate_inputs(b: int) -> tuple[pd.DataFrame, pd.DataFrame]:
     return ps, imp
 
 
-def point_inputs() -> tuple[pd.DataFrame, pd.DataFrame, dict[str, int]]:
-    ps, filled = player_season(np.ones(len(panel().unit)))
+def point_inputs(europe: bool = False) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, int]]:
+    ps, filled = player_season(row_weights(None, europe))
     imp, counts = impact_season(ps, *point_rapm())
     return ps, imp, panel().counts | counts | {"on_pitch_gd_group_season_fill": filled}
 
@@ -418,18 +454,19 @@ def m5_scores(result: Multiverse, ids: np.ndarray) -> np.ndarray:
     return r["score"].to_numpy(np.float64).reshape(-1, ids.size)
 
 
-def m5_chunk(reps: list[int]) -> list[tuple[int, float]]:
+def m5_chunk(task: tuple[list[int], Path, bool]) -> list[tuple[int, float]]:
+    reps, rep_dir, europe = task
     ids = pool_ids()
 
     def inputs() -> Iterator[tuple[pd.DataFrame, pd.DataFrame]]:
         for b in reps:
-            yield replicate_inputs(b)
+            yield replicate_inputs(b, europe)
 
     times = []
     t0 = time.perf_counter()
     runs = multiverse_runs(inputs(), stabilisation(), list(ids), rng("multiverse"))  # type: ignore[arg-type]
     for b, result in zip(reps, runs, strict=True):
-        np.save(REP_DIR / f"b{b:03d}.npy", m5_scores(result, ids).astype(np.float32))
+        np.save(rep_dir / f"b{b:03d}.npy", m5_scores(result, ids).astype(np.float32))
         t1 = time.perf_counter()
         times.append((b, t1 - t0))
         t0 = t1
@@ -437,8 +474,15 @@ def m5_chunk(reps: list[int]) -> list[tuple[int, float]]:
 
 
 def stage_multiverse() -> None:
+    run_m5(M5_DIR, europe=False)
+
+
+def run_m5(m5_dir: Path, europe: bool) -> None:
+    """M5 on the original data and the B replicates, outputs in ``m5_dir``."""
+    m5_dir.mkdir(parents=True, exist_ok=True)
+    rep_dir = m5_dir / "replicates_parts"
     ids = pool_ids()
-    ps, imp, _ = point_inputs()
+    ps, imp, _ = point_inputs(europe)
     t0 = time.perf_counter()
     runs = multiverse_runs([(ps, imp)], stabilisation(), list(ids), rng("multiverse"))  # type: ignore[arg-type]
     point = next(runs)
@@ -446,53 +490,53 @@ def stage_multiverse() -> None:
     print(f"point M5 run: {t_point:.1f} s", flush=True)
     ranks = point.ranks
     grid = spec_grid()
-    to_csv(grid, M5_DIR / "spec_grid.csv")
+    to_csv(grid, m5_dir / "spec_grid.csv")
     to_csv(ranks[["spec_id", "player_id", "segment", "score", "rank"]],
-           M5_DIR / "point_ranks.csv.gz", exact=True)  # fmt: skip
-    np.save(M5_DIR / "point_scores.npy", m5_scores(point, ids))
-    to_csv(point.weights, M5_DIR / "weights.csv.gz", exact=True)
-    write_json(M5_DIR / "fallbacks.json", point.fallbacks)
+           m5_dir / "point_ranks.csv.gz", exact=True)  # fmt: skip
+    np.save(m5_dir / "point_scores.npy", m5_scores(point, ids))
+    to_csv(point.weights, m5_dir / "weights.csv.gz", exact=True)
+    write_json(m5_dir / "fallbacks.json", point.fallbacks)
     probs = rank_probabilities(ranks)
     probs.insert(1, "player", probs["player_id"].map(names()))
     to_csv(probs.sort_values(["segment", "p_first"], ascending=[True, False]),
-           M5_DIR / "rank_probabilities.csv")  # fmt: skip
+           m5_dir / "rank_probabilities.csv")  # fmt: skip
     indices = variance_indices(ranks)
-    to_csv(indices, M5_DIR / "variance_indices.csv")
+    to_csv(indices, m5_dir / "variance_indices.csv")
     curve = specification_curve(ranks)
     to_csv(curve[["player_id", "curve_position", "spec_id", "rank"]],
-           M5_DIR / "specification_curve.csv.gz")  # fmt: skip
+           m5_dir / "specification_curve.csv.gz")  # fmt: skip
     distinct = distinct_rankings(ranks)
     out = probs[probs["segment"] == "outfield"].set_index("player_id")
     top = int(out["p_first"].idxmax())
 
     # replicates (A13 iii), resumable: one file per replicate, stacked at the end
-    REP_DIR.mkdir(parents=True, exist_ok=True)
-    todo = [b for b in range(N_BOOT) if not (REP_DIR / f"b{b:03d}.npy").exists()]
+    rep_dir.mkdir(parents=True, exist_ok=True)
+    todo = [b for b in range(N_BOOT) if not (rep_dir / f"b{b:03d}.npy").exists()]
     chunks = [todo[i::N_M5_WORKERS] for i in range(N_M5_WORKERS) if todo[i::N_M5_WORKERS]]
     t0 = time.perf_counter()
     times: list[tuple[int, float]] = []
     if chunks:
         with ProcessPoolExecutor(max_workers=len(chunks)) as ex:
-            for part in ex.map(m5_chunk, chunks):
+            for part in ex.map(m5_chunk, [(c, rep_dir, europe) for c in chunks]):
                 times.extend(part)
     wall = time.perf_counter() - t0
     stacked = np.lib.format.open_memmap(
-        M5_DIR / "replicate_scores.npy", mode="w+", dtype=np.float32,
+        m5_dir / "replicate_scores.npy", mode="w+", dtype=np.float32,
         shape=(N_BOOT, len(grid), ids.size),
     )  # fmt: skip
     for b in range(N_BOOT):
-        stacked[b] = np.load(REP_DIR / f"b{b:03d}.npy")
+        stacked[b] = np.load(rep_dir / f"b{b:03d}.npy")
     stacked.flush()
     del stacked
-    shutil.rmtree(REP_DIR)
-    old = read_json(M5_DIR / "replicate_times.json").get("times", {})
+    shutil.rmtree(rep_dir)
+    old = read_json(m5_dir / "replicate_times.json").get("times", {})
     old.update({str(b): s for b, s in times})
-    write_json(M5_DIR / "replicate_times.json", {"times": old})
+    write_json(m5_dir / "replicate_times.json", {"times": old})
     per_run = np.array(list(old.values()), dtype=np.float64)
     print(f"replicates: {len(times)} runs in {wall:.0f} s wall; "
           f"median {np.median(per_run):.1f} s per run", flush=True)  # fmt: skip
 
-    record(M5_DIR, {
+    record(m5_dir, {
         "NDistinctRankingsOutfield": (distinct.get("outfield"), "Distinct outfield pool "
                                       "rankings among the 5,760 specifications"),
         "NDistinctRankingsGoalkeeper": (distinct.get("goalkeeper"), "Distinct goalkeeper "
@@ -516,16 +560,16 @@ def stage_multiverse() -> None:
 # --- M8 -------------------------------------------------------------------------------
 
 
-def point_ranks() -> pd.DataFrame:
-    ranks = pd.read_csv(M5_DIR / "point_ranks.csv.gz")
+def point_ranks(m5_dir: Path = M5_DIR) -> pd.DataFrame:
+    ranks = pd.read_csv(m5_dir / "point_ranks.csv.gz")
     grid = spec_grid()
     ranks = ranks.merge(grid, on="spec_id", how="left")
     ranks["segment"] = pd.Categorical(ranks["segment"], categories=["outfield", "goalkeeper"])
     return ranks
 
 
-def replicate_frames() -> Iterator[pd.DataFrame]:
-    arr = np.load(M5_DIR / "replicate_scores.npy", mmap_mode="r")
+def replicate_frames(m5_dir: Path = M5_DIR) -> Iterator[pd.DataFrame]:
+    arr = np.load(m5_dir / "replicate_scores.npy", mmap_mode="r")
     ids = pool_ids()
     spec_ids = spec_grid()["spec_id"].to_numpy(np.int64)
     spec_col, player_col = np.repeat(spec_ids, ids.size), np.tile(ids, spec_ids.size)
@@ -554,12 +598,16 @@ def bdo_points() -> pd.DataFrame:
     return b
 
 
-def run_synthesis(share: dict[str, float], out_dir: Path, task: str, label: str) -> None:
-    ranks = point_ranks()
-    weights = pd.read_csv(M5_DIR / "weights.csv.gz")
+def run_synthesis(
+    share: dict[str, float], out_dir: Path, task: str, label: str, m5_dir: Path = M5_DIR
+) -> pd.DataFrame:
+    """M8 on the M5 outputs of ``m5_dir``; returns the players table."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    ranks = point_ranks(m5_dir)
+    weights = pd.read_csv(m5_dir / "weights.csv.gz")
     omega = stats_weight_share(weights)
     t0 = time.perf_counter()
-    result = synthesise(ranks, replicate_frames(), share, groups(), rng(task), omega=omega)
+    result = synthesise(ranks, replicate_frames(m5_dir), share, groups(), rng(task), omega=omega)
     seconds = time.perf_counter() - t0
     print(f"synthesise: {seconds:.0f} s", flush=True)
     indices = variance_indices(ranks)
@@ -662,6 +710,11 @@ def run_synthesis(share: dict[str, float], out_dir: Path, task: str, label: str)
         "n_replicates": (result.n_replicates, "Replicates in the mixture"),
         "n_unmeasured": (result.n_unmeasured, "U draws per (s, b)"),
         "seconds_synthesise": (seconds, "Wall time of synthesis.synthesise"),
+        "h5_aggregation_total": (total.get("aggregation"), "H5 statistic: total-order index "
+                                 "of aggregation for the P(#1) leader's rank"),
+        "top10": (view.head(10).reset_index()[["player", *shown[1:]]].to_dict("records"),
+                  "Top 10 outfield players by P(#1): P(top-3), median rank, 90% interval, "
+                  "variance shares"),
         **{f"sigma_{g}": (s, "Unmeasured share used for group " + g) for g, s in share.items()},
     }  # fmt: skip
     record(out_dir, entries)
@@ -674,10 +727,84 @@ def run_synthesis(share: dict[str, float], out_dir: Path, task: str, label: str)
             "HFiveMaxTotal": (total.max(), "H5: that largest total-order index"),
         })  # fmt: skip
     print(f"{label}: H1 {says('H1')}, H2 {says('H2')}, H4 {says('H4')}, H5 {says('H5')}")
+    return players
+
+
+def firsts_by_dimension(m5_dir: Path, players: pd.DataFrame) -> pd.DataFrame:
+    """Share of specifications ranking each of the top N_FIRSTS (M8 P(#1), outfield) first,
+    per (family, aggregation) cell and on each margin ("all")."""
+    ranks = point_ranks(m5_dir)
+    top = players[players["segment"] == "outfield"].nlargest(N_FIRSTS, "p_first")
+    r = ranks[ranks["player_id"].isin(top["player_id"])].copy()
+    r["first"] = r["rank"] == 1
+    parts = []
+    for by in (["family", "aggregation"], ["family"], ["aggregation"], []):
+        g = r.groupby(["player_id", *by], observed=True)["first"].agg(["size", "sum"])
+        g = g.reset_index().rename(columns={"size": "n_specs", "sum": "n_first"})
+        for d in ("family", "aggregation"):
+            if d not in by:
+                g[d] = "all"
+        parts.append(g)
+    out = pd.concat(parts, ignore_index=True)
+    out["share_first"] = out["n_first"] / out["n_specs"]
+    out["m8_p_first"] = out["player_id"].map(top.set_index("player_id")["p_first"])
+    out.insert(1, "player", out["player_id"].map(names()))
+    order = {pid: i for i, pid in enumerate(top["player_id"])}
+    out["_o"] = out["player_id"].map(order)
+    out = out.sort_values(["_o", "family", "aggregation"]).drop(columns="_o")
+    cols = ["player_id", "player", "m8_p_first", "family", "aggregation", "n_specs",
+            "n_first", "share_first"]  # fmt: skip
+    return out[cols]
 
 
 def stage_synthesis() -> None:
-    run_synthesis(m4_shares(), M8_DIR, "synthesis", "M8")
+    players = run_synthesis(m4_shares(), M8_DIR, "synthesis", "M8")
+    to_csv(firsts_by_dimension(M5_DIR, players), M8_DIR / "firsts_by_dimension.csv")
+
+
+def stage_synthesis_europe() -> None:
+    """Post hoc, exploratory: league rows outside UEFA dropped, everything else as the
+    primary M5 + M8 (same sigma, omega from this run's weights, U = 4, same seeds)."""
+    run_m5(M5_EU_DIR, europe=True)
+    players = run_synthesis(m4_shares(), M8_EU_DIR, "synthesis", "M8, UEFA leagues only "
+                            "(post hoc, exploratory)", m5_dir=M5_EU_DIR)  # fmt: skip
+    to_csv(firsts_by_dimension(M5_EU_DIR, players), M8_EU_DIR / "firsts_by_dimension.csv")
+    # pool player-seasons that lost minutes
+    full, eu = point_inputs()[0], point_inputs(europe=True)[0]
+    key = ["player_id", "season"]
+    lost = full.groupby(key)["minutes"].sum().to_frame("minutes_primary").join(
+        eu.groupby(key)["minutes"].sum().rename("minutes_europe"), how="left"
+    ).fillna(0.0).reset_index()  # fmt: skip
+    lost = lost[
+        lost["player_id"].isin(pool_ids()) & (lost["minutes_europe"] < lost["minutes_primary"])
+    ]
+    lost.insert(1, "player", lost["player_id"].map(names()))
+    lost["minutes_dropped"] = lost["minutes_primary"] - lost["minutes_europe"]
+    for t in DIMENSIONS["min_minutes"]:
+        lost[f"lost_qualifying_{t}"] = (lost["minutes_primary"] >= t) & (lost["minutes_europe"] < t)
+    to_csv(lost, M8_EU_DIR / "lost_seasons.csv")
+    q900 = lost[lost["lost_qualifying_900"]]
+    p = panel()
+    comps = pd.read_csv(
+        PROCESSED / "panel_player_match.csv.gz", usecols=["competition_id", "scope"]
+    )
+    others = sorted(
+        set(comps.loc[comps["scope"] == "league", "competition_id"]) - set(uefa_leagues())
+    )
+    print(lost.round(0).to_string(), flush=True)
+    record(M8_EU_DIR, {
+        "uefa_leagues": (uefa_leagues(), "League competitions kept (domestic leagues of "
+                         "UEFA member associations, Transfermarkt confederation 'europa')"),
+        "dropped_leagues": (others, "League competitions whose rows were dropped"),
+        "n_rows_dropped": (int(p.non_uefa_league.sum()), "Panel league rows dropped"),
+        "n_pool_players_lost_minutes": (int(lost["player_id"].nunique()), "Pool players with "
+                                        "league minutes outside UEFA"),
+        "pool_players_lost_minutes": (sorted(lost["player"].unique()), "Their names"),
+        "n_pool_players_lost_qualifying_900": (int(q900["player_id"].nunique()), "Pool "
+                                               "players with a season no longer reaching 900"),
+        "lost_qualifying_900": ([f"{r.player} {r.season}" for r in q900.itertuples()],
+                                "Those player-seasons"),
+    })  # fmt: skip
 
 
 def stage_synthesis_bias() -> None:
@@ -1059,6 +1186,7 @@ STAGES: dict[str, tuple[Callable[[], None], Path]] = {
     "multiverse": (stage_multiverse, M5_DIR),
     "synthesis": (stage_synthesis, M8_DIR),
     "synthesis_bias": (stage_synthesis_bias, M8_DIR),
+    "synthesis_europe": (stage_synthesis_europe, M8_EU_DIR),
     "recognition": (stage_recognition, M6_DIR),
     "recovery": (stage_recovery, M9_DIR),
 }
