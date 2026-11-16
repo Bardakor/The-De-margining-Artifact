@@ -20,6 +20,10 @@ Design §5 (M5, M6, M8, M9); pre-registration A1, A11-A14, A16 (i). Stages, in o
   factorial has no league-strength dimension and the context dimension partials out
   own-team Elo, not opposition strength.
 - recognition: M6 on A14's universe and features; H6 by the OLS shares (A1).
+- recognition_curated (post hoc, exploratory): M6 as the primary after applying the curated
+  team-success indicators of paper-unmeasured/data/team_honours.csv (official champions
+  with play-offs, the 2025/26 UCL final, tournaments missing from tm_games, squad lists;
+  rules and sources in team_honours_sources.md); results/players/recognition/curated/.
 - recovery: M9's rank recovery on the real schedule (exploratory).
 
 Outputs: results/players/{multiverse,synthesis,recognition,recovery}/, each with a
@@ -171,6 +175,7 @@ M8_BIAS_DIR = M8_DIR / "bias_corrected"
 M8_EU_DIR = M8_DIR / "europe"
 N_FIRSTS = 8  # players in firsts_by_dimension.csv
 M6_DIR = RESULTS / "recognition"
+M6_CURATED_DIR = M6_DIR / "curated"
 M9_DIR = RESULTS / "recovery"
 
 
@@ -993,6 +998,36 @@ def stage_recognition() -> None:
     to_csv(fin, M6_DIR / "finals.csv")
     to_csv(frame, M6_DIR / "universe.csv")
     print(fin.to_string(), flush=True)
+    run_recognition(frame, counts, M6_DIR, "")
+
+
+def stage_recognition_curated() -> None:
+    """Post hoc, exploratory: M6 as the primary (same blocks, seeds, B) on the universe with
+    the team-success indicators of paper-unmeasured/data/team_honours.csv applied."""
+    frame, counts, _, _ = recognition_frame()
+    honours = pd.read_csv(PAPER / "data" / "team_honours.csv")
+    for h in honours.itertuples():
+        hit = (frame["edition"] == h.edition) & (frame["player"] == h.player_id)
+        if hit.sum() != 1 or frame.loc[hit, h.indicator].iloc[0] != h.computed:
+            raise ValueError(f"team_honours.csv row does not match the universe: {h}")
+        frame.loc[hit, h.indicator] = float(h.curated)
+    to_csv(frame, M6_CURATED_DIR / "universe.csv")
+    run_recognition(frame, counts, M6_CURATED_DIR, " (post hoc, exploratory: curated team "
+                    "honours)")  # fmt: skip
+    changed = honours["indicator"].value_counts().reindex(BLOCKS["team"], fill_value=0)
+    record(
+        M6_CURATED_DIR,
+        {
+            f"changed_{k}": (int(n), f"Indicators changed by team_honours.csv: {k} (post hoc)")
+            for k, n in changed.items()
+        }
+        | {"changed_total": (len(honours), "Indicators changed by team_honours.csv (post hoc)")},
+    )
+
+
+def run_recognition(frame: pd.DataFrame, counts: dict[str, Any], out_dir: Path, label: str) -> None:
+    """M6 fits, B = N_BOOT bootstrap and outputs for ``frame`` in ``out_dir``; ``label`` is
+    appended to every summary description."""
     print(frame.groupby("edition")[["league_title", "ucl_winner", "ucl_finalist",
                                      "intl_winner"]].sum().to_string())  # fmt: skip
     t0 = time.perf_counter()
@@ -1000,11 +1035,11 @@ def stage_recognition() -> None:
     alt = fit_recognition(frame, BLOCKS_PER90)
     boot = bootstrap_shares(frame, BLOCKS, rng("recognition/bootstrap"), n_boot=N_BOOT)
     seconds = time.perf_counter() - t0
-    to_csv(boot, M6_DIR / "bootstrap_shares.csv")
+    to_csv(boot, out_dir / "bootstrap_shares.csv")
     res = fit.residuals.copy()
     res.insert(2, "name", res["player"].map(names()))
     res = res.sort_values("ols_residual", ascending=False)
-    to_csv(res, M6_DIR / "residuals.csv")
+    to_csv(res, out_dir / "residuals.csv")
     q = [(1 - LEVEL) / 2, (1 + LEVEL) / 2]
     ci = {(m, blk): boot.loc[boot["model"] == m, blk].quantile(q).to_numpy()
           for m in ("ols", "pl") for blk in BLOCKS}  # fmt: skip
@@ -1024,9 +1059,9 @@ def stage_recognition() -> None:
     table["ols_hi"] = [ci[("ols", k)][1] for k in table.index]
     table["pl_lo"] = [ci[("pl", k)][0] for k in table.index]
     table["pl_hi"] = [ci[("pl", k)][1] for k in table.index]
-    to_csv(table.rename_axis("block").reset_index(), M6_DIR / "shares.csv")
+    to_csv(table.rename_axis("block").reset_index(), out_dir / "shares.csv")
     betas = pd.DataFrame({"ols": fit.ols_beta, "pl": fit.pl_beta})
-    to_csv(betas.rename_axis("feature").reset_index(), M6_DIR / "coefficients.csv")
+    to_csv(betas.rename_axis("feature").reset_index(), out_dir / "coefficients.csv")
     print(table.round(4).to_string())
     print(
         f"OLS R2 {fit.ols_r2:.3f}, LOEO {fit.ols_cv_r2:.3f}, PL {fit.pl_pseudo_r2:.3f}; "
@@ -1073,7 +1108,7 @@ def stage_recognition() -> None:
     for (m, blk), (lo, hi) in ci.items():
         entries[f"{m}_{blk}_lo"] = (lo, f"90% bootstrap lower bound, {m} {blk}")
         entries[f"{m}_{blk}_hi"] = (hi, f"90% bootstrap upper bound, {m} {blk}")
-    record(M6_DIR, entries)
+    record(out_dir, {k: (v, d + label) for k, (v, d) in entries.items()})
 
 
 # --- M9 -------------------------------------------------------------------------------
@@ -1188,6 +1223,7 @@ STAGES: dict[str, tuple[Callable[[], None], Path]] = {
     "synthesis_bias": (stage_synthesis_bias, M8_DIR),
     "synthesis_europe": (stage_synthesis_europe, M8_EU_DIR),
     "recognition": (stage_recognition, M6_DIR),
+    "recognition_curated": (stage_recognition_curated, M6_CURATED_DIR),
     "recovery": (stage_recovery, M9_DIR),
 }
 
