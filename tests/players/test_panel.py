@@ -195,16 +195,7 @@ def test_toy_panel_build() -> None:
     assert row.loc[(1, 7), "position_group"] == "W"
     assert row.loc[(1, 7), "match_position_group"] == "CF"
     assert row.loc[(2, 8), "position_group"] == "FB"
-    assert pm[panel.ESPN_COLUMNS].isna().all().all() and not pm["espn_linked"].any()
     assert not pm["sb_linked"].any()
-
-
-def test_add_espn() -> None:
-    pm = _toy_panel()
-    espn = pd.DataFrame({"game_id": [1], "player_id": [7], "shots": [4.0], "zxg": [0.9]})
-    out = panel.add_espn(pm, espn).set_index(["game_id", "player_id"])
-    assert out.loc[(1, 7), "shots"] == 4.0 and bool(out.loc[(1, 7), "espn_linked"])
-    assert pd.isna(out.loc[(1, 9), "shots"]) and not bool(out.loc[(1, 9), "espn_linked"])
 
 
 def test_player_season_rates_use_their_own_minutes() -> None:

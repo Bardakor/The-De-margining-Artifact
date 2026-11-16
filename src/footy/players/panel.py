@@ -37,9 +37,8 @@ Assumptions (each stated once here):
 - on_pitch_* sum, over the stints a player was on the pitch, the value for his side and
   for the other side; missing for games without stints. Per-90 rates in the season
   panel divide by the minutes of the rows where that column is not missing.
-- ESPN columns (``ESPN_COLUMNS``) are missing and espn_linked is False until
-  ``add_espn`` merges them. StatsBomb columns carry an ``sb_`` prefix and are missing
-  where no StatsBomb match is linked.
+- StatsBomb columns carry an ``sb_`` prefix and are missing where no StatsBomb match
+  is linked. There are no ESPN columns: that source was withdrawn (A15).
 """
 
 from __future__ import annotations
@@ -80,23 +79,19 @@ SB_TO_TM_POSITION = {
     "Right Center Forward": "Centre-Forward", "Secondary Striker": "Second Striker",
 }  # fmt: skip
 GROUP_ORDER = ("GK", "CB", "FB", "DM", "CM", "AM", "W", "CF")
-ESPN_COLUMNS = [
-    "shots", "shots_on_target", "zxg", "np_zxg", "zxa", "fouls_won", "fouls_committed",
-    "offsides", "penalties_won", "on_pitch_zxg_for", "on_pitch_zxg_against",
-]  # fmt: skip
 SB_COLUMNS = [
     "sb_shots", "sb_shots_on_target", "sb_xg", "sb_np_xg", "sb_xa",
     "on_pitch_sb_xg_for", "on_pitch_sb_xg_against",
 ]  # fmt: skip
 SEASON_COUNTS = [
     "goals", "np_goals", "assists", "penalty_goals", "yellow", "red",
-    "on_pitch_gf", "on_pitch_ga", *SB_COLUMNS, *ESPN_COLUMNS,
+    "on_pitch_gf", "on_pitch_ga", *SB_COLUMNS,
 ]  # fmt: skip
 PANEL_COLUMNS = [
     "game_id", "player_id", "date", "season", "competition_id", "competition_type", "scope",
     "club_id", "position_group", "match_position_group", "started", "minutes", "goals",
     "np_goals", "assists", "penalty_goals", "yellow", "red", "on_pitch_gf", "on_pitch_ga",
-    "team_elo", "opp_elo", "knockout", "sb_linked", *SB_COLUMNS, "espn_linked", *ESPN_COLUMNS,
+    "team_elo", "opp_elo", "knockout", "sb_linked", *SB_COLUMNS,
 ]  # fmt: skip
 APPEARANCE_COLUMNS = [
     "game_id", "player_id", "club_id", "date", "competition_id", "minutes", "goals",
@@ -459,30 +454,13 @@ def player_match(
     out = out.merge(sb_columns, on=["game_id", "player_id"], how="left")
     out[SB_COLUMNS] = out[SB_COLUMNS].astype(float)
     out["sb_linked"] = out["sb_xg"].notna()
-    out["espn_linked"] = False
-    for column in ESPN_COLUMNS:
-        out[column] = np.nan
     out["started"] = out["started"].astype("boolean")
     return out[PANEL_COLUMNS].sort_values(["date", "game_id", "player_id"]).reset_index(drop=True)
 
 
-def add_espn(panel: pd.DataFrame, espn: pd.DataFrame) -> pd.DataFrame:
-    """Merge ESPN-derived columns once they are allowed: ``espn`` holds game_id,
-    player_id and any of ``ESPN_COLUMNS`` (on_pitch_zxg_* via ``assign_to_stints`` and
-    ``on_pitch_totals``); matched rows get espn_linked True."""
-    columns = [c for c in ESPN_COLUMNS if c in espn.columns]
-    keyed = espn.set_index(["game_id", "player_id"])[columns]
-    keys = pd.MultiIndex.from_frame(panel[["game_id", "player_id"]])
-    out = panel.copy()
-    for column in columns:
-        out[column] = keyed[column].reindex(keys).to_numpy()
-    out["espn_linked"] = keys.isin(keyed.index)
-    return out
-
-
 def player_season(panel: pd.DataFrame) -> pd.DataFrame:
     """panel_player_season: per (player_id, season, scope), plus scope ``all``: games,
-    starts, minutes, the minutes behind each column family (stints, sb, espn), sums of
+    starts, minutes, the minutes behind each column family (stints, sb), sums of
     ``SEASON_COUNTS`` (missing when no row has the column) and their per-90 rates."""
     long = pd.concat([panel, panel.assign(scope="all")], ignore_index=True)
     keys = ["player_id", "season", "scope"]
@@ -500,8 +478,8 @@ def player_season(panel: pd.DataFrame) -> pd.DataFrame:
         )
         out[column] = total
         out[f"{column}_p90"] = 90.0 * total / behind.where(behind > 0)
-        if column in ("on_pitch_gf", "sb_xg", "zxg"):
-            family = {"on_pitch_gf": "stints", "sb_xg": "sb", "zxg": "espn"}[column]
+        if column in ("on_pitch_gf", "sb_xg"):
+            family = {"on_pitch_gf": "stints", "sb_xg": "sb"}[column]
             out[f"minutes_{family}"] = behind.fillna(0).astype(int)
     return out.reset_index()
 
