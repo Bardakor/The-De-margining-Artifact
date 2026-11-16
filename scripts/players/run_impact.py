@@ -668,7 +668,8 @@ def stage_attribution() -> None:
     d, lam_ = design(), lam()
     pos = data().positions
     frames = []
-    for kind, groups in (("groups", pos), ("pools", pos.map(POOLS))):
+    every = pd.Series("ALL", index=pos.index)
+    for kind, groups in (("groups", pos), ("pools", pos.map(POOLS)), ("all", every)):
         for halves in (False, True):
             a = attribution_factor(
                 d, lam_, rng(f"attribution/{kind}/{halves}"), min_minutes=MIN_MINUTES,

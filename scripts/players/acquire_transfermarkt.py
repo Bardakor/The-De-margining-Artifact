@@ -114,6 +114,9 @@ def main() -> None:
 
     print("\n[4] Elo (squared error of expected home score):")
     print(t["elo_report"].to_string(index=False))
+    elo_path = RESULTS / "elo" / "report.csv"
+    elo_path.parent.mkdir(parents=True, exist_ok=True)
+    t["elo_report"].to_csv(elo_path, index=False)
 
     coverage = t["coverage"]
     path = RESULTS / "coverage" / "tm_coverage.csv"
