@@ -220,7 +220,12 @@ def macros_data() -> dict[str, str]:
     seasons = csv(PROCESSED / "panel_player_season.csv.gz", usecols=["scope", "minutes"])
     with_stints = set(tm_stints["game_id"]) | set(sb_stints["game_id"])
     qualifying = (seasons["scope"] == "all") & (seasons["minutes"] >= 900)
+    elo = csv(RESULTS / "elo" / "report.csv").set_index("pool")
     return {
+        "EloKClub": count(elo.loc["club", "k"]),
+        "EloHClub": count(elo.loc["club", "home_advantage"]),
+        "EloKNational": count(elo.loc["national", "k"]),
+        "EloHNational": count(elo.loc["national", "home_advantage"]),
         "NGames": count(cov["games"].sum()),
         "NGamesWithStints": count(len(with_stints)),
         "NPlayersPanel": count(panel["player_id"].nunique()),
