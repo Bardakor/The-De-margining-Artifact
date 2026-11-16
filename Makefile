@@ -51,7 +51,7 @@ players-results:
 # Numbers, tables and figures come from results/players/, never typed into the paper.
 paper2:
 	uv run python scripts/players/make_paper2.py
-	latexmk -pdf -outdir=build -cd paper-unmeasured/main.tex
+	latexmk -pdf -g -halt-on-error -interaction=nonstopmode -outdir=build -cd paper-unmeasured/main.tex
 	cp paper-unmeasured/build/main.pdf The-Unmeasured-Remainder.pdf
 
 clean:
