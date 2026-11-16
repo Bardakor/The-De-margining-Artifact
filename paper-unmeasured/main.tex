@@ -34,6 +34,9 @@
 %     tab-recovery               7.9  M9 recovery by planted top-two gap
 %     tab-v1                     7.10 exploratory comparison of V1 ranks with M8
 %     tab-verdicts               7.11 H1-H8: statistic, threshold, verdict
+%     tab-robustness             7.12 post hoc: M8 primary / bias-corrected / European leagues; H3 assortative (raw interval)
+%     tab-firsts-by-dimension    7.12 post hoc: share of M5 specs ranking each M8 leader first, by family and aggregation
+%     tab-recognition-curated    7.12 post hoc: M6 with curated team honours (pending run)
 %     tab-pool                   App. C  the pool: name, group, source, Transfermarkt match
 %   Figures
 %     fig-reliability            7.1  M1 reliability against minutes, fitted m/(m+k)
@@ -178,21 +181,28 @@ definitions, match-bootstrap replicates and draws of the unmeasured part. A
 recovery study on the real schedule bounds what any method could decide from
 data of this size.
 
-The outfield player with the highest probability of being ranked first is
-\TopPlayerName{}, at \TopPlayerPFirst{} (H2: \VerdictHTwo{}). The share of the
-pool's outfield pairwise orderings that the data decide at the 0.9 level is
-\SharePairsDecided{} (H1: \VerdictHOne{}). The disattenuated share of on-pitch
-impact that the statistics cannot see is \ShareHigh{} for centre-backs and
-defensive midfielders and \ShareLow{} for centre-forwards and wingers; the
-90\% interval of the difference is [\ShareContrastParamLo, \ShareContrastParamHi]
-(H3: \VerdictHThree{}). Across the leading players, specification variance is
-\HFourRatio{} times sampling variance on average (H4: \VerdictHFour{}).
-H5: \VerdictHFive{}. H6: \VerdictHSix{}. H7: \VerdictHSeven{}. H8 is not
-tested, because the coarse shot data it needed were withdrawn over their
-terms of use.
-% RESULTS-PROSE: one or two sentences saying what the verdicts mean together:
-% whether the 2020s have a decidable best player, and which source of
-% uncertainty (sampling, specification, unmeasured) dominates the answer.
+The data do not name a best player. The outfield player most likely to rank
+first is \TopPlayerName{}, at \TopPlayerPFirst{} (H2: \VerdictHTwo{}), and his
+lead rests on adjusted plus-minus: box-score definitions of ``best'' rank
+other players first. Only \SharePairsDecided{} of the pool's outfield pairwise
+orderings are decided at the 0.9 level (H1: \VerdictHOne{}), almost none of
+them among the leaders. Across the leading players, the definition of
+``best'' moves ranks more than sampling noise, \HFourRatio{} times on average
+(H4: \VerdictHFour{}), and the decisive choice is what a score is built from,
+not how seasons are combined (H5: \VerdictHFive{}). The disattenuated share of
+on-pitch impact that the statistics cannot see is \ShareHigh{} for centre-backs
+and defensive midfielders; for attackers the correction over-corrects and the
+share is clipped to \ShareLow{}. The 90\% interval of the difference is
+[\ShareContrastParamLo, \ShareContrastParamHi] (H3: \VerdictHThree{}), and its
+sign survives a post-hoc model in which quality clusters on teams. The
+Ballon d'Or vote follows individual statistics more than team success in our
+data (H6: \VerdictHSix{}), a result open to gaps in the records of team
+honours. Knockout over-performance is too noisy for its persistence test to
+refute anything (H7: \VerdictHSeven{}), and H8 is not tested, because the
+coarse shot data it needed were withdrawn over their terms of use. Even with a
+planted best player and the right model, data of this size identify him in
+\RecoveryRapmFirst{} of simulated leagues. A ranking of the best player of the
+2020s is a statement about the definition chosen more than about the players.
 \end{abstract}
 \clearpage
 
@@ -698,8 +708,9 @@ gives the coverage of every competition-season.
 
 \begin{table}[htbp]
   \centering
-  \caption{Coverage of the panel per competition-season: games, games with
-  stints, player-games, and player-games known only from stints.}
+  \caption{Coverage of the panel per competition: the study seasons it spans
+  and their number, games, games with stints, player-games, and Transfermarkt
+  player-games known only from stints.}
   \label{tab:coverage}
   \small
   \IfFileExists{generated/tab-coverage.tex}{\input{generated/tab-coverage.tex}}{\pendingtable{tab-coverage}}
@@ -760,18 +771,21 @@ The taxonomy, the descriptive structure of the metrics (M2), the visibility of
 on-ball value (M7a), the recovery study (M9) and the comparison with V1 were
 not pre-registered. They are exploratory and are labelled as such.
 
-Fifteen amendments followed (Table~\ref{tab:amendments}). Each was committed
-before any real-data analysis it concerns had run, with the commit as its
-timestamp. A9 and A10 were prompted by synthetic leagues and by the M7a
-StatsBomb analysis, which is exploratory and outside the hypotheses. A15
-records the withdrawal of a candidate data source before any analysis used it.
-Where the amendments and the original text differ, this paper follows the
-amendments.
+Seventeen amendments followed (Table~\ref{tab:amendments}), each with its
+commit as its timestamp. A1 to A15 and A16 (i) were committed before any
+real-data analysis they concern had run. A9 and A10 were prompted by synthetic
+leagues and by the M7a StatsBomb analysis, which is exploratory and outside the
+hypotheses. A15 records the withdrawal of a candidate data source before any
+analysis used it. A16 (ii), A16 (iii) and A17 were recorded after the analyses
+they concern (M2's team-share interval and H7's test level) had run; they are
+not pre-registered, and the paper labels them so where they apply. Where the
+amendments and the original text differ, this paper follows the amendments.
 
 {\small
 \setlength{\tabcolsep}{4pt}
 \begin{longtable}{@{}L{0.7cm}L{8.4cm}L{5.5cm}@{}}
-\caption{Amendments to the pre-registration, one line each, with the reason.}
+\caption{Amendments to the pre-registration, one line each, with the reason.
+A16 (ii), A16 (iii) and A17 were recorded after the analyses they concern.}
 \label{tab:amendments}\\
 \toprule
 & Change & Why \\
@@ -798,6 +812,8 @@ A12 & M3 primary specification: every stint; per competition-season terms; own c
 A13 & Implementation choices: M5's families and V1-like weights, M8's unmeasured draw and replicates, the A9 calibration, and the recognition view. & A9, A11 and M8 left them open. \\
 A14 & M6's universe (outfield pool players with minutes in the voted season), edition-to-season mapping, and the features of each block. & Fixed before any M6 fit; the design named the blocks but not their contents. \\
 A15 & ESPN withdrawn; H8 not tested; A4's secondary zone-xG metric and A11's ESPN-based secondary analyses not run. & Its terms of use forbid automated extraction. \\
+A16 & (i) Empirical-Bayes shrinkage in M5 uses each metric's stabilisation constant within the position group. (ii) After M2 ran: team-ICC interval changed to the basic bootstrap interval. (iii) After H7 was computed: one-sided Pearson test at $\alpha = 0.05$ and simulated power recorded. & (i) Shrinkage is toward the group mean. (ii) A shift seen on synthetic data. (iii) A5 left both open. \\
+A17 & After M2 ran: A16 (ii) withdrawn; the team-ICC interval is the standard bootstrap interval, estimate $\pm 1.645$ bootstrap SDs, reported as approximate. & On synthetic panels the basic interval mirrored the bootstrap's shift upward; the standard interval covered better. \\
 \end{longtable}
 }
 
@@ -876,10 +892,16 @@ within the unit.
 \label{sec:m2}
 
 M2 is exploratory. It asks how many independent things the metrics measure,
-and how much a weighted composite counts twice. Its input is the player-season
-panel (at least 900 minutes) with the per-90 metrics available for every match
-(A11), team Elo, league-season and club. Metrics are standardised, so the
-analysis works on the correlation matrix $R$.
+and how much a weighted composite counts twice. Its input is the outfield
+player-seasons of at least 900 minutes over all competitions, with seven per-90
+metrics available for every match (A11): goals, non-penalty goals, penalty
+goals, assists, yellow cards, red cards and raw on-pitch goal difference. Each
+player-season also carries its team Elo (the minutes-weighted mean of his
+club's pre-match Elo), its league-season (his main domestic league) and its
+main club. Metrics are standardised, so the analysis works on the correlation
+matrix $R$. Goals are exactly non-penalty goals plus penalty goals, so the
+eigenvalue analyses below use the six other metrics; correlations, clustering,
+the team share and the composite keep all seven.
 
 \paragraph{Correlation and partial correlation.}
 Spearman correlations describe raw dependence. Partial correlations control
@@ -937,7 +959,11 @@ cells, $S'$ strata and cell sizes $n_c$,
 where $\mathrm{MS}_B$ is the mean square of cell means around their stratum
 mean and $\mathrm{MS}_W$ the within-cell mean square. It is an upper bound on
 the team's causal share, because clubs that recruit similar players raise it
-too. Intervals come from a bootstrap over clubs.
+too. The interval is the standard bootstrap interval, the estimate $\pm 1.645$
+bootstrap standard deviations over 1,000 resamples of clubs (A17). This
+replaced the percentile interval after M2 had run, because on synthetic panels
+the club bootstrap sits below an about unbiased estimate; on the real data that
+offset is larger, so the intervals are approximate.
 
 \paragraph{Double counting in a composite.}
 A composite $C = \sum_k w_k z_k$ of z-scored metrics has $\Var(C) = w^\top R w$
@@ -953,10 +979,12 @@ with $v_1$ the first eigenvector of $R$. With $R = I$, $e_k = c_k$ and the
 inflation is 1. A metric entered twice under two names (correlation 1) raises
 the inflation and its effective share above what its weights claim; this is
 the mechanism of \citet{paruolo2013voodoo}. We apply the diagnostics to a
-V1-like composite with the A13 weights: goals 0.30, non-penalty goals 0.15,
-assists 0.25, on-pitch goal difference 0.20, RAPM offence 0.05 and RAPM defence
-0.05. These are a stylised imitation of V1's emphasis, not V1's weights, which
-cannot be recovered.
+V1-like composite. A13 (i) gives its weights: goals 0.30, non-penalty goals
+0.15, assists 0.25, on-pitch goal difference 0.20, RAPM offence 0.05 and RAPM
+defence 0.05. M2's metrics do not include RAPM, so M2 uses the four other
+weights, renormalised to sum to one; the diagnostics do not depend on the scale
+of $w$. These weights are a stylised imitation of V1's emphasis, not V1's
+weights, which cannot be recovered.
 
 % ---------------------------------------------------------------------------
 \subsection{M3: on-pitch impact}
@@ -1016,8 +1044,9 @@ games \citep{efron1979bootstrap}; each replicate is also fitted on two random
 halves of its games, so that M4 can re-estimate reliabilities inside it.
 Split-half reliability $\rho^{\mathrm{SH}}_g$ fits the model on two random
 halves of the games at the same $\lambda$, correlates the two estimates across
-the players of group $g$ with at least 900 minutes in both halves, averages
-over splits and steps up with Equation~\eqref{eq:sb}.
+the players of group $g$ with own columns and at least 450 minutes in each
+half, averages over 20 random game splits and steps up with
+Equation~\eqref{eq:sb}.
 
 \paragraph{Attribution factor.}
 Split-half reliability measures stability, not attribution. Ridge lets
@@ -1198,7 +1227,11 @@ averaged with weights equal to the competition weight times minutes;
 (3) empirical-Bayes shrinkage \citep{efron1975stein} replaces a rate $x$ with
 $\bar x_g + \frac{m}{m+k}(x - \bar x_g)$, where $m$ is the season's minutes,
 $\bar x_g$ the minutes-weighted mean of the player's group and $k$ the metric's
-stabilisation constant from M1 (Equation~\eqref{eq:stab});
+stabilisation constant from M1 (Equation~\eqref{eq:stab}) within that position
+group (A16 (i), fixed before M5 ran: the outfield-pooled $k$ would count
+differences between positions as signal); M1 has no goalkeeper constant for
+goals, non-penalty goals and assists, so these are shrunk fully to the
+goalkeeper mean;
 (4) Elo partialling subtracts, within each group, the metric's OLS slope on
 team Elo times the centred Elo;
 (5) position normalisation is a z-score over the segment, a z-score within the
@@ -1277,7 +1310,10 @@ candidate has four blocks of features, all for that season over every
 competition:
 \begin{itemize}
   \item \emph{individual statistics}: goals, assists, minutes and non-penalty
-    goals per 90;
+    goals per 90 (A14's wording). We read it as season totals of goals and
+    assists, minutes, and the per-90 rate of non-penalty goals; the other
+    reading, per-90 goals, assists and non-penalty goals plus minutes, is fitted
+    as a post-hoc robustness check;
   \item \emph{impact}: per-season RAPM offence and defence;
   \item \emph{team success}: indicators for a league title (first in the final
     table computed from the games, with 3, 1 and 0 points, then goal
@@ -1287,8 +1323,15 @@ competition:
     with 2019 for 2021 (A3), and the log market value at the last valuation on
     or before 30 June of the edition year.
 \end{itemize}
-Players without a per-season RAPM estimate are dropped and counted. Market
-values are crowd estimates, not facts \citep{herm2014crowd}.
+A player counts for a club in a competition-season if he played at least one
+minute for it there. No league title is awarded for the unfinished 2026 season
+of calendar-year leagues. Finals are the games labelled ``Final'' in the data;
+a drawn final is decided by the shoot-out where StatsBomb has the match. Every
+national-team competition with a final in the data counts as a senior
+tournament, and a final missing from the data gives no indicator.
+Candidate-editions without a per-season RAPM estimate, or without a market
+value on or before 30 June, are dropped and counted. Market values are crowd
+estimates, not facts \citep{herm2014crowd}.
 
 \paragraph{OLS.}
 With $y_{ie} = \log(1 + \text{points}_{ie})$, edition fixed effects $\gamma_e$ and
@@ -1372,7 +1415,8 @@ Both are lower bounds on what the best linear box-score summary could see.
 For player $i$ in period $p \in \{1, 2\}$ (2020-01-01 to 2022-12-31 and
 2023-01-01 to 2026-08-31), let $x^{\mathrm{KO}}_{ip}$ and $x^{\mathrm{N}}_{ip}$ be
 his non-penalty goals plus assists per 90 (A4) in knockout and non-knockout
-matches, $d^{\mathrm{KO}}_{ip}$ and $d^{\mathrm{N}}_{ip}$ the minutes, and
+matches of every competition, $d^{\mathrm{KO}}_{ip}$ and $d^{\mathrm{N}}_{ip}$
+the minutes, and
 $\bar x_{ip}$ his pooled rate. His over-performance is the difference divided by
 its Poisson standard error under the null of one common rate:
 \begin{equation}
@@ -1380,8 +1424,13 @@ its Poisson standard error under the null of one common rate:
   {\sqrt{90\, \bar x_{ip}\big(1/d^{\mathrm{KO}}_{ip} + 1/d^{\mathrm N}_{ip}\big)}} .
   \label{eq:overperf}
 \end{equation}
-A player enters if, in both periods, he has at least 360 knockout minutes,
-some non-knockout minutes and a non-zero pooled rate (A4). Persistence is
+A match is a knockout if its round is neither a league matchday nor a group
+stage (the league phase of UEFA competitions from 2024 counts as a group), so
+domestic cups, super cups and qualifying rounds count as knockouts alongside
+the later rounds of continental and international tournaments. Only outfield
+players are analysed. A player enters if, in both periods, he has at least 360
+knockout minutes, some non-knockout minutes and a non-zero pooled rate (A4).
+Persistence is
 $r = \corr(Z_{i1}, Z_{i2})$ across entering players, with a percentile
 bootstrap interval over players and a one-sided permutation p-value
 $(1 + \#\{r_{\text{perm}} \ge r\}) / (n_{\text{perm}} + 1)$, since a trait can only
@@ -1392,8 +1441,12 @@ a correlation near zero there.
 \paragraph{The A5 power rule.}
 A low $r$ means little if $Z$ is mostly noise, because unreliability
 attenuates any true correlation \citep{spearman1904proof}. Let $R_1$ and $R_2$
-be the within-period split-half reliabilities of $Z$ (M1's definition applied to
-$Z$). A true correlation of 0.3 would be observed, in expectation, as
+be the within-period split-half reliabilities of $Z$: in each of 200 random
+splits, a player's knockout and non-knockout matches of the period are dealt
+alternately into two halves, $Z$ is recomputed on each half, and the
+correlation of the halves across players is stepped up with
+Equation~\eqref{eq:sb}. A true correlation of 0.3 would be observed, in
+expectation, as
 \begin{equation}
   \rho_{\text{obs}} = 0.3\,\sqrt{R_1 R_2},
   \qquad
@@ -1401,13 +1454,16 @@ $Z$). A true correlation of 0.3 would be observed, in expectation, as
   \label{eq:power}
 \end{equation}
 with $n$ the number of entering players, $\Phi$ the standard normal distribution
-function and the Fisher transformation of the correlation. The one-sided level
-is $\alpha$ = \HSevenAlpha. H7 is concluded (``not a stable trait'') only if
-$r < 0.2$ and the power is at least 0.8; otherwise it is reported as
-inconclusive (A5).
-% OPEN: A5 fixes neither the level alpha nor how power is computed. The
-% Fisher-z approximation above, and the value of \HSevenAlpha, must be
-% confirmed (or replaced) by the run script or an amendment before M7b runs.
+function, $z_{1-\alpha}$ its $1-\alpha$ quantile and $\operatorname{artanh}$ the
+Fisher transformation. A5 left the test level and the power method open. The
+analysis used a one-sided Pearson test at $\alpha$ = \HSevenAlpha{} and
+computed power by simulation: 20,000 samples of $n$ players whose observed
+scores have the estimated reliabilities and whose true scores correlate at 0.3,
+counting the samples in which the test rejects. The Fisher approximation in
+Equation~\eqref{eq:power} gives nearly the same value. Both choices were
+recorded after H7 had been computed (A16 (iii)) and are not pre-registered.
+H7 is concluded (``not a stable trait'') only if $r < 0.2$ and the power is at
+least 0.8; otherwise it is reported as inconclusive (A5).
 
 \paragraph{H8.}
 H8 is not tested (A6, A11, A15). Its test compares a coarse, zone-based xG
@@ -1597,9 +1653,19 @@ in bins of $\Delta_{12}$ with equal numbers of simulations.
 \section{Results}
 \label{sec:results}
 
-% RESULTS-PROSE: one opening paragraph saying, in plain terms, what the section
-% finds before the module-by-module detail (decidability, the size of the
-% unmeasured share, the dominant source of rank variance).
+The data do not name a best player. Under the mixture of definitions, samples
+and unmeasured draws (M8), the outfield player most likely to rank first is
+\TopPlayerName{}, with a probability of \TopPlayerPFirst{}, and only
+\SharePairsDecided{} of the outfield pool's pairwise orderings are decided. What moves a
+player's rank most is the definition of ``best'', and within the definition it
+is the kind of evidence a score is built from (box scores, on-pitch goal
+difference or RAPM), not the way seasons are combined. On-pitch impact is far
+less visible to the box score for centre-backs and defensive midfielders than
+for attackers, although the correction behind that estimate over-corrects for
+attackers. In our data the Ballon d'Or vote follows individual statistics more
+than team success, a result that rests on incomplete records of team honours.
+The subsections below follow the modules; Section~\ref{sec:r-posthoc} collects
+the analyses added after the results were seen, each with its motivation.
 
 % ---------------------------------------------------------------------------
 \subsection{M1: sampling noise}
@@ -1613,16 +1679,28 @@ goal difference \RelOnPitchGd{}. The stabilisation constant of non-penalty goals
 plus assists is $k$ = \StabKNpga{} minutes, so its reliability reaches 0.7 at
 \StabSevenNpga{} minutes; for on-pitch goal difference, $k$ = \StabKOnPitchGd{}
 minutes (Table~\ref{tab:reliability}, Figure~\ref{fig:reliability}).
-% RESULTS-PROSE: which metrics stabilise within a season and which do not;
-% what the minutes to 0.7 imply for a single-season ranking; how this sets the
-% sampling layer of M8.
+
+Scoring rates stabilise fastest. Assists stabilise more slowly than goals,
+yellow cards more slowly still, and red cards carry almost no stable signal at
+season level. A regular starter's season is therefore enough to rank scoring
+rates roughly, but not to separate two players whose true rates are close.
+These reliabilities pool every outfield position, and part of the stable
+variance they measure is the difference between positions. Within a position
+group, where true scoring rates differ less, goals, non-penalty goals and
+assists are much less reliable; on-pitch goal difference and cards are not.
+This is why M5 shrinks toward the group mean with within-group constants
+(A16 (i)). The
+StatsBomb rows of Table~\ref{tab:reliability} are exploratory: few
+player-seasons reach the floor on StatsBomb matches, almost all of them from
+four club teams, so they are not comparable with the Transfermarkt rows.
 
 \begin{table}[htbp]
   \centering
   \caption{Split-half reliability (Spearman--Brown, mean and SD over 200
-  splits) of each per-90 metric for player-seasons of at least 900 minutes,
-  with its stabilisation constant $k$ and the minutes at which reliability
-  reaches 0.5 and 0.7.}
+  splits) of each per-90 metric for outfield player-seasons of at least 900
+  minutes, with the mean number of player-seasons per split, the stabilisation
+  constant $k$ (minutes to reliability 0.5) and the minutes to reliability 0.7.
+  The last two rows use StatsBomb-linked matches only and are exploratory.}
   \label{tab:reliability}
   \small
   \IfFileExists{generated/tab-reliability.tex}{\input{generated/tab-reliability.tex}}{\pendingtable{tab-reliability}}
@@ -1643,27 +1721,44 @@ minutes (Table~\ref{tab:reliability}, Figure~\ref{fig:reliability}).
 \subsection{M2: structure and double counting}
 \label{sec:r-m2}
 
-This subsection is exploratory. Over \NMetricsStructure{} per-90 metrics,
-parallel analysis retains \NComponentsRetained{} components; the participation
-ratio is \ParticipationRatio{} and the entropy effective number
-\EntropyEffective{} (Figure~\ref{fig:scree}). Goals and non-penalty goals have a
-Spearman correlation of \CorrGoalsNpGoals{}. The team ICC is \IccNpga{} for
-non-penalty goals plus assists and \IccOnPitchGd{} for on-pitch goal difference
-(Table~\ref{tab:icc}). In the V1-like composite, the variance inflation is
-\VOneInflation{} and the first principal component carries \VOnePcOneShare{} of
-the variance; goals and non-penalty goals together claim \VOneGoalsClaimed{} of
-the variance and carry \VOneGoalsEffective{} (Table~\ref{tab:composite}).
-% RESULTS-PROSE: how many independent things the metrics measure; which
-% metrics are largely team properties; how far the V1-like composite's
-% effective shares depart from its claimed ones, and what that says about V1's
-% admitted double counting.
+This subsection is exploratory. The number of components that parallel
+analysis retains among the \NMetricsStructure{} non-redundant metrics is
+\NComponentsRetained{}; the participation ratio is \ParticipationRatio{} and the
+entropy effective number \EntropyEffective{}, against a maximum of
+\NMetricsStructure{} (Figure~\ref{fig:scree}). The metrics are therefore close
+to independent: a box score of this kind measures several different things
+weakly, not one thing many times. The strong dependence is the one built into
+the definitions. Goals and non-penalty goals have a Spearman correlation of
+\CorrGoalsNpGoals{}, because most goals are not penalties, and any score that
+weights both counts scoring twice (Figure~\ref{fig:corr-heatmap}).
+
+The V1-like composite does exactly that. Its variance is \VOneInflation{} times
+what its weights imply under independence, and the first principal component
+carries \VOnePcOneShare{} of it: the composite is, in effect, one scoring
+dimension. Goals and non-penalty goals together claim \VOneGoalsClaimed{} of its
+variance and carry \VOneGoalsEffective{} (Table~\ref{tab:composite}). The
+double counting that V1's author conceded is real in kind; in our imitation it
+shifts the shares modestly and concentrates the composite on scoring.
+
+The team ICC is \IccNpGoals{} for non-penalty goals, \IccAssists{} for assists
+and \IccOnPitchGd{} for on-pitch goal difference (Table~\ref{tab:icc}). Raw
+on-pitch goal difference, the plus-minus that public sites show, is mostly a
+property of the team; this is why M3 adjusts it for teammates and opponents.
+The near-zero values for scoring rates do not mean that a striker's output is
+independent of his team. Within a club, a centre-back and a striker differ far
+more than clubs do, so ICC(1) over all outfield positions is small for any
+metric that varies mostly by position. The penalty-goal ICC is negative, which
+is consistent with each club having one designated taker. The intervals are
+approximate (A17): the club bootstrap is offset from the estimate on the real
+data, by more than on the synthetic panels that motivated the standard
+interval.
 
 \begin{figure}[htbp]
   \centering
   \IfFileExists{generated/fig-scree.pdf}{\includegraphics[width=0.75\linewidth]{generated/fig-scree.pdf}}{\pendingfigure{fig-scree}}
-  \caption{Eigenvalues of the correlation matrix of the per-90 metrics (points)
-  against the 95th percentile of eigenvalues from column-permuted data
-  (parallel analysis, line).}
+  \caption{Eigenvalues of the correlation matrix of the six non-redundant
+  per-90 metrics (points) against the 95th percentile of eigenvalues from
+  column-permuted data (parallel analysis, line).}
   \label{fig:scree}
 \end{figure}
 
@@ -1671,15 +1766,16 @@ the variance and carry \VOneGoalsEffective{} (Table~\ref{tab:composite}).
   \centering
   \IfFileExists{generated/fig-corr-heatmap.pdf}{\includegraphics[width=\linewidth]{generated/fig-corr-heatmap.pdf}}{\pendingfigure{fig-corr-heatmap}}
   \caption{Spearman correlations (left) and partial correlations controlling
-  team Elo and league-season (right) of the per-90 metrics, in the leaf order
-  of average-linkage clustering on $1 - |\rho|$.}
+  team Elo and league-season (right) of the seven per-90 metrics, in the leaf
+  order of average-linkage clustering on $1 - |\rho|$.}
   \label{fig:corr-heatmap}
 \end{figure}
 
 \begin{table}[htbp]
   \centering
-  \caption{Team ICC(1) of each metric, clubs within league-season, with 95\%
-  club-bootstrap intervals.}
+  \caption{Team ICC(1) of each metric, clubs within league-season, with the
+  approximate 90\% standard bootstrap interval (estimate $\pm 1.645$
+  club-bootstrap SDs; A17).}
   \label{tab:icc}
   \small
   \IfFileExists{generated/tab-icc.tex}{\input{generated/tab-icc.tex}}{\pendingtable{tab-icc}}
@@ -1687,8 +1783,9 @@ the variance and carry \VOneGoalsEffective{} (Table~\ref{tab:composite}).
 
 \begin{table}[htbp]
   \centering
-  \caption{Double-counting diagnostics of the V1-like composite: per metric,
-  its weight, claimed share $c_k$ and effective share $e_k$; overall, the
+  \caption{Double-counting diagnostics of the V1-like composite over its four
+  non-RAPM metrics, with the A13 (i) weights renormalised to sum to one: per
+  metric, its weight, claimed share $c_k$ and effective share $e_k$; overall, the
   variance inflation and the first principal component's share.}
   \label{tab:composite}
   \small
@@ -1707,20 +1804,31 @@ of RAPM is \RelRapmOffence{} for offence, \RelRapmDefence{} for defence and
 \RelRapmTotal{} for the total. The attribution factor of the total is
 \AttrFullTotal{} on full data and \AttrHalfTotal{} on half data, so the
 attributed reliability of RAPM total is \RelRapmTotalAttributed{}
-(Table~\ref{tab:rapm-reliability}). \NPoolRapmExcludesZero{} outfield pool
-players have a 90\% interval of RAPM total that excludes zero
-(Figure~\ref{fig:rapm-pool}). The mean home term is \HomeTermEmpty{} goals per
-90 in 2019/20 and 2020/21 and \HomeTermOther{} in the other seasons. The
-with-Elo fit has a rank correlation of \RapmEloSpearman{} with the primary fit.
-% RESULTS-PROSE: how precisely RAPM separates players; how much of split-half
-% reliability is teammate leakage (attribution); whether the home terms show the
-% empty-stadium drop; whether the Elo covariate changes the ordering.
+(Table~\ref{tab:rapm-reliability}).
+
+RAPM is stable but poorly attributed. In every group, less than half of its
+stable variance belongs to the player's own effect when effects are planted
+independently of who plays with whom; the rest is teammates and opponents
+leaking through the ridge. Section~\ref{sec:r-posthoc} (a) shows that this
+factor depends strongly on how quality is spread across teammates.
+
+\NPoolRapmExcludesZero{} of the \NPoolOutfield{} outfield pool players have a
+90\% interval of RAPM total that excludes zero (Figure~\ref{fig:rapm-pool}).
+That says they are good, not that they can be told apart: the pool was
+selected for quality, and the intervals of the leading players overlap.
+\TopPlayerName{} has the highest pooled RAPM total in the outfield pool,
+\PoolTopRapm{} goals per 90 (bootstrap SE \PoolTopRapmSe{}). In domestic
+leagues the home term is \HomeTermEmpty{} goals per 90 in 2019/20 and 2020/21
+and \HomeTermOther{} in the later seasons, the drop that the empty stadiums
+predict \citep{fischer2021ghost,bryson2021crowd}. Adding Elo as a covariate
+barely reorders players: the rank correlation between the two fits is
+\RapmEloSpearman{}.
 
 \begin{table}[htbp]
   \centering
   \caption{Split-half reliability of RAPM offence, defence and total per
-  position group, the full- and half-data attribution factors, and the
-  attributed reliability.}
+  position group (20 game splits), the full- and half-data attribution factors
+  of the total, and the attributed reliability.}
   \label{tab:rapm-reliability}
   \small
   \IfFileExists{generated/tab-rapm-reliability.tex}{\input{generated/tab-rapm-reliability.tex}}{\pendingtable{tab-rapm-reliability}}
@@ -1730,8 +1838,9 @@ with-Elo fit has a rank correlation of \RapmEloSpearman{} with the primary fit.
   \centering
   \IfFileExists{generated/fig-rapm-pool.pdf}{\includegraphics[width=\linewidth]{generated/fig-rapm-pool.pdf}}{\pendingfigure{fig-rapm-pool}}
   \caption{Pooled RAPM total (goals per 90) of each outfield pool player with
-  its 90\% game-bootstrap interval ($B = 200$), ordered by estimate and coloured
-  by position group.}
+  its 90\% game-bootstrap interval ($B = 200$), ordered by estimate; colour
+  marks the line (defence, midfield, attack) and the marker the position
+  group.}
   \label{fig:rapm-pool}
 \end{figure}
 \FloatBarrier
@@ -1741,30 +1850,55 @@ with-Elo fit has a rank correlation of \RapmEloSpearman{} with the primary fit.
 \label{sec:r-m4}
 
 Without correction, the statistics explain between \RTwoFullMin{} and
-\RTwoFullMax{} of the variance of RAPM total across outfield groups, the
-figure comparable with the 22--38\% of \citet{gelade2020events}. With the
-cross-half correction, the unmeasured share is \ShareHigh{} for CB and DM
-pooled and \ShareLow{} for CF and W pooled (Table~\ref{tab:unmeasured},
-Figure~\ref{fig:unmeasured-share}); \NGroupsClipped{} of the eight groups were
-clipped. The H3 contrast is \ShareContrast{} (raw: \ShareContrastRaw{}). Its
-90\% parametric basic interval, which decides H3, is
+\RTwoFullMax{} of the variance of RAPM total across outfield groups, least for
+centre-backs and most for centre-forwards. These raw values are at or below
+the 22--38\% that \citet{gelade2020events} report for richer event statistics.
+Both sides are noisy at half length: the half-length reliability of RAPM is low
+in every group, and that of the statistics' prediction is lowest for
+goalkeepers and centre-backs (Table~\ref{tab:unmeasured}). The correction
+divides by the product of the two, so it is large and sensitive.
+
+With the cross-half correction, the unmeasured share is \ShareHigh{} for
+centre-backs and defensive midfielders pooled and \ShareLow{} for
+centre-forwards and wingers pooled (Figure~\ref{fig:unmeasured-share}). By
+group, it is largest for goalkeepers, whose impact statistics about scoring
+cannot see; large for centre-backs and defensive midfielders; intermediate for
+full-backs and central midfielders; and at or near zero for wingers, attacking
+midfielders and centre-forwards.
+
+For centre-forwards and attacking midfielders the corrected $R^2_{\text{true}}$
+exceeds 1, and \NGroupsClipped{} groups are clipped. A true $R^2$ cannot exceed
+1, so the correction over-corrects there: the observed cross-half correlation
+is larger than the two reliabilities allow. The likeliest cause is the
+attribution factor, which assumes that player effects are independent of who
+plays with whom. If good attackers play beside good teammates, more of RAPM's
+stable variance is the player's own than the factor credits, its reliability
+is understated, and the corrected $R^2$ is inflated.
+Section~\ref{sec:r-posthoc} (a) supports this reading. The zero share for
+attackers should therefore be read as ``not resolved'', and the size of the
+H3 contrast as likely overstated; its sign is robust.
+
+The H3 contrast is \ShareContrast{} (raw: \ShareContrastRaw{}). Its 90\%
+parametric basic interval, which decides H3, is
 [\ShareContrastParamLo, \ShareContrastParamHi]; the player bootstrap gives
 [\ShareContrastPlayerLo, \ShareContrastPlayerHi] and the A7 joint bootstrap
 [\ShareContrastJointLo, \ShareContrastJointHi] (Table~\ref{tab:h3},
-Figure~\ref{fig:h3-parametric}). The leave-one-out coverage of the parametric
-interval is \ParamCoverageLoo{}, and the player-bootstrap interval covers the
-planted contrast in \ParamCoverageMFour{} of simulations. The within-sample
-estimator gives a contrast of \ShareContrastWithin{}. H3: \VerdictHThree{}.
-% RESULTS-PROSE: the size of the unmeasured share by position in words; how it
-% compares with Gelade and Hvattum's raw figure once corrected; what the three
-% intervals and the coverages say about which interval to trust; the H3 verdict.
+Figure~\ref{fig:h3-parametric}). H3: \VerdictHThree{}. In the parametric
+simulations the estimator recovers the planted contrast with little bias; the
+leave-one-out coverage of the parametric interval is \ParamCoverageLoo{}, while
+the player-bootstrap interval covers the planted contrast in only
+\ParamCoverageMFour{} of simulations. The A7 joint bootstrap is wider, as the
+synthetic leagues predicted (A9). The within-sample estimator, which A10
+demoted because shared match noise biases it, gives a clipped contrast of
+\ShareContrastWithin{}.
 
 \begin{table}[htbp]
   \centering
   \caption{The unmeasured share of RAPM total per position group and for the
   two H3 pools: $R^2_{\text{full}}$, $R^2_{\text{obs}}$, the half-length
   reliabilities $\rho_P$ and $\rho_\beta$, $R^2_{\text{true}}$ raw and clipped,
-  the share $\sigma_g$, and its player-bootstrap interval.}
+  the clipped share $\sigma^{\text{clip}}_g$, and its 90\% player-bootstrap
+  interval.}
   \label{tab:unmeasured}
   \small
   \IfFileExists{generated/tab-unmeasured.tex}{\input{generated/tab-unmeasured.tex}}{\pendingtable{tab-unmeasured}}
@@ -1773,9 +1907,9 @@ estimator gives a contrast of \ShareContrastWithin{}. H3: \VerdictHThree{}.
 \begin{figure}[htbp]
   \centering
   \IfFileExists{generated/fig-unmeasured-share.pdf}{\includegraphics[width=0.85\linewidth]{generated/fig-unmeasured-share.pdf}}{\pendingfigure{fig-unmeasured-share}}
-  \caption{Cross-half unmeasured share of RAPM total per position group with
-  90\% player-bootstrap intervals, clipped values filled and raw values
-  hollow.}
+  \caption{Cross-half unmeasured share of RAPM total per position group and
+  for the two H3 pools, with 90\% player-bootstrap intervals of the raw share;
+  values clipped to $[0,1]$ are marked separately from raw ones.}
   \label{fig:unmeasured-share}
 \end{figure}
 
@@ -1783,7 +1917,8 @@ estimator gives a contrast of \ShareContrastWithin{}. H3: \VerdictHThree{}.
   \centering
   \caption{The H3 contrast (CB+DM minus CF+W), raw and clipped, with the
   parametric basic interval, the player-bootstrap and A7 joint-bootstrap
-  intervals, the planted contrast and the two coverages.}
+  intervals, the within-sample estimator, the planted contrast and the two
+  coverages.}
   \label{tab:h3}
   \small
   \IfFileExists{generated/tab-h3.tex}{\input{generated/tab-h3.tex}}{\pendingtable{tab-h3}}
@@ -1792,9 +1927,9 @@ estimator gives a contrast of \ShareContrastWithin{}. H3: \VerdictHThree{}.
 \begin{figure}[htbp]
   \centering
   \IfFileExists{generated/fig-h3-parametric.pdf}{\includegraphics[width=0.75\linewidth]{generated/fig-h3-parametric.pdf}}{\pendingfigure{fig-h3-parametric}}
-  \caption{Distribution of the H3 contrast over the $S = 200$ parametric
-  simulations on the real schedule, with the planted contrast, the real
-  estimate and the basic interval marked.}
+  \caption{Distribution of the clipped H3 contrast over the $S = 200$
+  parametric simulations on the real schedule, with the planted contrast, the
+  real estimate and the basic interval marked.}
   \label{fig:h3-parametric}
 \end{figure}
 \FloatBarrier
@@ -1804,22 +1939,32 @@ estimator gives a contrast of \ShareContrastWithin{}. H3: \VerdictHThree{}.
 \label{sec:r-m5}
 
 The 5,760 specifications produce \NDistinctRankingsOutfield{} distinct outfield
-rankings and \NDistinctRankingsGoalkeeper{} distinct goalkeeper rankings.
-\NPlayersEverFirst{} outfield pool players are ranked first by at least one
-specification. \MultiverseTopName{} is ranked first most often, by
-\MultiverseTopPFirst{} of specifications (Table~\ref{tab:multiverse},
-Figure~\ref{fig:spec-curve}). For the player with the highest M8 $P(\#1)$, the
-total-order index of time aggregation is \HFiveAggTotal{}; the largest index is
-that of \HFiveMaxDim{}, at \HFiveMaxTotal{} (Figure~\ref{fig:total-order}).
-H5: \VerdictHFive{}.
-% RESULTS-PROSE: which choices move the top of the ranking and which do not;
-% whether interactions matter (total versus first order); the H5 verdict.
+rankings and \NDistinctRankingsGoalkeeper{} distinct goalkeeper rankings: most
+definitions order the pool differently. \NPlayersEverFirst{} outfield pool
+players are ranked first by at least one specification
+(Table~\ref{tab:multiverse}). \MultiverseTopName{} is ranked first most often,
+by \MultiverseTopPFirst{} of specifications, and his firsts come from one
+family: \TopFirstImpact{} of the impact-family specifications rank him first,
+against \TopFirstBox{} of the box-family ones (Table~\ref{tab:firsts}). The
+second most frequent leader, Julián Quiñones, is ranked first by
+\QuinonesSpecShare{} of specifications on the strength of a Saudi league season
+(Section~\ref{sec:r-posthoc} (c)).
+
+For the rank of the player with the highest M8 $P(\#1)$, the dimension with the
+largest total-order index is \HFiveMaxDim{}, at \HFiveMaxTotal{}; the index of
+time aggregation is \HFiveAggTotal{} (Figure~\ref{fig:total-order}). H5:
+\VerdictHFive{}. What ``best'' means is decisive, as H5 expected, but the
+decisive part is what a score is built from, not over which seasons it is
+taken. The family has the largest total-order index for most of the players
+ever ranked first. For each of them, the first-order indices of the eight
+dimensions sum to most of the rank variance, so the choices matter more on
+their own than through their interactions.
 
 \begin{table}[htbp]
   \centering
-  \caption{Share of the 5,760 specifications that rank each leading outfield
-  pool player first, in the top three and in the top ten, on the original
-  data.}
+  \caption{Every outfield pool player ranked first by at least one of the
+  5,760 specifications on the original data: the share of specifications that
+  rank him first, in the top three and in the top ten.}
   \label{tab:multiverse}
   \small
   \IfFileExists{generated/tab-multiverse.tex}{\input{generated/tab-multiverse.tex}}{\pendingtable{tab-multiverse}}
@@ -1828,17 +1973,19 @@ H5: \VerdictHFive{}.
 \begin{figure}[htbp]
   \centering
   \IfFileExists{generated/fig-spec-curve.pdf}{\includegraphics[width=\linewidth]{generated/fig-spec-curve.pdf}}{\pendingfigure{fig-spec-curve}}
-  \caption{Specification curve: for each leading player, his rank under every
-  specification sorted from best to worst (top), and the level of each
-  dimension at each position of the curve (bottom).}
+  \caption{Specification curves of the four players ranked first by the most
+  specifications: each player's rank under every specification sorted from
+  best to worst (top), and the level of each dimension at each position of the
+  curve (bottom).}
   \label{fig:spec-curve}
 \end{figure}
 
 \begin{figure}[htbp]
   \centering
   \IfFileExists{generated/fig-total-order.pdf}{\includegraphics[width=\linewidth]{generated/fig-total-order.pdf}}{\pendingfigure{fig-total-order}}
-  \caption{Exact total-order indices $T_{id}$ of each leading player's rank
-  (rows) for each of the eight dimensions (columns).}
+  \caption{Exact total-order indices $T_{id}$ of the rank of every player ranked
+  first by at least one specification (rows), for each of the eight dimensions
+  (columns).}
   \label{fig:total-order}
 \end{figure}
 \FloatBarrier
@@ -1848,22 +1995,36 @@ H5: \VerdictHFive{}.
 \label{sec:r-m6}
 
 The recognition universe has \NBdoRows{} candidate-editions and
-\NBdoCandidates{} distinct players; \NBdoDropped{} candidate-editions without a
-per-season RAPM estimate were dropped (A14). The OLS model has a within-edition $R^2$ of
-\OlsRTwo{} (leave one edition out: \OlsRTwoLoeo{}), and the Plackett--Luce model
-a pseudo-$R^2$ of \PlPseudoRTwo{}. In OLS, the Shapley shares are \ShapleyStatsOls{}
-for individual statistics, \ShapleyImpactOls{} for impact, \ShapleyTeamOls{} for
-team success and \ShapleyRepOls{} for reputation. The 90\% intervals are
-[\ShapleyTeamOlsLo, \ShapleyTeamOlsHi] for team success and
+\NBdoCandidates{} distinct players; \NBdoDropped{} candidate-editions were dropped
+for lack of a per-season RAPM estimate and \NBdoDroppedValuation{} for lack of a
+market value (A14). The OLS model has a within-edition $R^2$ of \OlsRTwo{}
+(leave one edition out: \OlsRTwoLoeo{}), and the Plackett--Luce model a
+pseudo-$R^2$ of \PlPseudoRTwo{}. In OLS, the Shapley shares are
+\ShapleyStatsOls{} for individual statistics, \ShapleyImpactOls{} for impact,
+\ShapleyTeamOls{} for team success and \ShapleyRepOls{} for reputation. The
+90\% intervals are [\ShapleyTeamOlsLo, \ShapleyTeamOlsHi] for team success and
 [\ShapleyStatsOlsLo, \ShapleyStatsOlsHi] for statistics, and team success
 exceeds statistics in \ShapleyTeamAboveStatsBoot{} of bootstrap replicates. The
-Plackett--Luce shares are \ShapleyStatsPl{}, \ShapleyImpactPl{}, \ShapleyTeamPl{}
-and \ShapleyRepPl{} in the same order; the two models \OlsPlAgreement{} on the
-order of team success and statistics (Table~\ref{tab:recognition},
-Figure~\ref{fig:shapley}). H6: \VerdictHSix{}.
-% RESULTS-PROSE: what the vote rewards; how much is left in the residual; the
-% players the vote most over- and under-rewards relative to the blocks; the H6
-% verdict and any OLS/Plackett-Luce disagreement (A1).
+Plackett--Luce shares are \ShapleyStatsPl{}, \ShapleyImpactPl{},
+\ShapleyTeamPl{} and \ShapleyRepPl{} in the same order; the two models
+\OlsPlAgreement{} on the order of team success and statistics
+(Table~\ref{tab:recognition}, Figure~\ref{fig:shapley}). H6: \VerdictHSix{}.
+
+In this model the vote follows individual statistics more than team success; on-pitch impact as RAPM measures it earns almost nothing.
+Under the other reading of A14's statistics block (per-90 rates plus minutes;
+post hoc), the statistics share is \PerNinetyStatsOls{} and the team share
+\PerNinetyTeamOls{}, so the order holds.
+
+The team block, however, is measured with gaps that bias it down, toward
+refuting H6. League titles come from tables computed from the games, which miss
+titles decided by play-offs. Several finals are absent from the data: the 2021
+Copa América, the 2021 and 2023 Africa Cups of Nations, the Gold Cups, the
+Nations League finals and the 2025/26 Champions League final; the 2026 World
+Cup stops at its group stage. The largest positive OLS residuals, players the
+vote rewarded beyond all four blocks, belong to 2026 candidates, whose vote
+covered that World Cup. H6's refutation may therefore owe something to
+missing honours; Section~\ref{sec:r-posthoc} (e) refits M6 with curated
+honours.
 
 \begin{table}[htbp]
   \centering
@@ -1891,11 +2052,16 @@ Figure~\ref{fig:shapley}). H6: \VerdictHSix{}.
 \paragraph{M7a (exploratory).}
 On \NSbUnitsVisibility{} player-competitions of \NSbPlayersVisibility{} players
 in the StatsBomb sample, the cross-half visibility of xT added to the box score
-is \VisXtCross{} [\VisXtCrossLo, \VisXtCrossHi]; the within-sample estimator gives
-\VisXtDisatt{} (Table~\ref{tab:visibility}, Figure~\ref{fig:visibility}).
-% RESULTS-PROSE: which event-visible values the box score sees and which it
-% misses; how the within-sample and cross-half estimators differ, as the
-% motivation of A10; the sample caveat (tournaments plus three clubs).
+is \VisXtCross{} [\VisXtCrossLo, \VisXtCrossHi]; the within-sample estimator
+gives \VisXtDisatt{} (Table~\ref{tab:visibility}, Figure~\ref{fig:visibility}).
+The box score sees part of on-ball value and misses much of it. Among the event
+metrics, progressive passes are the least visible and StatsBomb xA, close in
+kind to the assists a box score counts, the most visible. Pressures, tackles
+and interceptions, which our box score does not count, are partly predictable
+from it. The within-sample estimator is at least as large as the cross-half one
+for every target and exceeds 1 for StatsBomb xA: one match moves both sides,
+which is the bias that led to A10. The sample is the tournaments plus three
+club teams, so these numbers describe that sample, not the leagues.
 
 \begin{table}[htbp]
   \centering
@@ -1920,20 +2086,29 @@ is \VisXtCross{} [\VisXtCrossLo, \VisXtCrossHi]; the within-sample estimator giv
 \paragraph{M7b (H7).}
 \NPlayersClutch{} players have at least 360 knockout minutes in both periods.
 The persistence of knockout over-performance is $r$ = \ClutchR{}
-[\ClutchRLo, \ClutchRHi], with one-sided permutation p-value \ClutchP{}. The
-within-period reliabilities of $Z$ are \ClutchRelFirst{} and \ClutchRelSecond{},
-so the power against a true correlation of 0.3 is \ClutchPower{}. On placebo
-knockout labels, $r$ = \ClutchPlaceboR{} (Table~\ref{tab:clutch},
-Figure~\ref{fig:knockout}). H7: \VerdictHSeven{}.
-% RESULTS-PROSE: whether knockout over-performance repeats; whether the test
-% could have seen a trait (A5); the placebo check; the H7 verdict.
+[\ClutchRLo, \ClutchRHi], with one-sided permutation p-value \ClutchP{}; on
+placebo knockout labels its mean is \ClutchPlaceboR{} (Table~\ref{tab:clutch},
+Figure~\ref{fig:knockout}). Knockout over-performance does repeat a little:
+the correlation is small, it is above zero, and the placebo is centred on zero.
+
+H7 could not have been refuted. The over-performance score is almost pure
+noise: its within-period reliabilities are \ClutchRelFirst{} and
+\ClutchRelSecond{}, so even a perfect true correlation would be observed, in
+expectation, as \ClutchAttenuation{}, below the 0.2 that the pre-registration
+set as the refutation threshold. The power against a true correlation of 0.3
+is \ClutchPower{}, short of the 0.8 that A5 requires. H7: \VerdictHSeven{}.
+Corrected for attenuation, the observed $r$ would correspond to a true
+correlation of \ClutchRDisatt{}, but with reliabilities this low that
+correction carries almost no information. The small persistence disappears
+when only continental and international knockouts count
+(Section~\ref{sec:r-posthoc} (d)).
 
 \begin{table}[htbp]
   \centering
   \caption{Persistence of knockout over-performance (non-penalty goals plus
   assists per 90) between 2020--2022 and 2023--2026: players, $r$ with its 90\%
   bootstrap interval and permutation p-value, within-period reliabilities,
-  power against 0.3, and the placebo.}
+  simulated power against 0.3, and the placebo.}
   \label{tab:clutch}
   \small
   \IfFileExists{generated/tab-clutch.tex}{\input{generated/tab-clutch.tex}}{\pendingtable{tab-clutch}}
@@ -1961,32 +2136,45 @@ The outfield player with the highest probability of being ranked first is
 rank is \TopPlayerMedianRank{} and his 90\% rank interval
 [\TopPlayerRankLo, \TopPlayerRankHi]. The next is \SecondPlayerName{}, at
 \SecondPlayerPFirst{} (Table~\ref{tab:synthesis}, Figure~\ref{fig:pfirst}).
-H2: \VerdictHTwo{}. Of \NPairsOutfield{} outfield pairs, \NPairsDecided{} are
-decided, a share of \SharePairsDecided{} (Figure~\ref{fig:decided-pairs}).
-H1: \VerdictHOne{}.
+H2: \VerdictHTwo{}. No player is a likely number one, and the leader's own rank
+interval spans a large part of the pool.
 
-The leading player's rank variance splits into \TopPlayerVarSpec{}
-specification, \TopPlayerVarSamp{} sampling and \TopPlayerVarUnm{} unmeasured
-(Figure~\ref{fig:variance-decomposition}). The median specification is
-\MedianSpecLabel{}. Over the \HFourNPlayers{} players in its top ten, the mean
-ratio of specification to sampling variance is \HFourRatio{}. H4:
-\VerdictHFour{}. At the median specification, the leading player's marginal
-90\% rank confidence set is [\TopPlayerMarginalLo, \TopPlayerMarginalHi].
-The statistics, impact and recognition views agree with Kendall's
-$W$ = \KendallW{} (mean pairwise Spearman correlation \KendallMeanSpearman{};
-Table~\ref{tab:views}). Among goalkeepers, \TopGoalkeeperName{} has the highest
-$P(\#1)$, at \TopGoalkeeperPFirst{} (Table~\ref{tab:goalkeepers}).
-% RESULTS-PROSE: what the probabilities say about a number one; which pairs are
-% decided (the top against the field, or nobody); which source dominates rank
-% variance for the leaders; how far the three views disagree; the H1, H2 and
-% H4 verdicts.
+Of \NPairsOutfield{} outfield pairs, \NPairsDecided{} are decided, a share of
+\SharePairsDecided{} (Figure~\ref{fig:decided-pairs}). H1: \VerdictHOne{}.
+Decided pairs mostly set the leaders apart from the bottom of the pool; among
+the leaders themselves almost nothing is decided.
+
+The leader's rank variance splits into \TopPlayerVarSpec{} specification,
+\TopPlayerVarSamp{} sampling and \TopPlayerVarUnm{} unmeasured
+(Figure~\ref{fig:variance-decomposition}). For most leading players the
+specification term is the largest. The unmeasured term is small for attackers
+because M4's share is zero or near zero for their groups; it is larger for the
+midfielders and defenders among the leaders. Section~\ref{sec:r-posthoc} (b)
+shows how much this depends on M4's attacker estimates. The median
+specification is \MedianSpecLabel{}. Over the \HFourNPlayers{} players in its top
+ten, the mean ratio of specification to sampling variance is \HFourRatio{}.
+H4: \VerdictHFour{}, narrowly. At the median specification, sampling alone
+leaves the leader's marginal 90\% rank confidence set at
+[\TopPlayerMarginalLo, \TopPlayerMarginalHi].
+
+The three views disagree. The statistics view ranks \StatsViewTopName{} best,
+the impact view \ImpactViewTopName{} and recognition \RecognitionTopName{}
+(Table~\ref{tab:views}). Kendall's $W$ is \KendallW{}, a mean pairwise Spearman
+correlation of \KendallMeanSpearman{}. \TopPlayerName{} owes his lead to the
+impact view: he received few Ballon d'Or points over the period. Among
+goalkeepers, \TopGoalkeeperName{} has the highest $P(\#1)$, at
+\TopGoalkeeperPFirst{} (Table~\ref{tab:goalkeepers}). That ranking rests on
+RAPM and on box metrics that say little about goalkeeping, and M4's unmeasured
+share for goalkeepers is close to one, so it is the least informative ranking
+in this paper.
 
 \begin{table}[htbp]
   \centering
-  \caption{The outfield pool in the $(s, b, u)$ mixture: $P(\#1)$,
-  $P(\text{top-3})$, $P(\text{top-10})$, median rank and 90\% rank interval,
-  marginal rank confidence set at the median specification, and the shares of
-  rank variance from specification, sampling and the unmeasured component.}
+  \caption{The outfield players with $P(\#1) \ge 0.01$ in the $(s, b, u)$
+  mixture: $P(\#1)$, $P(\text{top-3})$, $P(\text{top-10})$, median rank and 90\%
+  rank interval, marginal rank confidence set at the median specification, and
+  the shares of rank variance from specification, sampling and the unmeasured
+  component.}
   \label{tab:synthesis}
   \small
   \IfFileExists{generated/tab-synthesis.tex}{\input{generated/tab-synthesis.tex}}{\pendingtable{tab-synthesis}}
@@ -1995,17 +2183,17 @@ $P(\#1)$, at \TopGoalkeeperPFirst{} (Table~\ref{tab:goalkeepers}).
 \begin{figure}[htbp]
   \centering
   \IfFileExists{generated/fig-pfirst.pdf}{\includegraphics[width=\linewidth]{generated/fig-pfirst.pdf}}{\pendingfigure{fig-pfirst}}
-  \caption{$P(\#1)$ of the leading outfield pool players (bars) and their median
-  rank with 90\% rank interval in the mixture (points and lines).}
+  \caption{$P(\#1)$ of the outfield players with $P(\#1) \ge 0.01$ (left) and
+  their median rank with 90\% rank interval in the mixture (right).}
   \label{fig:pfirst}
 \end{figure}
 
 \begin{figure}[htbp]
   \centering
   \IfFileExists{generated/fig-variance-decomposition.pdf}{\includegraphics[width=\linewidth]{generated/fig-variance-decomposition.pdf}}{\pendingfigure{fig-variance-decomposition}}
-  \caption{Nested decomposition of each leading player's rank variance into
-  specification, sampling and unmeasured terms (Equation~\eqref{eq:decomp}),
-  as stacked shares.}
+  \caption{Nested decomposition of the rank variance of the outfield players
+  with $P(\#1) \ge 0.01$ into specification, sampling and unmeasured terms
+  (Equation~\eqref{eq:decomp}), as stacked shares.}
   \label{fig:variance-decomposition}
 \end{figure}
 
@@ -2022,8 +2210,7 @@ $P(\#1)$, at \TopGoalkeeperPFirst{} (Table~\ref{tab:goalkeepers}).
   \centering
   \caption{The three views of the outfield pool: mean rank over the box-family
   specifications (statistics), over the impact-family specifications (impact),
-  and the rank by Ballon d'Or points summed over 2021--2026 (recognition), with
-  Kendall's $W$.}
+  and Ballon d'Or points summed over 2021--2026 with their rank (recognition).}
   \label{tab:views}
   \small
   \IfFileExists{generated/tab-views.tex}{\input{generated/tab-views.tex}}{\pendingtable{tab-views}}
@@ -2044,15 +2231,23 @@ $P(\#1)$, at \TopGoalkeeperPFirst{} (Table~\ref{tab:goalkeepers}).
 \label{sec:r-m9}
 
 This subsection is exploratory. Over \NRecoverySims{} simulated leagues on the
-real schedule, pooled RAPM total ranks the planted first player of the pool
+real schedule, pooled RAPM total ranks the planted best player of the pool
 first in \RecoveryRapmFirst{} of simulations, and the box composite in
-\RecoveryBoxFirst{}. RAPM's recovery share is \RecoveryRapmFirstSmallGap{} in the
-bin of the smallest planted gaps and \RecoveryRapmFirstLargeGap{} in the bin of
-the largest. The mean absolute rank error within the pool is
-\RecoveryRankErrorRapm{} for RAPM and \RecoveryRankErrorBox{} for the box
-composite (Table~\ref{tab:recovery}, Figure~\ref{fig:recovery}).
-% RESULTS-PROSE: how large a true gap must be before data of this size reveal
-% the best player; what that implies for the real gaps seen in M8.
+\RecoveryBoxFirst{}, against a chance level of one in \NPoolOutfield{}. RAPM's
+recovery share is \RecoveryRapmFirstSmallGap{} in the bin of the smallest planted
+gaps and \RecoveryRapmFirstLargeGap{} in the bin of the largest. The mean
+absolute rank error within the pool is \RecoveryRankErrorRapm{} places for RAPM
+and \RecoveryRankErrorBox{} for the box composite (Table~\ref{tab:recovery},
+Figure~\ref{fig:recovery}).
+
+Even when a best player exists, the truth is known and RAPM's model is the
+model that generated the goals, data of this size identify him only in a
+minority of leagues, and a larger planted gap helps less than one might hope.
+The box composite does about as well as RAPM here because the box scores were
+planted with M4's measurable shares, which are near one for attackers; that is
+a property of the calibration, not evidence that box scores beat RAPM. Seen
+against these numbers, the small real-data probabilities of M8 are what data of
+this size allow, not a failure of the method.
 
 \begin{table}[htbp]
   \centering
@@ -2069,7 +2264,7 @@ composite (Table~\ref{tab:recovery}, Figure~\ref{fig:recovery}).
   \IfFileExists{generated/fig-recovery.pdf}{\includegraphics[width=0.8\linewidth]{generated/fig-recovery.pdf}}{\pendingfigure{fig-recovery}}
   \caption{Share of simulations in which RAPM total and the box composite
   recover the planted best pool player, against the planted top-two gap in
-  goals per 90 (equal-count bins).}
+  goals per 90 (equal-count bins), with the chance level.}
   \label{fig:recovery}
 \end{figure}
 \FloatBarrier
@@ -2078,15 +2273,31 @@ composite (Table~\ref{tab:recovery}, Figure~\ref{fig:recovery}).
 \subsection{Who was the best player of the 2020s?}
 \label{sec:r-best}
 
-% RESULTS-PROSE: the paper's answer in a few sentences, stated as
-% probabilities: who leads, by how much, under which definitions he leads and
-% under which he does not, and how much of the answer the unmeasured component
-% could overturn. Then the exploratory comparison with V1 (Table tab-v1): where
-% V1's order agrees with the mixture and where it does not.
+Public match data cannot name him. The most likely number one is
+\TopPlayerName{}, with $P(\#1)$ = \TopPlayerPFirst{}, a median rank of
+\TopPlayerMedianRank{} and a 90\% rank interval from \TopPlayerRankLo{} to
+\TopPlayerRankHi{}. His lead rests on one kind of evidence. He has the highest
+pooled RAPM of the outfield pool, and the impact-family specifications rank him
+first \TopFirstImpact{} of the time, the box-family ones \TopFirstBox{}. A
+reader who trusts RAPM's attribution of goals to the players on the pitch will
+rank him first more often than anyone else; a reader who trusts box scores will
+rank prolific scorers first instead; the Ballon d'Or voters ranked him low. The
+second most likely number one owes his place to a league season that the
+multiverse has no way to discount (Section~\ref{sec:r-posthoc} (c)). Without
+leagues outside UEFA, and with a far larger unmeasured share, \TopPlayerName{}
+still leads, but his probability stays low (Table~\ref{tab:robustness}).
 
-The comparison with V1 is exploratory. Over V1's outfield players, the
-Spearman correlation between V1's rank and the median rank in the mixture is
-\VOneSpearman{} (Table~\ref{tab:v1}).
+The honest answer is therefore a distribution, not a name: a handful of
+players each have a modest chance of being first, the ordering among the
+leaders is undecided, and most of what moves it is the choice of what to
+measure. The recovery study shows that this is close to the limit of what data
+of this size can decide.
+
+The comparison with V1 is exploratory. Over V1's outfield players, the Spearman
+correlation between V1's rank and the median rank in the mixture is
+\VOneSpearman{} (Table~\ref{tab:v1}). V1 agrees with the mixture loosely, and
+disagrees most at its top: several of V1's top ten have median ranks outside
+the mixture's top twenty.
 
 \begin{table}[htbp]
   \centering
@@ -2103,9 +2314,18 @@ Spearman correlation between V1's rank and the median rank in the mixture is
 \label{sec:r-verdicts}
 
 Table~\ref{tab:verdicts} collects the eight pre-registered hypotheses with the
-statistic each was decided on, its threshold and the verdict.
-% RESULTS-PROSE: one paragraph on the verdicts taken together, including any
-% hypothesis that was refuted or inconclusive and what that changes.
+statistic each was decided on, its threshold and the verdict. The ranking is
+mostly undecided (H1: \VerdictHOne{}) and has no consensus number one (H2:
+\VerdictHTwo{}). The unmeasured share follows position in the predicted
+direction (H3: \VerdictHThree{}), with the caveat on its size given in
+Section~\ref{sec:r-m4}. Definitions outweigh sampling noise for the leaders,
+narrowly (H4: \VerdictHFour{}). The decisive definitional choice is the family
+of metrics, not time aggregation (H5: \VerdictHFive{}). The vote follows
+individual statistics more than team success in our data (H6:
+\VerdictHSix{}), a verdict open to the gaps in team honours. The big-game test
+could not have refuted H7 at these reliabilities (H7: \VerdictHSeven{}), and H8
+is not tested. The robustness runs of Section~\ref{sec:r-posthoc} leave the
+verdicts of H1 to H5 unchanged; the check on H6 is (e).
 
 \begin{table}[htbp]
   \centering
@@ -2118,48 +2338,209 @@ statistic each was decided on, its threshold and the verdict.
 \end{table}
 \FloatBarrier
 
+% ---------------------------------------------------------------------------
+\subsection{Post-hoc and robustness analyses}
+\label{sec:r-posthoc}
+
+Every analysis in this subsection was added after the primary results were
+seen. Each is exploratory; none changes a pre-registered verdict, and none is
+used to decide one. Table~\ref{tab:robustness} gives the numbers of (a) to (c).
+
+\paragraph{(a) H3 under assortative planting.}
+\emph{Motivation.} On the real data, $R^2_{\text{true}}$ exceeds 1 for
+centre-forwards and attacking midfielders, which suggests that the attribution
+factor, computed with effects planted independently of who plays with whom,
+understates attribution when quality clusters on teams. \emph{Analysis.} We
+reran the A9 parametric bootstrap with planted effects equal to the real pooled
+RAPM, rescaled to the calibrated standard deviations, so that planted quality
+keeps the real teammate structure. \emph{Reading.} Under this planting the
+full-data attribution factor of RAPM total lies between \AssortAttrLo{} and
+\AssortAttrHi{} across outfield groups, against \AttrFullTotal{} with
+independent effects. That explains the anomaly: with the larger factor, RAPM's
+reliability is higher and the corrected $R^2$ lower. But this planting
+over-reproduces the anomaly. The mean simulated $R^2_{\text{true}}$ exceeds 1
+in every outfield group, whereas the real data show it only for centre-forwards
+and attacking midfielders. Rescaled RAPM carries the ridge's own leakage, so it
+plants more teammate structure than the truth has. The truth likely lies
+between the two plantings.
+
+Here the raw basic interval is the meaningful one. Clipping makes the
+estimator's error depend on the true contrast, so the clipped error is not a
+pivot: the clipped basic interval, [\AssortClippedLo, \AssortClippedHi], does
+not even contain the clipped estimate \ShareContrast{}, and the player-bootstrap
+interval of the clipped contrast covers the planted contrast in only
+\AssortCoverageClipped{} of simulations. Under this planting the raw estimate is
+biased upward by \AssortMeanErrorRaw{} on average. The raw basic interval, which
+removes that bias, is [\AssortRawLo, \AssortRawHi], for a planted contrast of
+\AssortPlanted{}. It excludes zero, so H3's direction holds under both
+plantings, with a smaller difference under this one.
+
+\paragraph{(b) M8 with bias-corrected unmeasured shares.}
+\emph{Motivation.} If the planting of (a) were the truth, M4 would understate
+the unmeasured share in almost every group, and M8's unmeasured component
+would be too small. \emph{Analysis.} We subtract each group's mean simulated
+error under (a) from its real raw share, clip the result to $[0,1]$, and rerun
+M8 with these shares. They are
+\BiasShareCF{} for centre-forwards and between \BiasShareOtherLo{} and 1 for the
+other outfield groups. This is an extreme bound, because (a) over-reproduces
+the anomaly. \emph{Reading.} The share of decided pairs falls to
+\BiasSharePairsDecided{}, and the unmeasured term becomes the largest part of
+the leader's rank variance (\BiasTopPlayerVarUnm{}). The player with the highest
+$P(\#1)$ and the verdicts of H1, H2, H4 and H5 are unchanged. If statistics see
+little of on-pitch impact in every group, the ranking is even less decided than
+the primary analysis says, but its leader and the hypotheses stand.
+
+\paragraph{(c) M8 restricted to European leagues.}
+\emph{Motivation.} Julián Quiñones is ranked first by \QuinonesSpecShare{} of
+the specifications on the strength of a 2025/26 Saudi league season. The
+factorial has no league-strength dimension, and its context dimension partials
+out the player's own team's Elo, not the strength of the opposition; Elo is
+also poorly comparable between Europe and leagues it rarely meets
+(Section~\ref{sec:limitations}). \emph{Analysis.} We reran M5 and M8 after
+dropping the league seasons of leagues outside UEFA; Champions League and
+national-team matches are kept, and RAPM is unchanged. \NPoolLostSeasons{} pool
+players lose at least one qualifying season: \EuropeLostPlayers{}. Quiñones keeps
+no qualifying season and falls to the bottom of the ranking. \emph{Reading.}
+The player with the highest $P(\#1)$ and every verdict of M8 are unchanged.
+The primary result is not driven by leagues outside Europe, but its second
+place was.
+
+\paragraph{(d) H7 with continental and international knockouts only.}
+\emph{Motivation.} This sensitivity is post hoc and prompted by the data. After
+the primary H7 result, we noted that the knockout flag counts domestic cups,
+super cups and qualifying rounds, often against weaker sides, so persistence
+might reflect who scores against weak cup opponents rather than who rises in
+big games. \emph{Analysis.} We keep only the knockout games of the Champions
+League, the Europa League, the Conference League, the Club World Cup and
+national-team tournaments, and drop the other knockout games from the baseline
+too. \emph{Reading.} \NPlayersClutchMajor{} players qualify, and $r$ =
+\ClutchMajorR{} [\ClutchMajorRLo, \ClutchMajorRHi], with one-sided p-value
+\ClutchMajorP{}. The small persistence of the primary analysis does not appear
+in big games. This test has even less power than the primary one, so it is not
+evidence against a big-game trait; it is only no evidence for one.
+
+\paragraph{(e) M6 with curated team honours.}
+\emph{Motivation.} The team-success block is measured with gaps
+(Section~\ref{sec:r-m6}) that bias it down, toward refuting H6.
+\emph{Analysis.} We refit M6 with team honours curated from published records:
+league champions including titles decided by play-offs, and the finals missing
+from the data. The curation changes the team-success indicators of
+\CuratedNChanged{} candidate-editions. \emph{Reading.} The OLS Shapley share of
+team success becomes \CuratedShapleyTeamOls{} and that of individual statistics
+\CuratedShapleyStatsOls{}; H6 with curated honours: \CuratedVerdictHSix{}
+(Table~\ref{tab:recognition-curated}).
+% RESULTS-PROSE (pending results/players/recognition/curated/): one or two
+% sentences saying whether the curated honours reverse the order of the team and
+% statistics shares, and so whether H6's refutation survives the data gaps.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Post-hoc robustness. Top: M8 with the primary unmeasured shares,
+  with the bias-corrected shares of (b), and with European leagues only (c).
+  Bottom: H3 with planted effects that keep the real teammate structure (a),
+  with the raw basic interval.}
+  \label{tab:robustness}
+  \small
+  \IfFileExists{generated/tab-robustness.tex}{\input{generated/tab-robustness.tex}}{\pendingtable{tab-robustness}}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \caption{The eight outfield players with the highest M8 $P(\#1)$: their
+  $P(\#1)$, and the share of M5 specifications that rank each first, overall,
+  within each family and within each time aggregation.}
+  \label{tab:firsts}
+  \small
+  \IfFileExists{generated/tab-firsts-by-dimension.tex}{\input{generated/tab-firsts-by-dimension.tex}}{\pendingtable{tab-firsts-by-dimension}}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \caption{M6 with curated team honours: Shapley shares of the four blocks in
+  the OLS and Plackett--Luce models, beside the primary fit.}
+  \label{tab:recognition-curated}
+  \small
+  \IfFileExists{generated/tab-recognition-curated.tex}{\input{generated/tab-recognition-curated.tex}}{\pendingtable{tab-recognition-curated}}
+\end{table}
+\FloatBarrier
+
 % ===========================================================================
 \section{Limitations}
 \label{sec:limitations}
 
 \paragraph{Coverage holes by design.}
-The window ends on 2026-08-31, and the source has holes inside it: late
-coverage of the Saudi Pro League and MLS, the missing 2026 Champions League
-and Europa League finals, and a 2026 World Cup cut after the group stage.
-A player's matches outside covered competitions are missing from his record,
+The window ends on 2026-08-31, and the source has holes inside it: the Saudi
+Pro League and MLS enter late, the 2026 Champions League and Europa League
+finals are missing, and the 2026 World Cup stops after its group stage. A
+player's matches outside covered competitions are missing from his record,
 which lowers his minutes and can move him below the 900- or 1,800-minute
 thresholds. StatsBomb-based estimates (M7a) come from tournaments plus three
 clubs, not from leagues.
+
+\paragraph{League strength and Elo.}
+Elo ties leagues together only through the games between their teams. Leagues
+outside Europe meet European teams rarely, for instance at the Club World Cup, so
+their Elo levels are weakly identified relative to Europe. The national-team
+pool was calibrated on few games, and its home advantage sits at the edge of
+the search grid. The multiverse has no
+league-strength dimension, and its context dimension partials out own-team
+Elo, not the opposition. A strong season in a weak league can therefore rank
+very high, as Section~\ref{sec:r-posthoc} (c) shows.
 
 \paragraph{Teammate leakage.}
 Ridge RAPM spreads a player's effect over his usual teammates and opponents.
 The attribution factor (Equation~\eqref{eq:attribution}) removes the stable
 part of that leak from the reliability, but it is computed on planted effects
-that are independent of who plays with whom. Real lineups are not: good
-players tend to play together, and the factor does not model that. RAPM's
-additivity also ignores chemistry, although the evidence that chemistry has an
-effect beyond team strength is mixed \citep{mukherjee2019shared,lecoz2025shared}.
+that are independent of who plays with whom. Real lineups are not: good players
+tend to play together. When planted quality keeps the real teammate structure,
+the factor rises from \AttrFullTotal{} to between \AssortAttrLo{} and
+\AssortAttrHi{} (Section~\ref{sec:r-posthoc} (a)). The
+consequence is visible in M4: $R^2_{\text{true}}$ exceeds 1 for attackers, so
+their unmeasured share is clipped at zero and not resolved, and the size of the
+H3 contrast is likely overstated. RAPM's additivity also ignores chemistry,
+although the evidence that chemistry matters beyond team strength is mixed
+\citep{mukherjee2019shared,lecoz2025shared}.
 
 \paragraph{What RAPM is.}
 RAPM measures effects on goals while the player is on the pitch. Goals are a
 sparse response \citep{kharrat2020plusminus}, and the primary analysis has no
-shot-quality response for every league. Effects that act when the player is
-off the pitch, or through teammates in later seasons, are outside both RAPM
-and the statistics, so they are outside the unmeasured share too.
+shot-quality response for every league. Effects that act when the player is off
+the pitch, or through teammates in later seasons, are outside both RAPM and the
+statistics, so they are outside the unmeasured share too.
 
 \paragraph{Goalkeepers.}
-No public statistic in the primary data measures shot-stopping. Goalkeepers
-are ranked separately, on RAPM and on box metrics that say little about their
-job; their ranking should be read with that in mind.
+No public statistic in the primary data measures shot-stopping. M4's unmeasured
+share for goalkeepers is close to one: the statistics, which are about
+scoring, see almost nothing of a goalkeeper's impact. Goalkeepers are ranked
+separately, on RAPM and on box metrics that say little about their job, and
+that ranking is the least informative in the paper.
 
 \paragraph{The statistics chosen by A11.}
 M4's statistics are five per-90 box-score rates: non-penalty goals, penalty
-goals, assists, yellow cards and red cards. They were chosen because they
-exist for every match of the panel, not because they are the best public
-statistics. The unmeasured share is therefore the share unseen by these five.
-It mixes what no public number reaches with what richer public event data
-could reach, and it is an upper bound on the share a superset of these
-statistics would leave.
+goals, assists, yellow cards and red cards. They were chosen because they exist
+for every match of the panel, not because they are the best public statistics.
+The unmeasured share is therefore the share unseen by these five. It mixes what
+no public number reaches with what richer public event data could reach, and it
+is an upper bound on the share a superset of these statistics would leave.
+
+\paragraph{Team honours.}
+The team-success block of M6 is computed from the games. It misses league
+titles decided by play-offs and several finals absent from the data, and the
+2026 World Cup stops at its group stage. These gaps bias the team share down,
+toward refuting H6; Section~\ref{sec:r-posthoc} (e) measures how much.
+
+\paragraph{H7's design.}
+At the reliabilities observed, the over-performance score is almost pure noise,
+and the expected observed correlation for a perfect true correlation is below
+the refutation threshold of 0.2. H7 could not have been refuted, whatever the
+truth, and the A5 power rule rightly makes it inconclusive. A useful test of a
+big-game trait needs many more knockout minutes per player than these periods
+provide, or a less noisy measure of performance.
+
+\paragraph{The team share in M2.}
+ICC(1) pools every outfield position, so it understates how much of a
+position's output is team; and its club-bootstrap intervals are approximate
+(A17).
 
 \paragraph{The V1-like weights.}
 V1's weights cannot be recovered. The V1-like weights of M2 and M5 are a
@@ -2168,36 +2549,56 @@ conclusions about that imitation, not about V1.
 
 \paragraph{The Ballon d'Or is recognition, not truth.}
 M6 measures what the vote rewards, not who was best. Voters see things our
-data do not, and our data see things voters ignore. The recognition view in
-M8 is one view among three, not a validation target.
+data do not, and our data see things voters ignore. The recognition view in M8
+is one view among three, not a validation target.
 
 \paragraph{The synthesis.}
 M4's share enters M8 at its point estimate, so its own uncertainty is not
-propagated and the unmeasured term is, in that respect, too narrow. The scale
-$\tau$ is conservative if the pool's visible spread understates the
+propagated; Section~\ref{sec:r-posthoc} (b) gives an extreme bound instead. The
+scale $\tau$ is conservative if the pool's visible spread understates the
 population's. The match bootstrap of ranks can be inconsistent near ties
-\citep{hall2009bootstrap}; the rank confidence sets of
-\citet{mogstad2024ranks} are reported beside it at one specification.
+\citep{hall2009bootstrap}; the rank confidence sets of \citet{mogstad2024ranks}
+are reported beside it at one specification.
 
 \paragraph{Other choices.}
 Elo applies home advantage to neutral-venue tournament games, because the
 source has no venue flag; Elo enters only M2, M5's context dimension and a
 robustness fit. Name linking between sources can err; medium-confidence pool
 matches are listed. The taxonomy's sizes come from the literature, mostly from
-abstracts, and many cells have no verified size.
+abstracts, and many cells have no verified size. Several analysis choices were
+made after the data were seen; each is labelled where it applies, and those
+that bear on a hypothesis are recorded as amendments A16 and A17.
 
 % ===========================================================================
 \section{Conclusion}
 \label{sec:conclusion}
 
-% RESULTS-PROSE: three short paragraphs. (1) The answer to "who was the best
-% footballer of 2020-2026", as probabilities and decided pairs. (2) How much of
-% the answer is the definition, how much sampling noise, and how much the
-% unmeasured remainder, with the position pattern of M4. (3) What would shrink
-% the remainder: tracking data for the tracking-only rows of the taxonomy, and
-% what the recovery study says about the limits of any method on data of this
-% size.
-\pendingprose{Conclusion}
+Who was the best footballer of 2020--2026? On public match data, the answer is
+a distribution. \TopPlayerName{} is the most likely number one, at
+\TopPlayerPFirst{}, ahead of a group of players whose chances are each smaller
+and close together; only \SharePairsDecided{} of the pool's pairwise orderings
+are decided, and almost none among the leaders. The lead itself depends on
+trusting RAPM, the one family of definitions in which \TopPlayerName{} is
+usually first.
+
+Most of what moves a leading player's rank is the definition of ``best'', and
+within it the choice of what is measured: box scores, on-pitch goal difference
+or adjusted plus-minus. Sampling noise comes second. The unmeasured remainder is
+large where statistics have least to count. For centre-backs and defensive
+midfielders, the box score misses most of their on-pitch impact
+(\ShareHigh{} pooled); for attackers our correction over-corrects and cannot
+resolve the share. Under a plausible alternative model of who
+plays with whom, the remainder is large almost everywhere, and the ranking is
+even less decided.
+
+The limits are not only ours. Even with the truth planted and the right model,
+data of this size recover the best player in \RecoveryRapmFirst{} of simulated
+leagues. Tracking data would reach the tracking-only rows of the taxonomy:
+off-ball runs, space creation, positional defending and pressing. They are what
+the box score misses for defenders, and no amount of public box-score data will
+recover them. Until such data are public, a ranking of the best player of the
+2020s should be read as a statement about the definition chosen, not about the
+players.
 
 % ===========================================================================
 \clearpage
@@ -2281,8 +2682,9 @@ every number from the public sources.
 
 \begin{table}[htbp]
   \centering
-  \caption{The pool: each player's name, position group, source (V1, Ballon
-  d'Or editions), Transfermarkt identifier, mapping method and confidence, and
+  \caption{The pool: each player's name, position group, membership of V1,
+  Ballon d'Or editions in which he was ranked, Transfermarkt identifier (marked
+  where the mapping was not by name and club, or has medium confidence), and
   minutes in the window.}
   \label{tab:pool}
   \small

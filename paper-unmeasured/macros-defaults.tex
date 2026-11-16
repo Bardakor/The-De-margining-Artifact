@@ -149,9 +149,9 @@
 \providecommand{\NPoolRapmExcludesZero}{\TBD}
 % Spearman correlation, over players with own columns, of RAPM total between the primary fit and the with-Elo robustness fit (A12); results/players/rapm/
 \providecommand{\RapmEloSpearman}{\TBD}
-% Minutes-weighted mean home term (goals per 90) over competition-seasons 2019/20 and 2020/21; rapm.fit_rapm; results/players/rapm/
+% Minutes-weighted home term (goals per 90) of domestic leagues, 2019/20 and 2020/21 (empty stadiums); results/players/rapm/summary.json home_league_empty
 \providecommand{\HomeTermEmpty}{\TBD}
-% Minutes-weighted mean home term (goals per 90) over all other competition-seasons; rapm.fit_rapm; results/players/rapm/
+% Minutes-weighted home term (goals per 90) of domestic leagues, 2021/22 to 2025/26; results/players/rapm/summary.json home_league_other
 \providecommand{\HomeTermOther}{\TBD}
 
 % ---------------------------------------------------------------------------
@@ -365,6 +365,88 @@
 \providecommand{\RecoveryRankErrorRapm}{\TBD}
 % Same for the box composite; results/players/simulation/
 \providecommand{\RecoveryRankErrorBox}{\TBD}
+
+% ---------------------------------------------------------------------------
+% Results additions (written with the results prose; the generator must add them)
+% ---------------------------------------------------------------------------
+% Pooled RAPM total (goals per 90) of the outfield pool player with the highest one; results/players/rapm/summary.json pool_top_total
+\providecommand{\PoolTopRapm}{\TBD}
+% Its bootstrap SE; results/players/rapm/summary.json pool_top_se
+\providecommand{\PoolTopRapmSe}{\TBD}
+% Share of impact-family M5 specifications that rank the M8 P(#1) leader first; results/players/synthesis/firsts_by_dimension.csv (leader's row, family = impact)
+\providecommand{\TopFirstImpact}{\TBD}
+% Same for box-family specifications; results/players/synthesis/firsts_by_dimension.csv (leader's row, family = box)
+\providecommand{\TopFirstBox}{\TBD}
+% Share of the 5,760 M5 specifications ranking Julian Quinones first, original data; results/players/multiverse/rank_probabilities.csv (p_first, his row)
+\providecommand{\QuinonesSpecShare}{\TBD}
+% M6 candidate-editions dropped for lack of a market value on or before 30 June (A14); results/players/recognition/summary.json count_dropped_no_market_value
+\providecommand{\NBdoDroppedValuation}{\TBD}
+% M6 OLS Shapley share of statistics under the post-hoc per-90 reading of A14's block; results/players/recognition/summary.json per90_reading_ols_stats
+\providecommand{\PerNinetyStatsOls}{\TBD}
+% Same, team success; results/players/recognition/summary.json per90_reading_ols_team
+\providecommand{\PerNinetyTeamOls}{\TBD}
+% Name of the outfield pool player with the best (lowest) statistics-view mean rank; results/players/synthesis/players.csv (min stats_view, segment outfield)
+\providecommand{\StatsViewTopName}{\TBD}
+% Name of the outfield pool player with the best impact-view mean rank; results/players/synthesis/players.csv (min impact_view, segment outfield)
+\providecommand{\ImpactViewTopName}{\TBD}
+% Name of the outfield pool player with the most Ballon d'Or points summed over 2021-2026 (recognition view, A13 v); paper-unmeasured/data/ballon_dor.csv joined to the pool
+\providecommand{\RecognitionTopName}{\TBD}
+% H7: sqrt(rel_a rel_b), the expected observed r for a true r of 1; results/players/clutch/summary.json attenuation
+\providecommand{\ClutchAttenuation}{\TBD}
+% H7: observed r divided by that attenuation (not clipped); results/players/clutch/summary.json h7_r_disattenuated
+\providecommand{\ClutchRDisatt}{\TBD}
+
+% ---------------------------------------------------------------------------
+% Section 7.12, post-hoc and robustness analyses (exploratory)
+% ---------------------------------------------------------------------------
+% (a) Smallest full-data attribution factor of RAPM total over the seven outfield groups, assortative planting; results/players/construct_gap/assortative/groups.csv (kind groups, halves False, group != GK, column total, min)
+\providecommand{\AssortAttrLo}{\TBD}
+% (a) Largest of the same; same file, max
+\providecommand{\AssortAttrHi}{\TBD}
+% (a) Planted H3 contrast under assortative planting; results/players/construct_gap/assortative/summary.json contrast_raw_planted
+\providecommand{\AssortPlanted}{\TBD}
+% (a) Mean error of the raw contrast under assortative planting (estimate - planted); assortative/summary.json contrast_raw_mean_error
+\providecommand{\AssortMeanErrorRaw}{\TBD}
+% (a) Lower bound of the raw 90% basic interval, assortative planting; assortative/summary.json contrast_raw_ci_low
+\providecommand{\AssortRawLo}{\TBD}
+% (a) Upper bound of the same; assortative/summary.json contrast_raw_ci_high
+\providecommand{\AssortRawHi}{\TBD}
+% (a) Lower bound of the clipped 90% basic interval (non-pivotal; shown only to explain why the raw one is used); assortative/summary.json contrast_clipped_ci_low
+\providecommand{\AssortClippedLo}{\TBD}
+% (a) Upper bound of the same; assortative/summary.json contrast_clipped_ci_high
+\providecommand{\AssortClippedHi}{\TBD}
+% (a) Share of simulations whose M4 player-bootstrap interval of the clipped contrast covers the planted one; assortative/summary.json contrast_clipped_coverage_m4
+\providecommand{\AssortCoverageClipped}{\TBD}
+% (b) Bias-corrected unmeasured share of CF; results/players/construct_gap/assortative/summary.json share_bias_corrected_CF
+\providecommand{\BiasShareCF}{\TBD}
+% (b) Smallest bias-corrected share over the other six outfield groups (CB FB DM CM AM W); assortative/summary.json share_bias_corrected_*
+\providecommand{\BiasShareOtherLo}{\TBD}
+% (b) H1 statistic of M8 with bias-corrected shares; results/players/synthesis/bias_corrected/summary.json SharePairsDecided
+\providecommand{\BiasSharePairsDecided}{\TBD}
+% (b) The leader's unmeasured share of rank variance in that run; results/players/synthesis/bias_corrected/summary.json TopPlayerVarUnm
+\providecommand{\BiasTopPlayerVarUnm}{\TBD}
+% (c) Pool players with at least one season that no longer reaches 900 minutes without non-UEFA leagues; results/players/synthesis/europe/summary.json n_pool_players_lost_qualifying_900
+\providecommand{\NPoolLostSeasons}{\TBD}
+% (c) Their names, comma-separated, in the order of results/players/synthesis/europe/lost_seasons.csv (rows with lost_qualifying_900 True, unique players)
+\providecommand{\EuropeLostPlayers}{\TBD}
+% (d) Players in the continental-and-international-knockouts H7 sensitivity; results/players/clutch/summary.json h7_major_n
+\providecommand{\NPlayersClutchMajor}{\TBD}
+% (d) Its persistence r; results/players/clutch/summary.json h7_major_r
+\providecommand{\ClutchMajorR}{\TBD}
+% (d) Lower bound of its 90% player-bootstrap interval; results/players/clutch/summary.json h7_major_ci_low
+\providecommand{\ClutchMajorRLo}{\TBD}
+% (d) Upper bound; results/players/clutch/summary.json h7_major_ci_high
+\providecommand{\ClutchMajorRHi}{\TBD}
+% (d) One-sided permutation p-value; results/players/clutch/summary.json h7_major_p_value
+\providecommand{\ClutchMajorP}{\TBD}
+% (e) Candidate-editions whose team-success indicators change with curated honours; results/players/recognition/curated/ (pending)
+\providecommand{\CuratedNChanged}{\TBD}
+% (e) OLS Shapley share of team success with curated honours; results/players/recognition/curated/ (pending)
+\providecommand{\CuratedShapleyTeamOls}{\TBD}
+% (e) OLS Shapley share of individual statistics with curated honours; results/players/recognition/curated/ (pending)
+\providecommand{\CuratedShapleyStatsOls}{\TBD}
+% (e) H6 verdict with curated honours ("supported" or "refuted"); results/players/recognition/curated/ (pending)
+\providecommand{\CuratedVerdictHSix}{\TBD}
 
 % ---------------------------------------------------------------------------
 % Section 7.11, hypothesis verdicts (text: "supported", "refuted" or, for H7
