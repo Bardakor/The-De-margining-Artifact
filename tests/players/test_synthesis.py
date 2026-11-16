@@ -71,6 +71,7 @@ def _run(
     omega: Sequence[float] | None = None,
     n_unmeasured: int = 6,
     seed: int = 0,
+    onpitch_ratio: dict[str, float] | None = None,
 ) -> pd.DataFrame:
     """Synthesis of ``scores`` (replicates x specs x players); frame 0 is the point."""
     segment = ["goalkeeper" if g == "GK" else "outfield" for g in groups]
@@ -84,6 +85,7 @@ def _run(
         np.random.default_rng(seed),
         omega=_omega(family, omega),
         n_unmeasured=n_unmeasured,
+        onpitch_ratio=onpitch_ratio,
     )
     return result.players.set_index("player_id")
 
@@ -139,6 +141,38 @@ def test_decomposition_matches_a_brute_force_nested_simulation() -> None:
     mad = np.median(np.abs(x - np.median(x, axis=2, keepdims=True)), axis=2, keepdims=True)
     eff = np.array(omega)[None, :, None] * sigma
     tau = np.sqrt(eff / (1 - eff)) * 1.4826 * mad
+    y = x[:, :, None, :] + tau[:, :, None, :] * rng.standard_normal((n_rep, len(family), n_u, n))
+    r = rankdata(-y, axis=-1, method="min")
+    e_sb = r.mean(axis=2)
+    expected = {
+        "var_total": r.reshape(-1, n).var(axis=0),
+        "var_specification": e_sb.mean(axis=0).var(axis=0),
+        "var_sampling": e_sb.var(axis=0).mean(axis=0),
+        "var_unmeasured": r.var(axis=2).mean(axis=(0, 1)),
+    }
+    for column, value in expected.items():
+        np.testing.assert_allclose(players[column], value, rtol=0.03, atol=0.005)
+
+
+def test_onpitch_ratio_matches_a_brute_force_nested_simulation() -> None:
+    """With omega = 0 the leakage term alone sets tau^2 = lambda Var_g(x), whatever sigma.
+
+    E_u[r^2] is a plain Monte Carlo mean on both sides (relative SE about 4% at 4,000
+    draws), so this test uses 100,000.
+    """
+    rng = np.random.default_rng(11)
+    family, omega = ["impact", "impact", "hybrid"], [0.0, 0.0, 0.0]
+    n, n_rep, lam, n_u = 5, 4, 0.6, 100_000
+    scores = 0.4 * np.arange(n)[::-1] + rng.standard_normal((n_rep + 1, len(family), n))
+    groups, share = ["CF"] * n, {"CF": 0.9}
+    without = _run(scores, family, groups, share, omega=omega, n_unmeasured=50)
+    players = _run(scores, family, groups, share, omega=omega, n_unmeasured=n_u,
+                   onpitch_ratio={"CF": lam})  # fmt: skip
+
+    np.testing.assert_allclose(without["var_unmeasured"], 0.0, atol=1e-12)
+    x = scores[1:]
+    mad = np.median(np.abs(x - np.median(x, axis=2, keepdims=True)), axis=2, keepdims=True)
+    tau = np.sqrt(lam) * 1.4826 * mad
     y = x[:, :, None, :] + tau[:, :, None, :] * rng.standard_normal((n_rep, len(family), n_u, n))
     r = rankdata(-y, axis=-1, method="min")
     e_sb = r.mean(axis=2)

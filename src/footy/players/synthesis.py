@@ -39,6 +39,19 @@ partly box uses ``omega * sigma_g`` in place of ``sigma_g``.
 - ``z``: standard normal, independent across players, draws and (s, b), and of
   the visible score.
 - M4's share is held at its point estimate; its own uncertainty is not propagated.
+- Optional on-pitch leakage term (post hoc robustness, ``onpitch_ratio``). RAPM's
+  teammate leakage is stable across game resamples, so b does not contain it. Within
+  group g write the stable part of a RAPM score ``S = own + leak``, own independent of
+  leak, own's share of ``Var(S)`` the attribution factor ``A_g``. Ranking by own given
+  S: ``E[own | S] = A_g S`` (rank-preserving) and ``Var(own | S) = A_g (1 - A_g) Var(S)``;
+  in score units (divide by ``A_g``) the equivalent Gaussian draw has variance
+  ``(1 - A_g) / A_g Var(S)``, with ``Var(S) = rel_g Var_g(x)`` (``rel_g`` RAPM's split-half
+  reliability in g). It is added to the on-pitch share ``1 - omega`` of each
+  specification: ``tau^2 = Var_g(x) [omega sigma_g / (1 - omega sigma_g) + (1 - omega)
+  lambda_g]`` with ``lambda_g = (1 - A_g) / A_g rel_g`` the caller's ``onpitch_ratio``.
+  On-pitch goal difference counts with the on-pitch part, as for omega; it is noisier
+  than RAPM, so the term is conservative for box_gd and hybrid. Without it (default)
+  impact specifications get ``tau = 0``.
 
 Outputs.
 
@@ -172,6 +185,7 @@ def synthesise(
     omega: pd.Series,
     n_unmeasured: int = N_UNMEASURED,
     fixed_spec: int | None = None,
+    onpitch_ratio: Mapping[str, float] | None = None,
 ) -> Synthesis:
     """The (s, b, u) mixture (module doc).
 
@@ -181,7 +195,8 @@ def synthesise(
     unmeasured share; ``groups`` maps player id to position group; ``omega`` maps
     (spec_id, segment) to the box share of the weights (``stats_weight_share`` of
     M5's weights on the original data). ``fixed_spec`` defaults to the median
-    specification.
+    specification. ``onpitch_ratio`` maps position group to ``lambda_g`` of the
+    on-pitch leakage term (module doc); None leaves it out.
     """
     if n_unmeasured < 1:
         raise ValueError("n_unmeasured must be at least 1")
@@ -205,6 +220,14 @@ def synthesise(
         raise ValueError("omega must give every (spec_id, segment) a share in [0, 1]")
     eff = om * np.minimum(sigma, SHARE_CAP)[None, :]
     ratio = eff / (1.0 - eff)
+    if onpitch_ratio is not None:
+        missing = sorted(set(group) - set(onpitch_ratio))
+        if missing:
+            raise ValueError(f"no on-pitch ratio for groups {missing}")
+        lam = np.array([onpitch_ratio[g] for g in group], dtype=np.float64)
+        if (lam < 0).any():
+            raise ValueError("on-pitch ratios must be non-negative")
+        ratio = ratio + (1.0 - om) * lam[None, :]
 
     x_point = _score_table(point, spec_ids, players)
     if fixed_spec is None:

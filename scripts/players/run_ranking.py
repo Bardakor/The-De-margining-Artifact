@@ -13,6 +13,11 @@ Design §5 (M5, M6, M8, M9); pre-registration A1, A11-A14, A16 (i). Stages, in o
   exploratory comparison with V1.
 - synthesis_bias (post hoc, robustness): the same with the bias-corrected shares of
   results/players/construct_gap/assortative/summary.json, if that file exists.
+- synthesis_leakage (post hoc, robustness): the primary M8 plus the on-pitch leakage
+  term of synthesis.synthesise (``onpitch_ratio``, derivation in that module's doc), with
+  A_g from independent planting (results/players/rapm/attribution.csv) and from the real
+  teammate structure (results/players/construct_gap/assortative/attribution.csv), outputs
+  in results/players/synthesis/leakage_{independent,assortative}/.
 - synthesis_europe (post hoc, exploratory): M5 + M8 as the primary after dropping the
   league rows of leagues outside UEFA (results/players/multiverse/europe/,
   results/players/synthesis/europe/). Motivated by the primary result that a 2025/26
@@ -71,6 +76,10 @@ Choices the pre-registration does not fix (post hoc, Claude's calls):
   game). Same sigma, U and task seeds as the primary; omega from this run's weights.
   firsts_by_dimension.csv: the top 8 by M8 P(#1), share of specifications ranking each
   first per (family, aggregation) cell and margin.
+- synthesis_leakage: A_g = full-data (not half-data) attribution factor of RAPM total,
+  kind "groups"; rel_g = split-half reliability of RAPM total per group
+  (results/players/rapm/reliability.csv). Same sigma, omega, U and task seed as the
+  primary.
 - M9: pool = outfield pool players with at least 900 stint minutes (others dropped and
   counted); positions as M3 (unknown group for the few stint players without one);
   simulations split over worker processes with spawned seeds; gap bins recomputed on
@@ -604,7 +613,12 @@ def bdo_points() -> pd.DataFrame:
 
 
 def run_synthesis(
-    share: dict[str, float], out_dir: Path, task: str, label: str, m5_dir: Path = M5_DIR
+    share: dict[str, float],
+    out_dir: Path,
+    task: str,
+    label: str,
+    m5_dir: Path = M5_DIR,
+    onpitch_ratio: dict[str, float] | None = None,
 ) -> pd.DataFrame:
     """M8 on the M5 outputs of ``m5_dir``; returns the players table."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -612,7 +626,10 @@ def run_synthesis(
     weights = pd.read_csv(m5_dir / "weights.csv.gz")
     omega = stats_weight_share(weights)
     t0 = time.perf_counter()
-    result = synthesise(ranks, replicate_frames(m5_dir), share, groups(), rng(task), omega=omega)
+    result = synthesise(
+        ranks, replicate_frames(m5_dir), share, groups(), rng(task), omega=omega,
+        onpitch_ratio=onpitch_ratio,
+    )  # fmt: skip
     seconds = time.perf_counter() - t0
     print(f"synthesise: {seconds:.0f} s", flush=True)
     indices = variance_indices(ranks)
@@ -765,6 +782,42 @@ def firsts_by_dimension(m5_dir: Path, players: pd.DataFrame) -> pd.DataFrame:
 def stage_synthesis() -> None:
     players = run_synthesis(m4_shares(), M8_DIR, "synthesis", "M8")
     to_csv(firsts_by_dimension(M5_DIR, players), M8_DIR / "firsts_by_dimension.csv")
+
+
+def onpitch_ratios(attribution: pd.DataFrame) -> pd.DataFrame:
+    """lambda_g = (1 - A_g) / A_g rel_g per group (synthesis module doc): A_g the full-data
+    attribution factor of RAPM total, rel_g RAPM total's split-half reliability."""
+    a = attribution[(attribution["kind"] == "groups") & ~attribution["halves"].astype(bool)]
+    out = a.set_index("group")[["total"]].rename(columns={"total": "attribution"})
+    rel = pd.read_csv(RAPM_DIR / "reliability.csv").set_index("group")["total"]
+    out["reliability"] = rel.reindex(out.index)
+    out["lambda"] = (1 - out["attribution"]) / out["attribution"] * out["reliability"]
+    if out.isna().to_numpy().any():
+        raise ValueError("attribution or reliability missing for a group")
+    return out
+
+
+def stage_synthesis_leakage() -> None:
+    """Post hoc robustness: the primary M8 plus the on-pitch leakage term, with A_g from
+    independent planting (lower A, larger term) and from the real teammate structure."""
+    sources = {
+        "independent": RAPM_DIR / "attribution.csv",
+        "assortative": GAP_DIR / "assortative" / "attribution.csv",
+    }
+    for name, path in sources.items():
+        out_dir = M8_DIR / f"leakage_{name}"
+        table = onpitch_ratios(pd.read_csv(path))
+        to_csv(table.rename_axis("group").reset_index(), out_dir / "lambda.csv")
+        print(f"{name}:\n{table.round(4).to_string()}", flush=True)
+        lam = {str(g): float(v) for g, v in table["lambda"].items()}
+        run_synthesis(m4_shares(), out_dir, "synthesis", f"M8 + leakage, {name} A (post hoc)",
+                      onpitch_ratio=lam)  # fmt: skip
+        entries: dict[str, tuple[Any, str]] = {}
+        for g, row in table.iterrows():
+            entries[f"lambda_{g}"] = (row["lambda"], f"On-pitch leakage ratio, group {g}")
+            entries[f"attribution_{g}"] = (row["attribution"], f"A_g ({name} planting), {g}")
+            entries[f"rapm_reliability_{g}"] = (row["reliability"], f"rel_g of RAPM total, {g}")
+        record(out_dir, entries)
 
 
 def stage_synthesis_europe() -> None:
@@ -1222,6 +1275,7 @@ STAGES: dict[str, tuple[Callable[[], None], Path]] = {
     "synthesis": (stage_synthesis, M8_DIR),
     "synthesis_bias": (stage_synthesis_bias, M8_DIR),
     "synthesis_europe": (stage_synthesis_europe, M8_EU_DIR),
+    "synthesis_leakage": (stage_synthesis_leakage, M8_DIR),
     "recognition": (stage_recognition, M6_DIR),
     "recognition_curated": (stage_recognition_curated, M6_CURATED_DIR),
     "recovery": (stage_recovery, M9_DIR),
