@@ -213,3 +213,13 @@ timestamp.
   recomputed from these errors. The post-hoc assortative robustness uses the
   same definition. Recorded here and labelled as a correction made after
   the result.
+- **A19 (2026-11-17), after M8 ran.** A13 (v) summed raw Ballon d'Or points
+  over the 2021–2026 editions. The ballot changed in 2022 (fewer voters, ten
+  places instead of five), so an edition's total points differ several-fold
+  and the raw sum weights the later editions more: it puts a player with
+  three recent editions first. The recognition view is corrected to the sum
+  over editions of the player's share of that edition's points. Kendall's W
+  and the recognition column are reported with this view; the raw-sum value
+  is reported beside it. Recorded here and labelled as a correction made
+  after the result. M6 is unaffected (it models each edition separately,
+  with edition fixed effects).
