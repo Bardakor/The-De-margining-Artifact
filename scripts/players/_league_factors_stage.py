@@ -1,11 +1,19 @@
-"""Stage ``factors`` of run_league.py: box-score league factors from movers (A20 ii).
+"""Stage ``factors`` of run_league.py: box-score league factors from movers (A20 ii, A21).
 
 Cells are player x season x league sums over the panel's league matches
-(scope == "league", minutes > 0). One conditional fixed-effects Poisson fit per
-metric (``footy.players.league_factors``), B = 200 player bootstrap seeded by
-task ``factors/<metric>``, 90% percentile intervals.
+(scope == "league", minutes > 0). Per metric, two conditional fixed-effects
+Poisson fits (``footy.players.league_factors``):
 
-Choices A20 does not fix (post hoc, Claude's calls):
+- ``context`` (A21, the one the league-adjusted ranking uses): age, age^2 and the
+  team's Elo. It enters the estimation of gamma only; counts are divided by
+  exp(gamma) alone.
+- ``plain`` (A20 ii, sensitivity): age and age^2.
+
+B = 200 player bootstrap per fit, 90% percentile intervals. Both models of a
+metric draw from task ``factors/<metric>``: as long as no cell lacks team Elo
+the same players inform both, so they see the same 200 resamples.
+
+Choices the amendments do not fix (post hoc, Claude's calls):
 
 - Linking players: at least 450 league minutes, summed over the window, in the
   league and in another one, the count of docs/unmeasured/league-strength.md §2.2
@@ -15,15 +23,20 @@ Choices A20 does not fix (post hoc, Claude's calls):
   in the panel (a calendar-year league's season is half a year later than its
   label), in years of 365.25 days, centred at 26. A player without a birth date
   is dropped; counted.
+- Team Elo: minutes-weighted mean of ``team_elo`` over the cell's matches, minus
+  the same mean over every player-row of the league-season, in units of 100
+  points. A cell with a match without ``team_elo`` is left out of ``context``;
+  counted.
 - Selection check (§3.2): a cell is "before a move" when the player's next cell,
   ordered by the date of the cell's last match, is in another league. Two point
-  fits per metric: with that dummy, and without those cells.
+  fits per model and metric: with that dummy, and without those cells.
 - Leagues holding pool player-seasons: a pool player with at least 900 league
   minutes in the league in one season.
 
-Outputs in results/players/league/: factors.csv (one row per metric and league),
+Outputs in results/players/league/, each with a ``model`` column: factors.csv
+(one row per metric and league; ``team_elo`` is the coefficient per 100 points),
 age_curve.csv (rate relative to age 26), selection_check.csv (one row per metric
-and league parameter), and ``factors_*`` entries in summary.json.
+and league parameter); ``factors_*`` entries in summary.json.
 """
 
 from __future__ import annotations
@@ -48,37 +61,51 @@ from footy.players.paths import PAPER, PROCESSED, RESULTS
 
 LEAGUE_DIR = RESULTS / "league"
 FACTOR_METRICS = ("goals", "np_goals", "assists")
+FACTOR_MODELS = {"context": ("age", "age2", "elo"), "plain": ("age", "age2")}
 FACTOR_BOOT = 200
 FACTOR_LEVEL = 0.9
 AGE_REF = 26.0
 AGES = np.arange(17.0, 41.0)
+ELO_UNIT = 100.0
 POOL_SEASON_MINUTES = 900.0
 
 
 def league_cells() -> pd.DataFrame:
-    """Player x season x league cells: minutes, counts, last match date, centred age."""
+    """Player x season x league cells: minutes, counts, last match date, age, team Elo."""
     pm = pd.read_csv(
         PROCESSED / "panel_player_match.csv.gz",
-        usecols=["player_id", "season", "competition_id", "scope", "minutes", "date"]
+        usecols=["player_id", "season", "competition_id", "scope", "minutes", "date", "team_elo"]
         + list(FACTOR_METRICS),
         parse_dates=["date"],
     )
     pm = pm[pm["scope"] == "league"].rename(columns={"competition_id": "league"})
-    sums = {m: (m, "sum") for m in ("minutes", *FACTOR_METRICS)}
+    pm["elo_weight"] = pm["minutes"].where(pm["team_elo"].notna())
+    pm["elo_minutes"] = pm["elo_weight"] * pm["team_elo"]
+    sums = {m: (m, "sum") for m in ("minutes", "elo_weight", "elo_minutes", *FACTOR_METRICS)}
     cells = pm.groupby(["player_id", "season", "league"], as_index=False).agg(
         **sums, last_date=("date", "max")
     )
     cells = cells[cells["minutes"] > 0]
-    span = pm.groupby(["season", "league"])["date"].agg(["min", "max"])
-    midpoint = (span["min"] + (span["max"] - span["min"]) / 2).rename("midpoint")
+    season = pm.groupby(["season", "league"]).agg(
+        first=("date", "min"),
+        last=("date", "max"),
+        elo_weight=("elo_weight", "sum"),
+        elo_minutes=("elo_minutes", "sum"),
+    )
+    season["midpoint"] = season["first"] + (season["last"] - season["first"]) / 2
+    season["level"] = season["elo_minutes"] / season["elo_weight"]
     born = pd.read_csv(
         PROCESSED / "tm_players.csv.gz",
         usecols=["player_id", "date_of_birth"],
         parse_dates=["date_of_birth"],
     ).set_index("player_id")["date_of_birth"]
-    cells = cells.join(midpoint, on=["season", "league"])
+    cells = cells.join(season[["midpoint", "level"]], on=["season", "league"])
     age = (cells["midpoint"] - cells["player_id"].map(born)).dt.days / 365.25 - AGE_REF
-    return cells.assign(age=age, age2=age**2).drop(columns="midpoint")
+    elo = (cells["elo_minutes"] / cells["elo_weight"] - cells["level"]) / ELO_UNIT
+    cells = cells.assign(
+        age=age, age2=age**2, elo=elo.where(cells["elo_weight"] == cells["minutes"])
+    )
+    return cells.drop(columns=["midpoint", "level", "elo_minutes", "elo_weight"])
 
 
 def stage_factors() -> None:
@@ -98,6 +125,10 @@ def stage_factors() -> None:
             "players dropped: no date of birth",
         ),
         "factors_cells_no_birth_date": (int(no_age.sum()), "their cells"),
+        "factors_cells_no_team_elo": (
+            int(cells["elo"].isna().sum()),
+            "cells left out of the context model: a match without team Elo",
+        ),
         "factors_leagues_own": (
             int((rule["status"] == "own").sum()),
             "leagues with their own gamma, the reference not counted",
@@ -123,89 +154,110 @@ def stage_factors() -> None:
     factors, curves, checks = [], [], []
     years = AGES - AGE_REF
     quantiles = [(1 - FACTOR_LEVEL) / 2, (1 + FACTOR_LEVEL) / 2]
-    for metric in FACTOR_METRICS:
-        c = prepare_cells(cells, metric, parameter_of)
+    fits = [(model, metric) for model in FACTOR_MODELS for metric in FACTOR_METRICS]
+    for model, metric in fits:
+        covariates = FACTOR_MODELS[model]
+        data = cells.dropna(subset=list(covariates))
+        c = prepare_cells(data, metric, parameter_of, covariates=covariates)
         estimate = fit(c)
         reps = bootstrap(c, estimate, rng(f"factors/{metric}"), n_boot=FACTOR_BOOT)
-        table = summarise(estimate, reps, level=FACTOR_LEVEL).rename(columns={"estimate": "gamma"})
+        table = summarise(estimate, reps, level=FACTOR_LEVEL)
+        gammas = table.rename(columns={"estimate": "gamma"})[["gamma", "se", "lo", "hi"]]
+        team = table.reindex(["elo"]).iloc[0]  # NaN in the plain model
 
-        f = rule.join(table[["gamma", "se", "lo", "hi"]], on="parameter")
+        f = rule.join(gammas, on="parameter")
         f.loc[f["league"] == REFERENCE, "gamma"] = 0.0
-        f = f.assign(metric=metric, multiplier=np.exp(-f["gamma"]))
+        f = f.assign(
+            model=model,
+            metric=metric,
+            multiplier=np.exp(-f["gamma"]),
+            team_elo=team["estimate"],
+            team_elo_se=team["se"],
+        )
         factors.append(f)
 
         b1, b2 = estimate["age"], estimate["age2"]
+        age, age2 = c.names.index("age"), c.names.index("age2")
         lo, hi = np.nanquantile(
-            np.exp(np.outer(reps[:, -2], years) + np.outer(reps[:, -1], years**2)),
+            np.exp(np.outer(reps[:, age], years) + np.outer(reps[:, age2], years**2)),
             quantiles,
             axis=0,
         )
         curve = {"age": AGES, "rate": np.exp(b1 * years + b2 * years**2), "lo": lo, "hi": hi}
-        curves.append(pd.DataFrame({"metric": metric} | curve))
+        curves.append(pd.DataFrame({"model": model, "metric": metric} | curve))
 
-        with_dummy = ("age", "age2", "pre_move")
-        dummy = fit(prepare_cells(cells, metric, parameter_of, covariates=with_dummy))
-        dropped = fit(prepare_cells(cells[cells["pre_move"] == 0], metric, parameter_of))
-        check = table[["gamma", "se"]].drop(index=["age", "age2"])
-        check = check.assign(metric=metric, gamma_dummy=dummy, gamma_dropped=dropped)
+        with_dummy = (*covariates, "pre_move")
+        dummy = fit(prepare_cells(data, metric, parameter_of, covariates=with_dummy))
+        stays = data[data["pre_move"] == 0]
+        dropped = fit(prepare_cells(stays, metric, parameter_of, covariates=covariates))
+        check = gammas[["gamma", "se"]].drop(index=list(covariates))
+        check = check.assign(model=model, metric=metric, gamma_dummy=dummy, gamma_dropped=dropped)
         checks.append(check.rename_axis("parameter").reset_index())
         shift = check.loc[pool_parameters].eval("(gamma_dummy - gamma) / se").abs().max()
         shift_dropped = check.loc[pool_parameters].eval("(gamma_dropped - gamma) / se").abs().max()
 
+        key, label = f"factors_{model}_{metric}", f"{model}, {metric}"
         entries |= {
-            f"factors_{metric}_cells_used": (len(c.count), f"{metric}: cells in the likelihood"),
-            f"factors_{metric}_players_used": (len(c.start), f"{metric}: players in it"),
-            f"factors_{metric}_players_single_cell": (
+            f"{key}_cells_used": (len(c.count), f"{label}: cells in the likelihood"),
+            f"{key}_players_used": (len(c.start), f"{label}: players in it"),
+            f"{key}_players_single_cell": (
                 c.n_single_cell,
-                f"{metric}: players dropped, a single cell",
+                f"{label}: players dropped, a single cell",
             ),
-            f"factors_{metric}_players_zero_count": (
+            f"{key}_players_zero_count": (
                 c.n_zero_count,
-                f"{metric}: players dropped, several cells and a total of zero",
+                f"{label}: players dropped, several cells and a total of zero",
             ),
-            f"factors_{metric}_boot_min": (
+            f"{key}_boot_min": (
                 int(table["n_boot"].min()),
-                f"{metric}: bootstrap replicates used, of {FACTOR_BOOT}",
+                f"{label}: bootstrap replicates used, of {FACTOR_BOOT}",
             ),
-            f"factors_{metric}_age_b1": (b1, f"{metric}: coefficient of age - {AGE_REF:g}"),
-            f"factors_{metric}_age_b2": (b2, f"{metric}: coefficient of (age - {AGE_REF:g})^2"),
-            f"factors_{metric}_age_peak": (AGE_REF - b1 / (2 * b2), f"{metric}: age of the peak"),
-            f"factors_{metric}_pre_move": (
-                dummy["pre_move"],
-                f"{metric}: coefficient of the before-a-move dummy",
-            ),
-            f"factors_{metric}_shift_dummy_max_se": (
+            f"{key}_age_b1": (b1, f"{label}: coefficient of age - {AGE_REF:g}"),
+            f"{key}_age_b2": (b2, f"{label}: coefficient of (age - {AGE_REF:g})^2"),
+            f"{key}_age_peak": (AGE_REF - b1 / (2 * b2), f"{label}: age of the peak"),
+            f"{key}_pre_move": (dummy["pre_move"], f"{label}: before-a-move dummy coefficient"),
+            f"{key}_shift_dummy_max_se": (
                 shift,
-                f"{metric}: largest |gamma with the dummy - gamma| over the pool's leagues, in SE",
+                f"{label}: largest |gamma with the dummy - gamma| over the pool's leagues, in SE",
             ),
-            f"factors_{metric}_shift_dropped_max_se": (
+            f"{key}_shift_dropped_max_se": (
                 shift_dropped,
-                f"{metric}: the same without the cells before a move",
+                f"{label}: the same without the cells before a move",
             ),
         }
+        if "elo" in covariates:
+            entries[f"{key}_team_elo"] = (
+                team["estimate"],
+                f"{label}: coefficient of the team's centred Elo, per {ELO_UNIT:g} points",
+            )
+            entries[f"{key}_team_elo_se"] = (team["se"], f"{label}: its bootstrap SE")
         shown = f[f["league"].isin(pool_leagues)].sort_values("gamma")
         for row in shown.itertuples():
-            entries[f"factors_{metric}_gamma_{row.league}"] = (
+            entries[f"{key}_gamma_{row.league}"] = (
                 row.gamma,
-                f"{metric}: gamma, {row.league} ({row.status}, {row.n_linking} linking players)",
+                f"{label}: gamma, {row.league} ({row.status}, {row.n_linking} linking players)",
             )
-            entries[f"factors_{metric}_multiplier_{row.league}"] = (
+            entries[f"{key}_multiplier_{row.league}"] = (
                 row.multiplier,
-                f"{metric}: exp(-gamma), applied to counts in {row.league} league matches",
+                f"{label}: exp(-gamma), applied to counts in {row.league} league matches",
             )
         print(
-            f"\n{metric}: {len(c.count)} cells, {len(c.start)} players; dropped "
+            f"\n{label}: {len(c.count)} cells, {len(c.start)} players; dropped "
             f"{c.n_single_cell} single-cell and {c.n_zero_count} zero-count players"
         )
-        print(shown.drop(columns=["metric", "parameter"]).round(3).to_string(index=False))
+        columns = ["league", "n_linking", "status", "gamma", "se", "lo", "hi", "multiplier"]
+        print(shown[columns].round(3).to_string(index=False))
+        if "elo" in covariates:
+            print(f"team Elo {team['estimate']:+.3f} per {ELO_UNIT:g} points (SE {team['se']:.3f})")
         print(
             f"age peak {AGE_REF - b1 / (2 * b2):.1f}; dummy {dummy['pre_move']:+.3f}; largest "
             f"shift {shift:.2f} SE with the dummy, {shift_dropped:.2f} SE without the cells"
         )
 
-    columns = ["metric", "league", "gamma", "se", "lo", "hi", "multiplier", "n_linking", "status"]
+    columns = ["model", "metric", "league", "gamma", "se", "lo", "hi", "multiplier"]
+    columns += ["n_linking", "status", "team_elo", "team_elo_se"]
     to_csv(pd.concat(factors)[columns], LEAGUE_DIR / "factors.csv")
     to_csv(pd.concat(curves), LEAGUE_DIR / "age_curve.csv")
-    columns = ["metric", "parameter", "gamma", "se", "gamma_dummy", "gamma_dropped"]
+    columns = ["model", "metric", "parameter", "gamma", "se", "gamma_dummy", "gamma_dropped"]
     to_csv(pd.concat(checks)[columns], LEAGUE_DIR / "selection_check.csv")
     record(LEAGUE_DIR, entries)

@@ -1,4 +1,4 @@
-"""A20 (vii): the league-factor estimator on simulated cells where the truth is known.
+"""A20 (vii), A21: the league-factor estimator on simulated cells where the truth is known.
 
 ``simulate`` draws player x season cells directly: a player effect, a league
 factor ``GAMMA`` on the goal rate, an age curve ``B1 * a + B2 * a**2`` around 26,
@@ -10,6 +10,11 @@ apart from ``few`` players who leave it once. Variants:
   above his own expected count and 0.02 otherwise; GB1 players leave at random.
 - ``ageing``: nobody leaves B and players of GB1 or A join it only from the age
   of 30 (30% per season); younger ones move between GB1 and A.
+- ``context`` (A21): moves as in ``random``, and the goal rate also carries
+  ``TEAM`` = 0.15 per unit of ``elo``, the player's team strength centred within
+  league-season (minutes-weighted). A player who arrives in GB1 joins a team one
+  unit weaker than his own level, one who leaves GB1 a team one unit stronger;
+  on top, every cell has noise of SD 0.5.
 
 What 100 simulated datasets per variant gave (1,200 players, 6 seasons; error of
 gamma for A, B and FEW; the standard error of a mean is near 0.003, 0.003, 0.012):
@@ -27,6 +32,10 @@ gamma for A, B and FEW; the standard error of a mean is near 0.003, 0.003, 0.012
   the bias; here the two bracket the truth.
 - ``ageing``: -0.003 for B with the age terms, -0.190 without them: the league
   joined late then looks harder than it is and its gap is understated.
+- ``context``: the players seen in GB1 and in A or B have ``elo`` 0.74 higher
+  outside GB1. Without the control gamma is biased up, +0.112, +0.118, +0.148
+  (GB1 looks harder than it is); with ``elo`` as a covariate the bias is +0.001,
+  +0.006, +0.022 and the coefficient is recovered (bias -0.001, SD 0.010).
 """
 
 from collections.abc import Sequence
@@ -57,6 +66,7 @@ B_LEAGUE, FEW = 2, 3
 B1, B2 = -0.02, -0.004
 AGE_REF = 26.0
 MOVE, FORM_HI, FORM_LO, LATE = 0.08, 0.25, 0.02, 0.3
+TEAM, TEAM_SHIFT, TEAM_NOISE = 0.15, 1.0, 0.5
 OWN = {str(x): str(x) for x in LEAGUES}
 REPEATS = 40
 
@@ -77,12 +87,23 @@ def simulate(
     leaves[rng.choice(np.flatnonzero(league == FEW), few, replace=False)] = rng.integers(
         1, n_seasons, few
     )
+    home = league.copy()
+    strength = rng.normal(0.0, 1.0, n_players) if variant == "context" else np.zeros(n_players)
     seasons = []
     for t in range(n_seasons):
         league = np.where(leaves == t, rng.integers(0, FEW, n_players), league)
         a = age + t
         minutes = rng.uniform(300.0, 3000.0, n_players)
-        mean = minutes / 90 * np.exp(alpha + np.asarray(gamma)[league] + B1 * a + B2 * a**2)
+        elo = strength
+        if variant == "context":
+            away = np.where(league == 0, -1.0 * (home != 0), 1.0 * (home == 0))
+            raw = strength + TEAM_SHIFT * away + rng.normal(0.0, TEAM_NOISE, n_players)
+            elo = raw - (np.bincount(league, minutes * raw) / np.bincount(league, minutes))[league]
+        mean = (
+            minutes
+            / 90
+            * np.exp(alpha + np.asarray(gamma)[league] + B1 * a + B2 * a**2 + TEAM * elo)
+        )
         goals = rng.poisson(mean)
         seasons.append(
             pd.DataFrame(
@@ -94,6 +115,7 @@ def simulate(
                     "goals": goals,
                     "age": a,
                     "age2": a**2,
+                    "elo": elo,
                 }
             )
         )
@@ -112,13 +134,15 @@ def simulate(
     return pd.concat(seasons, ignore_index=True)
 
 
-def estimate(cells: pd.DataFrame, how: str) -> pd.Series:
+def fit_as(cells: pd.DataFrame, how: str) -> pd.Series:
     if how == "dummy":
         return fit(prepare_cells(cells, "goals", OWN, covariates=("age", "age2", "pre_move")))
     if how == "dropped":
         return fit(prepare_cells(cells[cells["pre_move"] == 0], "goals", OWN))
     if how == "no_age":
         return fit(prepare_cells(cells, "goals", OWN, covariates=()))
+    if how == "context":
+        return fit(prepare_cells(cells, "goals", OWN, covariates=("age", "age2", "elo")))
     return fit(prepare_cells(cells, "goals", OWN))
 
 
@@ -129,7 +153,7 @@ def gamma_errors(test: int, variant: str, fits: Sequence[str]) -> pd.DataFrame:
     for r in range(REPEATS):
         cells = simulate(np.random.default_rng([test, r]), variant=variant)
         cells["pre_move"] = pre_move(cells, "season").astype(np.float64)
-        rows.append(pd.DataFrame({how: estimate(cells, how)[truth.index] - truth for how in fits}))
+        rows.append(pd.DataFrame({how: fit_as(cells, how)[truth.index] - truth for how in fits}))
     return pd.concat(rows).groupby(level=0).mean()
 
 
@@ -224,6 +248,17 @@ def test_late_moves_to_a_weak_league_need_the_age_terms() -> None:
     assert abs(plain["B"]) < 0.02
     assert -0.23 < no_age["B"] < -0.14
     assert abs(no_age["A"]) < 0.02
+
+
+def test_team_context_control_recovers_gamma_when_movers_change_team_strength() -> None:
+    error = gamma_errors(11, "context", ("plain", "context")).loc[["A", "B"]]
+    assert error["plain"].between(0.08, 0.15).all()
+    assert (error["context"].abs() < 0.02).all()
+    cells = simulate(np.random.default_rng(12), variant="context")
+    c = prepare_cells(cells, "goals", OWN, covariates=("age", "age2", "elo"))
+    estimate = fit(c)
+    table = summarise(estimate, bootstrap(c, estimate, np.random.default_rng(13), n_boot=100))
+    assert abs(table["estimate"]["elo"] - TEAM) < 3 * table["se"]["elo"] < 0.06
 
 
 def small_cells() -> pd.DataFrame:
