@@ -280,3 +280,18 @@ timestamp.
   the control are reported beside them, with the ranking they give, as a
   sensitivity. The control must first recover planted factors on synthetic
   cells in which movers change team strength with league.
+- **A22 (2026-11-18), after the A20 (i) fit and before any league-adjusted
+  ranking exists.** A20 (i) as written is mis-specified. In 5.4% of stint
+  minutes the sides are unequal (dismissals); there the league columns sum
+  to the difference in players, not to zero, so fixing the Premier League
+  at zero is a constraint and every other league's mean also absorbs the
+  effect of an extra player. A noise-free fit of a known truth on the real
+  schedule returns each mean 0.058 too high, and the fitted means put the
+  Premier League below six leagues and move with λ. The league-adjusted
+  RAPM therefore has one more unpenalised column, the number of players on
+  the pitch, home side minus away side. With it the same noise-free check
+  recovers the truth and the means are stable from λ/10 to 10λ. The fit as
+  written is kept in the results and not used. Two details A20 left open,
+  fixed by the fit: stint players without minutes in a covered league form
+  one pseudo-league with its own mean, and the replacement column carries
+  no league term.

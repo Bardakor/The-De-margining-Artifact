@@ -11,9 +11,10 @@ Stages:
   minutes in it and in another league; the other leagues share the mean REST. Pooled fit,
   per-season fits (pooled means kept), and the primary's 200 bootstrap draws of games
   (results/players/rapm/bootstrap_pooled.npz), each refitted pooled and per season.
-- rapm_men (A22, the fit the league-adjusted ranking uses): the same with one more unpenalised column, the
-  players on the pitch, home side minus away side. Where the sides are unequal (5% of the
-  minutes) the league columns no longer sum to 0, so fixing one league at 0 is a
+- rapm_men (A22, the fit the league-adjusted ranking uses): the same with one more
+  unpenalised column, the players on the pitch, home side minus away side. Where the
+  sides are unequal (5% of the minutes) the league columns no longer sum to 0, so fixing
+  one league at 0 is a
   constraint and not a normalisation: every other league's mean then also carries the
   effect of an extra player. This column takes that effect.
 - factors (A20 ii, A21): box-score league factors from players who change league, with
