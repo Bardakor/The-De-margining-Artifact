@@ -263,3 +263,20 @@ timestamp.
   goal difference, the existing rule for rows without stints). (vii) Both
   estimators must first recover planted league levels on synthetic
   multi-league data, including a league with almost no links.
+- **A21 (2026-11-18), after the A20 (ii) factors were estimated and before
+  any league-adjusted ranking exists.** The factors show what
+  `docs/unmeasured/league-strength.md` warned of: γ is the typical mover's
+  change in rate, so it mixes the league's difficulty with the mover's
+  change of team. Players who arrive in the Premier League usually leave a
+  dominant club for a less dominant one, and those who leave it do the
+  reverse, which overstates its difficulty; the Saudi and Brazilian
+  factors rest on one-way moves of older players and come out level with
+  the Bundesliga's. The factor model therefore gains one control, the
+  minutes-weighted pre-match Elo of the player's team in that cell centred
+  within league-season (within-league Elo differences are usable; A20 (iv)).
+  It enters only the estimation of γ: counts are still divided by
+  exp(γ̂_L) alone, so a player is not adjusted for his own team. The
+  league-adjusted ranking uses these factors; the A20 (ii) factors without
+  the control are reported beside them, with the ranking they give, as a
+  sensitivity. The control must first recover planted factors on synthetic
+  cells in which movers change team strength with league.
