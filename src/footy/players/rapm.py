@@ -19,6 +19,24 @@ acts on player columns only, through augmented rows; home, intercepts and the
 covariate are unpenalised. Every fit is one call to
 ``scipy.sparse.linalg.lsqr`` on the column-scaled (Jacobi-preconditioned) system.
 
+League means (pre-registration A20 i). With ``league_shares`` (one row per
+player, one column per league, the share of his league minutes played there;
+the league left out is the reference)::
+
+    offence_p = d_off_p + sum_L share_pL * mu_L    (defence likewise, same mu)
+
+The penalty then acts on the deviations ``d`` only, so a player is shrunk toward
+his leagues' mean instead of toward 0. In the design each ``mu_L`` is one more
+unpenalised column with the covariate's sign rule: ``z_L`` = the shares of
+league L on the pitch, home side minus away side. Reported offence, defence and
+total include the league term (``total = d_off + d_def + 2 * sum_L share_pL *
+mu_L``). The replacement player has no league term: his estimate is the
+deviation of a low-minute player from his own leagues' mean. With eleven a side
+the columns of all leagues sum to 0, so the reference only fixes the origin.
+With unequal sides they sum to the difference in players, and the reference is
+then a constraint: every other league's mean also takes the effect of an extra
+player, unless the covariate is that difference (home minus away).
+
 Assumptions, stated so callers and tests can rely on them:
 
 - Players below ``min_minutes`` over the whole data share one replacement
@@ -37,13 +55,13 @@ Assumptions, stated so callers and tests can rely on them:
   reliability inside every replicate.
 - Per-season estimates reuse the pooled fit as prior: ``season = pooled + delta``
   with penalty ``lam_season * ||delta||^2``; home, intercepts and covariate are
-  re-estimated.
+  re-estimated, league means stay at the pooled fit's.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 import pandas as pd
@@ -63,7 +81,9 @@ Split = tuple[FloatArray, FloatArray, FloatArray, FloatArray, FloatArray, FloatA
 @dataclass(frozen=True)
 class Design:
     """Weighted design: columns are offence (n_players), defence (n_players),
-    one home column per group, one intercept per group, then the covariate."""
+    one home column per group, one intercept per group, then the covariate,
+    then one mean per league. ``shares[i, j]`` is the share of player column
+    ``i`` in league ``j``."""
 
     x: sp.csr_matrix
     y: FloatArray
@@ -74,6 +94,8 @@ class Design:
     players: pd.Index
     groups: pd.Index
     has_covariate: bool
+    leagues: pd.Index
+    shares: FloatArray
 
     @property
     def n_players(self) -> int:
@@ -91,6 +113,7 @@ class RapmFit:
     intercepts: pd.Series
     covariate: float | None
     lam: float
+    leagues: pd.Series = field(default_factory=lambda: pd.Series(dtype=np.float64))
 
 
 @dataclass(frozen=True)
@@ -114,12 +137,14 @@ class RapmBootstrap:
     """``replicates[c]`` has one row per replicate; row ``b`` of ``halves`` is
     the split of replicate ``b``. ``counts[b, i]`` is how many times replicate
     ``b`` drew game ``i`` (order ``Design.game_ids``), so other quantities can be
-    resampled with the same games."""
+    resampled with the same games. ``leagues`` has one row per replicate and
+    one column per league mean."""
 
     se: pd.DataFrame
     replicates: dict[str, pd.DataFrame]
     halves: Halves
     counts: NDArray[np.int64]
+    leagues: pd.DataFrame
 
 
 def build_design(
@@ -130,9 +155,12 @@ def build_design(
     away_col: str = "away_goals",
     group: str | None = None,
     covariate: str | None = None,
+    league_shares: pd.DataFrame | None = None,
     min_minutes: float = 0.0,
 ) -> Design:
-    """``group`` and ``covariate`` name columns of ``stints``."""
+    """``group`` and ``covariate`` name columns of ``stints``. ``league_shares``
+    (index player_id, one column per league but the reference) must hold every
+    player of ``stint_players``, also those below ``min_minutes``."""
     st = stints.reset_index(drop=True)
     n = len(st)
     sp_ = stint_players.merge(st[["stint_id", "minutes"]], on="stint_id")
@@ -158,12 +186,27 @@ def build_design(
     cols = [codes, n_players + codes, home0 + g_codes, icpt0 + np.concatenate([g_codes, g_codes])]
     vals = [np.ones(len(s)), -np.ones(len(s)), np.ones(n), np.ones(2 * n)]
     n_cols = icpt0 + len(groups)
+    # Per-stint columns from the home side's view: +c in the home-attacking row,
+    # -c in the away-attacking row.
+    signed = []
     if covariate is not None:
-        c = st[covariate].to_numpy(dtype=np.float64)
-        rows.append(both)
-        cols.append(np.full(2 * n, n_cols))
-        vals.append(np.concatenate([c, -c]))
-        n_cols += 1
+        signed.append(sp.coo_matrix(st[[covariate]].to_numpy(dtype=np.float64)))
+    leagues: pd.Index = pd.Index([])
+    shares = np.zeros((n_players, 0))
+    if league_shares is not None:
+        on_codes, on_ids = pd.factorize(sp_["player_id"])
+        of_on = league_shares.reindex(on_ids).to_numpy(dtype=np.float64)
+        if np.isnan(of_on).any():
+            raise ValueError("stint players without league shares")
+        on = sp.coo_matrix((np.where(is_home, 1.0, -1.0), (s, on_codes)), shape=(n, len(on_ids)))
+        signed.append((on.tocsr() @ sp.csr_matrix(of_on)).tocoo())
+        leagues = league_shares.columns
+        shares = league_shares.reindex(players, fill_value=0.0).to_numpy(dtype=np.float64)
+    for c in signed:
+        rows += [c.row, n + c.row]
+        cols += [n_cols + c.col, n_cols + c.col]
+        vals += [c.data, -c.data]
+        n_cols += c.shape[1]
     x = sp.coo_matrix(
         (np.concatenate(vals), (np.concatenate(rows), np.concatenate(cols))),
         shape=(2 * n, n_cols),
@@ -184,6 +227,8 @@ def build_design(
         players=pd.Index(players),
         groups=pd.Index(groups),
         has_covariate=covariate is not None,
+        leagues=leagues,
+        shares=shares,
     )
 
 
@@ -214,18 +259,26 @@ def bootstrap_rapm(
     fitted whole and on two halves of its games (three fits per replicate)."""
     n_games = _n_games(d)
     reps = np.empty((n_boot, d.n_players, 3))
+    means = np.empty((n_boot, len(d.leagues)))
     all_counts = np.empty((n_boot, n_games), dtype=np.int64)
     splits = []
     for b in range(n_boot):
         counts = np.bincount(rng.integers(n_games, size=n_games), minlength=n_games)
         all_counts[b] = counts
-        reps[b] = _components(_solve(d, lam, counts[d.game].astype(np.float64)), d.n_players)
+        coef = _solve(d, lam, counts[d.game].astype(np.float64))
+        reps[b], means[b] = _effects(d, coef), _league_means(d, coef)
         splits.append(_split(d, lam, rng, counts.astype(np.float64)))
     replicates = {
         name: pd.DataFrame(reps[:, :, k], columns=d.players) for k, name in enumerate(COMPONENTS)
     }
     se = pd.DataFrame({name: df.std(ddof=1) for name, df in replicates.items()})
-    return RapmBootstrap(se=se, replicates=replicates, halves=_stack(d, splits), counts=all_counts)
+    return RapmBootstrap(
+        se=se,
+        replicates=replicates,
+        halves=_stack(d, splits),
+        counts=all_counts,
+        leagues=pd.DataFrame(means, columns=d.leagues),
+    )
 
 
 def split_halves(d: Design, lam: float, rng: np.random.Generator, *, n_repeats: int = 20) -> Halves:
@@ -298,13 +351,13 @@ def attribution_factor(
         if halves:
             n_games = _n_games(d)
             in_a = rng.permutation(n_games) < n_games // 2
-            est_a, est_b = (_components(_solve(dn, lam, w.astype(np.float64)[d.game]), p)
+            est_a, est_b = (_effects(dn, _solve(dn, lam, w.astype(np.float64)[d.game]))
                             for w in (in_a, ~in_a))  # fmt: skip
             corr = _group_corr(est_a, planted, labels)
             corr[comps] *= _group_corr(est_b, planted, labels)[comps]
             corr[comps] /= _group_corr(est_a, est_b, labels)[comps]
         else:
-            corr = _group_corr(_components(_solve(dn, lam), p), planted, labels)
+            corr = _group_corr(_effects(dn, _solve(dn, lam)), planted, labels)
             corr[comps] **= 2
         corrs.append(corr)
     return _mean(corrs)
@@ -325,10 +378,14 @@ def fit_rapm_by_season(
     ``weights`` multiplies each game's rows (order ``d.game_ids``; e.g. the
     bootstrap ``counts``) as if the game were repeated that many times;
     ``minutes`` are then weighted the same way, and a player-season seen only
-    in weight-0 games keeps its pooled estimate.
+    in weight-0 games keeps its pooled estimate. League means are not
+    re-estimated: every season keeps ``pooled.leagues``.
     """
     row_weight = None if weights is None else np.asarray(weights, dtype=np.float64)[d.game]
     n, p = len(d.stint_ids), d.n_players
+    n_free = d.x.shape[1] - len(d.leagues)
+    means = pooled.leagues.reindex(d.leagues).to_numpy(dtype=np.float64)
+    term = d.shares @ means
     s_codes, s_labels = pd.factorize(season.reindex(d.stint_ids).to_numpy(), sort=True)
     n_s = len(s_labels)
     off, dfn = d.x[:, :p].tocoo(), d.x[:, p : 2 * p].tocoo()
@@ -343,16 +400,19 @@ def fit_rapm_by_season(
     ).tocsr()
     base = pooled.players.reindex(d.players)
     prior = np.concatenate(
-        [base["offence"].to_numpy()[keys // n_s], base["defence"].to_numpy()[keys // n_s]]
+        [(base[c].to_numpy() - term)[keys // n_s] for c in ("offence", "defence")]
     )
     index = pd.MultiIndex.from_arrays(
         [d.players[keys // n_s], s_labels[keys % n_s]], names=["player_id", "season"]
     )
     ds = replace(
-        d, x=sp.hstack([block, d.x[:, 2 * p :]]).tocsr(), y=d.y - block @ prior, players=index
+        d,
+        x=sp.hstack([block, d.x[:, 2 * p : n_free]]).tocsr(),
+        y=d.y - block @ prior - d.x[:, n_free:] @ means,
+        players=index,
     )
     delta = _solve(ds, lam_season, row_weight)
-    est = prior + delta[: 2 * k]
+    est = prior + delta[: 2 * k] + np.tile(term[keys // n_s], 2)
     out = pd.DataFrame(
         {"minutes": ds.player_minutes(row_weight), "offence": est[:k], "defence": est[k:]},
         index=index,
@@ -365,8 +425,7 @@ def _split(d: Design, lam: float, rng: np.random.Generator, counts: FloatArray) 
     """Halve the games at random; ``counts`` weighs each game (bootstrap)."""
     in_a = rng.permutation(len(counts)) < len(counts) // 2
     ga, gb = counts * in_a, counts * ~in_a
-    p = d.n_players
-    est_a, est_b = (_components(_solve(d, lam, g[d.game]), p) for g in (ga, gb))
+    est_a, est_b = (_effects(d, _solve(d, lam, g[d.game])) for g in (ga, gb))
     return est_a, est_b, d.player_minutes(ga[d.game]), d.player_minutes(gb[d.game]), ga, gb
 
 
@@ -439,14 +498,25 @@ def _components(coef: FloatArray, n_players: int) -> FloatArray:
     return np.column_stack([off, dfn, off + dfn])
 
 
+def _league_means(d: Design, coef: FloatArray) -> FloatArray:
+    return coef[d.x.shape[1] - len(d.leagues) :]
+
+
+def _effects(d: Design, coef: FloatArray) -> FloatArray:
+    """Offence, defence and total per player, each with his league term."""
+    term = d.shares @ _league_means(d, coef)
+    return _components(coef, d.n_players) + np.outer(term, [1.0, 1.0, 2.0])
+
+
 def _to_fit(d: Design, coef: FloatArray, lam: float) -> RapmFit:
     p, g = d.n_players, len(d.groups)
-    players = pd.DataFrame(_components(coef, p), index=d.players, columns=COMPONENTS)
+    players = pd.DataFrame(_effects(d, coef), index=d.players, columns=COMPONENTS)
     players.insert(0, "minutes", d.player_minutes())
     return RapmFit(
         players=players,
         home=pd.Series(coef[2 * p : 2 * p + g], index=d.groups),
         intercepts=pd.Series(coef[2 * p + g : 2 * p + 2 * g], index=d.groups),
-        covariate=float(coef[-1]) if d.has_covariate else None,
+        covariate=float(coef[2 * p + 2 * g]) if d.has_covariate else None,
         lam=lam,
+        leagues=pd.Series(_league_means(d, coef), index=d.leagues),
     )

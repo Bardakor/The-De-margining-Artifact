@@ -27,10 +27,37 @@ Model, stated so tests can rely on it:
   cards, no stoppage time.
 - Between seasons a share ``transfer_rate`` of players moves to a random other
   club; this is what makes teammates separable for plus-minus models.
+
+Several leagues (pre-registration A20 vii), one per entry of ``league_means``;
+with the default single entry nothing below applies and the draws are those of
+the one-league generator:
+
+- Each league has ``n_teams`` clubs and its own double round robin, competition
+  ``SYN1``, ``SYN2``, ... (``SYN`` when there is one league). A player's
+  ``offence`` and ``defence`` each include the planted mean of the league he
+  starts in, and he keeps them when he moves. Transfers at ``transfer_rate``
+  stay inside a league.
+- Cup (competition ``CUP``): each season the ``CUP_TEAMS`` clubs of every
+  league with the most points in its previous season (first season: drawn at
+  random) play every cup club of the other leagues once, home side by coin flip.
+- Between seasons a share ``cross_transfer_rate`` of players swaps clubs with a
+  player of another league (a player drawn for two swaps counts once).
+- ``age_slope > 0``: a player is ``AGE_MIN``..``AGE_MAX`` years old in the first
+  season and loses ``age_slope`` of offence and of defence per year above
+  ``AGE_PEAK``. In a swap the player who leaves the league with the higher mean
+  is then drawn from its older half and the other from the younger half of his
+  league. The truth table holds the effects before any decline and ``age``, the
+  age in the first season.
+- ``weak_link_swaps``: when set, the last league plays no cup and swaps exactly
+  that many players per season with the other leagues.
+- The truth table has ``league_mean``, the planted mean of the player's first
+  league, and one ``share_<competition>`` per league: the share of his league
+  minutes (no cup) played there.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -40,6 +67,9 @@ from numpy.typing import NDArray
 RATE_FLOOR = 0.02
 SHOT_RATE_FLOOR = 0.05
 STARTERS = 11
+CUP = "CUP"
+CUP_TEAMS = 4
+AGE_MIN, AGE_PEAK, AGE_MAX = 18, 27, 33
 
 
 @dataclass(frozen=True)
@@ -68,29 +98,65 @@ def simulate_league(
     subs_per_side: int = 3,
     transfer_rate: float = 0.2,
     match_shock_sd: float = 0.0,
+    league_means: Sequence[float] = (0.0,),
+    cross_transfer_rate: float = 0.0,
+    age_slope: float = 0.0,
+    weak_link_swaps: int | None = None,
 ) -> League:
-    n_players = n_teams * squad_size
+    n_leagues = len(league_means)
+    n_clubs = n_leagues * n_teams
+    n_players = n_clubs * squad_size
     player_ids = np.arange(1, n_players + 1)
     z_seen = rng.standard_normal(n_players)
     z_unseen = rng.standard_normal(n_players)
-    offence = offence_sd * (
+    club = np.repeat(np.arange(1, n_clubs + 1), squad_size)
+    league_of = (np.arange(n_clubs + 1) - 1) // n_teams  # by club id
+    means = np.asarray(league_means, dtype=np.float64)
+    league_mean = means[league_of[club]]
+    offence = league_mean + offence_sd * (
         np.sqrt(measurable_share) * z_seen + np.sqrt(1 - measurable_share) * z_unseen
     )
-    defence = defence_sd * rng.standard_normal(n_players)
+    defence = league_mean + defence_sd * rng.standard_normal(n_players)
     shot_rate = np.maximum(SHOT_RATE_FLOOR, shot_rate_mean + shot_rate_sd * z_seen)
-    club = np.repeat(np.arange(1, n_teams + 1), squad_size)
+    age = rng.integers(AGE_MIN, AGE_MAX + 1, size=n_players) if age_slope > 0 else None
+    comps = ["SYN"] if n_leagues == 1 else [f"SYN{k + 1}" for k in range(n_leagues)]
+    n_linked = n_leagues - (weak_link_swaps is not None)  # leagues in the cup
 
     games: list[tuple[object, ...]] = []
     stints: list[tuple[object, ...]] = []
     stint_players: list[tuple[object, ...]] = []
     player_match: list[tuple[object, ...]] = []
     game_id = stint_id = 0
+    points = np.zeros(n_clubs + 1, dtype=np.int64)  # by club id, league games of one season
+    league_minutes = np.zeros((n_players, n_leagues))
     for season_index in range(n_seasons):
         if season_index > 0:
-            club = _transfer(rng, club, transfer_rate)
+            for k in range(n_leagues):
+                members = np.flatnonzero(league_of[club] == k)
+                club[members] = _transfer(rng, club[members], transfer_rate)
+            swaps = [
+                rng.choice(n_linked, size=2, replace=False)
+                for _ in range(int(cross_transfer_rate * n_linked * n_teams * squad_size) // 2)
+            ] + [(n_linked, rng.integers(n_linked)) for _ in range(weak_link_swaps or 0)]
+            for a, b in swaps:
+                if means[b] > means[a]:
+                    a, b = b, a
+                down = _pick(rng, np.flatnonzero(league_of[club] == a), age, oldest=True)
+                up = _pick(rng, np.flatnonzero(league_of[club] == b), age, oldest=False)
+                club[down], club[up] = club[up], club[down]
         season = f"{2020 + season_index}/{(21 + season_index) % 100:02d}"
-        squads = {c: player_ids[club == c] for c in range(1, n_teams + 1)}
-        for home, away in _double_round_robin(n_teams):
+        squads = {c: player_ids[club == c] for c in range(1, n_clubs + 1)}
+        fade = 0.0 if age is None else age_slope * np.maximum(0, age + season_index - AGE_PEAK)
+        off_now, def_now = offence - fade, defence - fade
+        fixtures = [
+            (comps[k], k * n_teams + h, k * n_teams + a)
+            for k in range(n_leagues)
+            for h, a in _double_round_robin(n_teams)
+        ]
+        if n_linked > 1:
+            fixtures += _cup(rng, points, n_linked, n_teams, first=season_index == 0)
+        points = np.zeros(n_clubs + 1, dtype=np.int64)
+        for comp, home, away in fixtures:
             game_id += 1
             on = {"home": _starters(rng, squads[home]), "away": _starters(rng, squads[away])}
             subs = {
@@ -116,8 +182,8 @@ def simulate_league(
                     rate = (
                         base_rate
                         + sign * home_advantage / 2
-                        + offence[np.array(on[side]) - 1].sum()
-                        - defence[np.array(on[other]) - 1].sum()
+                        + off_now[np.array(on[side]) - 1].sum()
+                        - def_now[np.array(on[other]) - 1].sum()
                         + shock[side]
                     )
                     goals[side] = int(rng.poisson(max(RATE_FLOOR, rate) * length / 90))
@@ -142,7 +208,11 @@ def simulate_league(
                         minutes_on[p] = minutes_on.get(p, 0) + length
                         gf[p] += goals[side]
                         ga[p] += goals[other]
-            games.append((game_id, "SYN", season, home, away, totals["home"], totals["away"]))
+            games.append((game_id, comp, season, home, away, totals["home"], totals["away"]))
+            if comp != CUP:
+                margin = totals["home"] - totals["away"]
+                points[home] += 3 * (margin > 0) + (margin == 0)
+                points[away] += 3 * (margin < 0) + (margin == 0)
             starters_now = {
                 side: set(_starting_ids(on[side], subs[side])) for side in ("home", "away")
             }
@@ -150,6 +220,8 @@ def simulate_league(
                 for p, mins in minutes_on.items():
                     if club[p - 1] != team:
                         continue
+                    if comp != CUP:
+                        league_minutes[p - 1, league_of[team]] += mins
                     shots = int(rng.poisson(shot_rate[p - 1] * np.exp(shock[side]) * mins / 90))
                     scored = int(rng.binomial(shots, conversion))
                     player_match.append(
@@ -167,6 +239,7 @@ def simulate_league(
                         )
                     )
 
+    shares = league_minutes / np.maximum(league_minutes.sum(axis=1, keepdims=True), 1.0)
     truth = pd.DataFrame(
         {
             "player_id": player_ids,
@@ -174,6 +247,9 @@ def simulate_league(
             "defence": defence,
             "seen": offence_sd * np.sqrt(measurable_share) * z_seen,
             "shot_rate": shot_rate,
+            "league_mean": league_mean,
+            **{f"share_{c}": shares[:, k] for k, c in enumerate(comps)},
+            **({} if age is None else {"age": age}),
         }
     )
     return League(
@@ -252,6 +328,47 @@ def _starting_ids(final_on: list[int], subs: list[tuple[int, int, int]]) -> list
     for _, off, inn in reversed(subs):
         current = [off if p == inn else p for p in current]
     return current
+
+
+def _cup(
+    rng: np.random.Generator,
+    points: NDArray[np.int64],
+    n_leagues: int,
+    n_teams: int,
+    *,
+    first: bool,
+) -> list[tuple[str, int, int]]:
+    """Cup fixtures among the first ``n_leagues`` leagues; ``points`` (by club id)
+    are last season's."""
+    entrants = []
+    for k in range(n_leagues):
+        clubs = k * n_teams + 1 + np.arange(n_teams)
+        best = (
+            rng.choice(clubs, size=CUP_TEAMS, replace=False)
+            if first
+            else clubs[np.argsort(-points[clubs], kind="stable")[:CUP_TEAMS]]
+        )
+        entrants += [(k, int(c)) for c in best]
+    fixtures = []
+    for i, (league_a, a) in enumerate(entrants):
+        for league_b, b in entrants[i + 1 :]:
+            if league_a != league_b:
+                fixtures.append((CUP, a, b) if rng.random() < 0.5 else (CUP, b, a))
+    return fixtures
+
+
+def _pick(
+    rng: np.random.Generator,
+    members: NDArray[np.int64],
+    age: NDArray[np.int64] | None,
+    *,
+    oldest: bool,
+) -> int:
+    """One of ``members`` at random; with ages, from their older or younger half."""
+    if age is not None:
+        by_age = members[np.argsort(age[members], kind="stable")]
+        members = by_age[len(by_age) // 2 :] if oldest else by_age[: len(by_age) // 2]
+    return int(rng.choice(members))
 
 
 def _transfer(rng: np.random.Generator, club: NDArray[np.int64], rate: float) -> NDArray[np.int64]:

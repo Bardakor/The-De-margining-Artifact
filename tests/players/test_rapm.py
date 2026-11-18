@@ -8,6 +8,7 @@ from numpy.typing import NDArray
 from footy.players.rapm import (
     REPLACEMENT,
     Design,
+    RapmFit,
     attribution_factor,
     bootstrap_rapm,
     build_design,
@@ -17,7 +18,7 @@ from footy.players.rapm import (
     split_half_reliability,
     split_halves,
 )
-from footy.players.synthetic import League, simulate_league
+from footy.players.synthetic import AGE_PEAK, League, simulate_league
 
 LAMS = [1e3, 3e3, 1e4, 3e4, 1e5]
 SD = 0.1  # planted offence / defence sd, goals per 90
@@ -325,3 +326,279 @@ def test_season_game_weights_act_as_duplicated_games(six_seasons: Fitted) -> Non
     assert (unseen["minutes"] == 0).all()
     base = pooled.players.loc[unseen.index.get_level_values("player_id")]
     np.testing.assert_allclose(unseen["offence"].to_numpy(), base["offence"].to_numpy())
+
+
+# --- league means (pre-registration A20 i, vii) ---------------------------------------
+
+MEANS = (0.0, -0.02, -0.04, -0.06, -0.03)  # planted; the last league is weakly linked
+
+
+@dataclass(frozen=True)
+class LeagueFitted:
+    league: League
+    plain: Design  # no league columns
+    design: Design  # league columns, the first league is the reference
+    lam: float
+    fit_plain: RapmFit
+    fit: RapmFit
+
+
+def _shares(lg: League) -> pd.DataFrame:
+    """League shares from the truth table, without the first league (the reference)."""
+    shares = lg.truth.set_index("player_id").filter(like="share_")
+    return shares.rename(columns=lambda c: c.removeprefix("share_")).iloc[:, 1:]
+
+
+def _league_designs(lg: League) -> tuple[Design, Design]:
+    """The same stints without and with league columns, group = competition-season."""
+    st = lg.stints.merge(lg.games[["game_id", "season", "competition_id"]], on="game_id")
+    st["group"] = st["competition_id"] + " " + st["season"]
+    return (
+        build_design(st, lg.stint_players, group="group"),
+        build_design(st, lg.stint_players, group="group", league_shares=_shares(lg)),
+    )
+
+
+@pytest.fixture(scope="module")
+def five_leagues() -> LeagueFitted:
+    """Four leagues linked by the cup and by 3% of players changing league each season,
+    and a fifth with no cup games and one swap a season; each 10 clubs x 18 players x
+    6 seasons, ~22k stints in all. lam is chosen without the league columns, as on the
+    real data (A20 i)."""
+    lg = simulate_league(
+        np.random.default_rng(30),
+        n_teams=10,
+        squad_size=18,
+        n_seasons=6,
+        offence_sd=SD,
+        defence_sd=SD,
+        league_means=MEANS,
+        cross_transfer_rate=0.03,
+        weak_link_swaps=1,
+    )
+    plain, design = _league_designs(lg)
+    lam, _ = cv_lambda(plain, LAMS, np.random.default_rng(31))
+    return LeagueFitted(lg, plain, design, lam, fit_rapm(plain, lam), fit_rapm(design, lam))
+
+
+def test_league_means_recover_the_planted_levels(five_leagues: LeagueFitted) -> None:
+    linked = np.concatenate([[0.0], five_leagues.fit.leagues.to_numpy()[:3]])
+    slope = float(np.polyfit(MEANS[:4], linked, 1)[0])
+    # Each mean has a sampling SD of ~0.007 (the cup gives 96 games per pair of
+    # leagues), so the slope over these four levels has SD 0.13: over 16 other seeds
+    # it averaged 0.97. Here it is 1.14, and the largest error of a mean is 0.014.
+    assert abs(slope - 1) < 0.3
+    assert np.abs(linked - MEANS[:4]).max() < 0.025
+
+
+def test_league_columns_improve_the_ranking_across_leagues(five_leagues: LeagueFitted) -> None:
+    truth = five_leagues.league.truth.set_index("player_id")
+    total = (truth["offence"] + truth["defence"])[truth["share_SYN5"] == 0]
+    without, with_ = (
+        float(f.players["total"].reindex(total.index).corr(total, method="spearman"))
+        for f in (five_leagues.fit_plain, five_leagues.fit)
+    )
+    # Spearman with the true total, players of the four linked leagues pooled: 0.519
+    # without the league columns, 0.542 with (16 other seeds: 0.547 and 0.559, higher
+    # with the columns in every one). Over all five leagues it falls from 0.519 to
+    # 0.410: the weakly linked league's own mean is noise (next test), which is why
+    # A20 pools such leagues.
+    assert with_ > without + 0.005
+
+
+def test_weakly_linked_league_has_a_wide_bootstrap_spread(five_leagues: LeagueFitted) -> None:
+    d, lam = five_leagues.design, five_leagues.lam
+    boot = bootstrap_rapm(d, lam, np.random.default_rng(32), n_boot=12)
+    sd = boot.leagues.std(ddof=1)
+    # 10 movers and no cup game: bootstrap SD 0.093 (estimate +0.044, planted -0.03)
+    # against at most 0.008 for a linked league (16 other seeds: ratio 6 to 21).
+    assert sd["SYN5"] > 4 * sd.drop("SYN5").max()
+    # A replicate is the fit on its own draw of games, league terms included.
+    refit = fit_rapm(replace(d, w=d.w * boot.counts[0][d.game]), lam)
+    np.testing.assert_allclose(refit.leagues.to_numpy(), boot.leagues.iloc[0].to_numpy(), atol=1e-9)
+    for comp in ("offence", "defence", "total"):
+        np.testing.assert_allclose(
+            refit.players[comp].to_numpy(), boot.replicates[comp].iloc[0].to_numpy(), atol=1e-9
+        )
+
+
+def test_league_columns_change_nothing_when_all_planted_means_are_zero() -> None:
+    lg = simulate_league(
+        np.random.default_rng(33),
+        n_teams=10,
+        squad_size=18,
+        n_seasons=6,
+        offence_sd=SD,
+        defence_sd=SD,
+        league_means=(0.0, 0.0, 0.0, 0.0),
+        cross_transfer_rate=0.03,
+    )
+    plain, design = _league_designs(lg)
+    lam, _ = cv_lambda(plain, LAMS, np.random.default_rng(34))
+    without, with_ = fit_rapm(plain, lam), fit_rapm(design, lam)
+    # The three free means have SD ~0.010 around 0 (10 other seeds); here the largest
+    # is 0.014 in absolute value and the two rankings correlate at 0.997 (Spearman
+    # with the true total: 0.515 without the columns, 0.513 with).
+    assert with_.leagues.abs().max() < 0.03
+    rho = without.players["total"].corr(with_.players["total"], method="spearman")
+    assert rho > 0.99
+
+
+def test_league_mean_takes_a_planted_shift_and_reaches_each_player_by_his_share() -> None:
+    """Adding g * z per 90 to home goals and removing it from away goals, z = the
+    SYN2 shares on the pitch (home minus away), must move the SYN2 mean by exactly
+    g, each player's offence and defence by g times his share, and nothing else."""
+    lg = simulate_league(
+        np.random.default_rng(35),
+        n_seasons=3,
+        league_means=(0.0, 0.0, 0.0),
+        cross_transfer_rate=0.1,
+    )
+    shares = _shares(lg)
+    on = lg.stint_players.join(shares, on="player_id")
+    signed = on["SYN2"] * np.where(on["side"] == "home", 1.0, -1.0)
+    z = signed.groupby(on["stint_id"]).sum().reindex(lg.stints["stint_id"]).to_numpy()
+    shift = 0.25 * z * lg.stints["minutes"] / 90
+    st = lg.stints.assign(
+        home_x=lg.stints["home_goals"] + shift, away_x=lg.stints["away_goals"] - shift
+    )
+    minutes = lg.player_match.groupby("player_id")["minutes"].sum()
+    cut = float(minutes.quantile(0.2))  # the lowest fifth share the replacement column
+    base = fit_rapm(build_design(st, lg.stint_players, league_shares=shares, min_minutes=cut), 1e4)
+    moved = fit_rapm(
+        build_design(
+            st,
+            lg.stint_players,
+            home_col="home_x",
+            away_col="away_x",
+            league_shares=shares,
+            min_minutes=cut,
+        ),
+        1e4,
+    )
+    np.testing.assert_allclose((moved.leagues - base.leagues).to_numpy(), [0.25, 0.0], atol=1e-6)
+    share = shares["SYN2"].reindex(base.players.index, fill_value=0.0)  # replacement: none
+    assert REPLACEMENT in share.index and (share > 0).sum() > 100
+    for comp, times in (("offence", 1), ("defence", 1), ("total", 2)):
+        np.testing.assert_allclose(
+            (moved.players[comp] - base.players[comp]).to_numpy(),
+            0.25 * times * share.to_numpy(),
+            atol=1e-6,
+        )
+    with pytest.raises(ValueError, match="without league shares"):
+        build_design(st, lg.stint_players, league_shares=shares.iloc[1:])
+
+
+def test_season_estimates_keep_the_pooled_league_means(five_leagues: LeagueFitted) -> None:
+    d, pooled, lg = five_leagues.design, five_leagues.fit, five_leagues.league
+    season = _with_season(lg).set_index("stint_id")["season"]
+    by_season = fit_rapm_by_season(d, pooled, season, 1e4)
+    # The same fit written without league columns: their pooled part goes into the
+    # response, the prior is the pooled deviation, the league term is added back.
+    means = pooled.leagues.to_numpy()
+    term = pd.Series(d.shares @ means, index=d.players)
+    plain = replace(five_leagues.plain, y=d.y - d.x[:, -len(means) :] @ means)
+    prior = replace(pooled, players=pooled.players[["offence", "defence"]].sub(term, axis=0))
+    expected = fit_rapm_by_season(
+        plain, replace(prior, leagues=pd.Series(dtype=float)), season, 1e4
+    )
+    add = term.reindex(by_season.index.get_level_values("player_id")).to_numpy()
+    assert np.abs(add).max() > 0.05 and by_season.index.equals(expected.index)
+    for comp, times in (("offence", 1), ("defence", 1), ("total", 2)):
+        np.testing.assert_allclose(
+            by_season[comp].to_numpy(), expected[comp].to_numpy() + times * add, atol=1e-9
+        )
+    # With an infinite season penalty every player-season is the pooled estimate.
+    fixed = fit_rapm_by_season(d, pooled, season, 1e12)
+    base = pooled.players.loc[fixed.index.get_level_values("player_id")]
+    np.testing.assert_allclose(fixed["total"].to_numpy(), base["total"].to_numpy(), atol=1e-6)
+
+
+def test_ageing_movers_make_a_league_linked_by_movers_look_stronger() -> None:
+    """Direction only (A20 vii). Two leagues linked by ten swaps a season and no cup;
+    players lose 0.02 per year above the peak age and the older ones move down. The
+    model's player effects are constant, so a mover down is credited in the weaker
+    league with what he was in the stronger one. Without sampling noise: the weak
+    league's mean fitted to the expected goals with ageing, against the same fit when
+    every player has his minutes-weighted average effect in every season."""
+    slope = 0.02
+    lg = simulate_league(
+        np.random.default_rng(36),
+        n_teams=10,
+        squad_size=18,
+        n_seasons=6,
+        offence_sd=SD,
+        defence_sd=SD,
+        league_means=(0.0, -0.05),
+        weak_link_swaps=10,
+        age_slope=slope,
+    )
+    st = _with_season(lg)
+    d = build_design(st, lg.stint_players, league_shares=_shares(lg))
+    p = d.n_players
+    truth = lg.truth.set_index("player_id").loc[d.players]
+    year = np.tile(st["season"].str[:4].astype(int).to_numpy() - 2020, 2)
+    years = np.arange(6)
+    fade = slope * np.maximum(0, truth["age"].to_numpy()[:, None] + years - AGE_PEAK)
+    base = np.concatenate([truth["offence"].to_numpy(), truth["defence"].to_numpy()])
+    ageing, minutes = np.zeros(len(d.y)), np.zeros((p, len(years)))
+    for s in years:
+        rows = np.flatnonzero(year == s)
+        ageing[rows] = d.x[rows, : 2 * p] @ (base - np.tile(fade[:, s], 2))
+        minutes[:, s] = d.x[rows, :p].T @ d.w[rows]
+    average = (fade * minutes).sum(axis=1) / minutes.sum(axis=1)
+    constant = d.x[:, : 2 * p] @ (base - np.tile(average, 2))
+    with_ageing, without = (
+        float(fit_rapm(replace(d, y=np.asarray(y)), 1e4).leagues["SYN2"])
+        for y in (ageing, constant)
+    )
+    # -0.058 with ageing against -0.076 without: the gap is understated (8 other
+    # seeds: by 0.016 to 0.028 at a gap of about 0.06). With a cup carrying the link
+    # the same comparison moves a mean by less than 0.003, the other way.
+    assert with_ageing > without + 0.005
+
+
+def test_reference_league_is_only_an_origin_when_the_sides_are_equal() -> None:
+    """With a player short on one side the league columns sum to the difference in
+    players, so the mean fixed at 0 is a constraint: unless that difference is the
+    covariate, the free means take part of the extra player's effect. Without noise
+    and without player effects: planted means and 0.9 goals per 90 per extra player
+    (the real data's value), one side a player short in every tenth stint."""
+    lg = simulate_league(
+        np.random.default_rng(37),
+        n_seasons=3,
+        league_means=(0.0, 0.0, 0.0),
+        cross_transfer_rate=0.1,
+    )
+    shares, on = _shares(lg), lg.stint_players
+    first = ~on.duplicated(["stint_id", "side"])
+    short = np.where(on["side"] == "home", on["stint_id"] % 20 == 0, on["stint_id"] % 20 == 10)
+    on = on[~(first & short)]
+    sign = np.where(on["side"] == "home", 1.0, -1.0)
+
+    def home_minus_away(values: NDArray[np.float64]) -> NDArray[np.float64]:
+        sums = pd.Series(values * sign).groupby(on["stint_id"].to_numpy()).sum()
+        return np.asarray(sums.reindex(lg.stints["stint_id"]), dtype=np.float64)
+
+    men = home_minus_away(np.ones(len(on)))
+    planted = {"SYN2": -0.03, "SYN3": -0.06}
+    rate = 0.9 * men + sum(
+        mean * home_minus_away(shares[league].reindex(on["player_id"]).to_numpy())
+        for league, mean in planted.items()
+    )
+    goals = rate * lg.stints["minutes"] / 90
+    st = lg.stints.assign(men=men, home_x=goals, away_x=-goals)
+    with_men, without = (
+        fit_rapm(
+            build_design(
+                st, on, home_col="home_x", away_col="away_x", covariate=c, league_shares=shares
+            ),
+            1e4,
+        )
+        for c in ("men", None)
+    )
+    np.testing.assert_allclose(with_men.leagues.to_numpy(), list(planted.values()), atol=1e-6)
+    assert with_men.covariate == pytest.approx(0.9, abs=1e-6)
+    # Without the covariate the free means come out at -0.018 and -0.046: too high by
+    # 0.012 and 0.014 here (10% of the minutes a player short), by 0.06 on the real data.
+    assert (without.leagues.to_numpy() > np.array(list(planted.values())) + 0.005).all()
