@@ -223,3 +223,43 @@ timestamp.
   is reported beside it. Recorded here and labelled as a correction made
   after the result. M6 is unaffected (it models each edition separately,
   with edition fixed effects).
+- **A20 (2026-11-18), after M5 and M8 ran: a league-strength-adjusted
+  analysis, post hoc.** Motivation, found in the results: nothing in the
+  pre-registered analysis adjusts for league strength. In RAPM the players
+  of Porto, Benfica and Sporting average the same total as Real Madrid's,
+  because a league's level is not identified by its own games and the ridge
+  centres every league at zero; in the box families a goal counts the same
+  in every league. In-house Elo cannot supply the levels: its league means
+  are fed by domestic-cup games against uncovered clubs entering at 1,500
+  (`docs/unmeasured/league-strength.md`). The method below is fixed before
+  any league-adjusted estimate exists. Verdicts H1–H8 stay decided by the
+  pre-registered analysis; both sets of results are reported side by side.
+  (i) *RAPM with league means* (the league term of Pantuso and Hvattum
+  2021): off_p = δoff_p + Σ_L s_pL μ_L and def_p = δdef_p + Σ_L s_pL μ_L,
+  with s_pL the share of the player's league minutes in the window played
+  in league L, the ridge on δ only at the primary λ, μ unpenalised and
+  μ = 0 for the Premier League. A league has its own μ if it has at least
+  100 stint games against clubs of other covered leagues or at least 150
+  players with 450 minutes in it and in another league; the remaining
+  leagues share one μ. The same 200 game resamples as the primary
+  bootstrap. Per-season fits keep the pooled μ. (ii) *Box-score league
+  factors from players who change league*: per metric (goals, non-penalty
+  goals, assists), a conditional fixed-effects Poisson model on
+  player × season × league counts in league matches,
+  log E[Y] = log(minutes/90) + α_p + γ_L + b₁·age + b₂·age², γ = 0 for the
+  Premier League; a league has its own γ with at least 100 players observed
+  in it and in another league, the others share one. League-match counts
+  are divided by exp(γ̂_L); European-cup and national-team matches are left
+  as they are. Player-bootstrap standard errors are reported; γ̂ is held
+  fixed across M8's replicates. (iii) *On-pitch goal difference* in league
+  matches is shifted by 22·μ̂_L per 90. (iv) *Context dimension*: team Elo is
+  centred within competition-season. (v) M5 and M8 are then rerun exactly
+  as the primary (same factorial, σ from the primary M4, ω, U, B, seeds).
+  M4, M6 and M7 are not rerun. (vi) *Coverage fill, a separate variant*:
+  the MLS seasons before 2025 of pool players, from the American Soccer
+  Analysis API (CC BY-SA 4.0), only if it gives minutes, goals, penalty or
+  non-penalty goals and primary assists per player-season; box metrics
+  only (no stints, so pooled RAPM and the group-season mean of on-pitch
+  goal difference, the existing rule for rows without stints). (vii) Both
+  estimators must first recover planted league levels on synthetic
+  multi-league data, including a league with almost no links.
