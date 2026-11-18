@@ -9,8 +9,8 @@ Design §5 (M5, M6, M8, M9); pre-registration A1, A11-A14, A16 (i). Stages, in o
   probabilities, variance indices, specification curve, distinct rankings; replicate
   scores as one float32 array.
 - synthesis: M8 with sigma = M4's clipped cross-half total share per group (A13 ii),
-  omega from M5's weights, U = 4; verdicts H1, H2, H4, H5; Kendall's W (A13 v); the
-  exploratory comparison with V1.
+  omega from M5's weights, U = 4; verdicts H1, H2, H4, H5; Kendall's W (A13 v, A19);
+  the exploratory comparison with V1.
 - synthesis_bias (post hoc, robustness): the same with the bias-corrected shares of
   results/players/construct_gap/assortative/summary.json, if that file exists.
 - synthesis_leakage (post hoc, robustness): the primary M8 plus the on-pitch leakage
@@ -24,6 +24,10 @@ Design §5 (M5, M6, M8, M9); pre-registration A1, A11-A14, A16 (i). Stages, in o
   Saudi league season puts Julian Quinones first in 896 of 5,760 specifications: the
   factorial has no league-strength dimension and the context dimension partials out
   own-team Elo, not opposition strength.
+- view_agreement (A19, a correction made after M8 ran): Kendall's W of every synthesis
+  variant recomputed from its saved players table with the recognition view as the sum
+  of per-edition point shares; no M5 or M8 draw. Writes
+  results/players/synthesis/recognition_view.csv.
 - recognition: M6 on A14's universe and features; H6 by the OLS shares (A1).
 - recognition_curated (post hoc, exploratory): M6 as the primary after applying the curated
   team-success indicators of paper-unmeasured/data/team_honours.csv (official champions
@@ -57,6 +61,13 @@ Choices the pre-registration does not fix (post hoc, Claude's calls):
   keep weight 1 (counted). Weighted minutes enter the minutes thresholds.
 - M8's mean rank (V1 comparison) = 1 + sum_j P(j above i) from the pairwise matrix
   (ties count half). V1's order is its rank column.
+- Recognition view (A19): an edition's total is the sum of the points of the players
+  listed for it in ballon_dor.csv. Every variant's W is computed from its saved
+  players.csv (its stats and impact views to 6 significant digits; the raw-points W so
+  computed equals the full-precision one exactly in all five variants). KendallW and
+  KendallMeanSpearman use the share view, KendallWRawPoints and
+  KendallMeanSpearmanRawPoints A13 (v)'s raw sum. recognition_view.csv ranks within
+  segment, 1 = most, ties sharing the best rank.
 - M6: the individual-statistics block is read as goals and assists (season totals),
   minutes, and non-penalty goals per 90 (the alternative reading, per-90 goals, assists
   and non-penalty goals plus minutes, is fitted as robustness). Team success, a player
@@ -612,6 +623,51 @@ def bdo_points() -> pd.DataFrame:
     return b
 
 
+def recognition_view() -> pd.DataFrame:
+    """Per pool player: ``share_sum``, the sum over the 2021-2026 editions of his share of
+    the edition's Ballon d'Or points (A19), and ``raw_sum``, the raw points summed
+    (A13 v); 0 for a player never ranked."""
+    b = bdo_points()
+    b = b[b["edition"].between(2021, 2026)]
+    parts = pd.DataFrame(
+        {"share_sum": b["points"] / b.groupby("edition")["points"].transform("sum"),
+         "raw_sum": b["points"].astype(np.float64)}
+    )  # fmt: skip
+    view = parts.groupby(b["player_id"]).sum().reindex(pool_ids(), fill_value=0.0)
+    return view.rename_axis("player_id")
+
+
+def record_view_agreement(out_dir: Path) -> tuple[float, float]:
+    """Kendall's W of the stats, impact and recognition views of ``out_dir``'s saved
+    players table, with A19's share view and with A13 (v)'s raw sum; both recorded."""
+    players = pd.read_csv(out_dir / "players.csv")
+    view = recognition_view()
+    w = view_agreement(players, view["share_sum"])
+    w_raw = view_agreement(players, view["raw_sum"])
+    record(out_dir, {
+        "KendallW": (w, "Kendall's W of the stats, impact and recognition views; recognition "
+                     "= sum over the 2021-2026 editions of the player's share of the "
+                     "edition's points (A19)"),
+        "KendallMeanSpearman": ((3 * w - 1) / 2, "Mean pairwise Spearman of the three "
+                                "views, (3W - 1) / 2 (A19 view)"),
+        "KendallWRawPoints": (w_raw, "Same W with A13 (v)'s recognition view, raw points "
+                              "summed over 2021-2026 (superseded by A19)"),
+        "KendallMeanSpearmanRawPoints": ((3 * w_raw - 1) / 2, "Mean pairwise Spearman with "
+                                         "the raw-points view"),
+    })  # fmt: skip
+    if out_dir == M8_DIR:
+        table = view.reset_index()
+        table.insert(1, "player", table["player_id"].map(names()))
+        keeper = pool()["is_goalkeeper"].to_numpy()  # pool order, as pool_ids
+        table.insert(2, "segment", np.where(keeper, "goalkeeper", "outfield"))
+        for c in ("share_sum", "raw_sum"):
+            by_segment = table.groupby("segment")[c]
+            table[f"rank_{c}"] = by_segment.rank(method="min", ascending=False).astype(int)
+        table = table.sort_values(["segment", "rank_share_sum"], ascending=[False, True])
+        to_csv(table, M8_DIR / "recognition_view.csv")
+    return w, w_raw
+
+
 def run_synthesis(
     share: dict[str, float],
     out_dir: Path,
@@ -653,11 +709,7 @@ def run_synthesis(
     to_csv(sets, out_dir / "rank_sets.csv")
     to_csv(verdict, out_dir / "verdicts.csv")
 
-    # Kendall's W (A13 v): BdO points summed over 2021-2026, 0 if unranked
-    b = bdo_points()
-    pts = b[b["edition"].between(2021, 2026)].groupby("player_id")["points"].sum()
-    recog = pts.reindex(pool_ids(), fill_value=0.0).astype(np.float64)
-    w = view_agreement(result.players, recog)
+    w, w_raw = record_view_agreement(out_dir)  # Kendall's W (A19; A13 v beside it)
 
     # exploratory: V1's order against M8, V1's outfield players
     v1 = pd.read_csv(PAPER / "data" / "v1_ranking.csv")
@@ -689,8 +741,8 @@ def run_synthesis(
     shown = ["player", "p_first", "p_top3", "median_rank", "rank_lo", "rank_hi",
              "share_specification", "share_sampling", "share_unmeasured"]  # fmt: skip
     print(f"top 10 by P(#1):\n{view.head(10)[shown].round(3).to_string()}")
-    print(f"decided {decided}/{upper.size}; W = {w:.3f}; V1 rho median {rho_median:.3f}, "
-          f"mean {rho_mean:.3f}", flush=True)  # fmt: skip
+    print(f"decided {decided}/{upper.size}; W = {w:.3f} (raw points {w_raw:.3f}); "
+          f"V1 rho median {rho_median:.3f}, mean {rho_mean:.3f}", flush=True)  # fmt: skip
     entries: dict[str, tuple[Any, str]] = {
         "TopPlayerName": (names()[leader], "Outfield pool player with the highest P(#1)"),
         "TopPlayerPFirst": (of.loc[leader, "p_first"], "That player's P(#1); H2's statistic"),
@@ -716,8 +768,6 @@ def run_synthesis(
         "HFourNPlayers": (n_h4, "Players behind H4's mean"),
         "MedianSpecLabel": (spec_label, f"Median specification (spec_id {result.fixed_spec})"),
         "median_spec_id": (result.fixed_spec, "spec_id of the median specification"),
-        "KendallW": (w, "Kendall's W of stats, impact and recognition views (A13 v)"),
-        "KendallMeanSpearman": ((3 * w - 1) / 2, "Mean pairwise Spearman of the three views"),
         "TopGoalkeeperName": (gk["player"].iloc[0], "Goalkeeper with the highest P(#1)"),
         "TopGoalkeeperPFirst": (gk["p_first"].iloc[0], "That goalkeeper's P(#1)"),
         "VOneSpearman": (rho_median, "Exploratory: Spearman of V1's rank and M8's median rank, "
@@ -818,6 +868,17 @@ def stage_synthesis_leakage() -> None:
             entries[f"attribution_{g}"] = (row["attribution"], f"A_g ({name} planting), {g}")
             entries[f"rapm_reliability_{g}"] = (row["reliability"], f"rel_g of RAPM total, {g}")
         record(out_dir, entries)
+
+
+def stage_view_agreement() -> None:
+    """A19: the view agreement of every synthesis variant from its saved players table."""
+    for out_dir in (M8_DIR, M8_BIAS_DIR, M8_EU_DIR, *sorted(M8_DIR.glob("leakage_*"))):
+        if not (out_dir / "players.csv").exists():
+            print(f"view_agreement: no players.csv in {out_dir}; skipped")
+            continue
+        w, w_raw = record_view_agreement(out_dir)
+        print(f"{out_dir.relative_to(RESULTS)}: W = {w:.4f} (point shares, A19), "
+              f"{w_raw:.4f} (raw points, A13 v)", flush=True)  # fmt: skip
 
 
 def stage_synthesis_europe() -> None:
@@ -1276,6 +1337,7 @@ STAGES: dict[str, tuple[Callable[[], None], Path]] = {
     "synthesis_bias": (stage_synthesis_bias, M8_DIR),
     "synthesis_europe": (stage_synthesis_europe, M8_EU_DIR),
     "synthesis_leakage": (stage_synthesis_leakage, M8_DIR),
+    "view_agreement": (stage_view_agreement, M8_DIR),
     "recognition": (stage_recognition, M6_DIR),
     "recognition_curated": (stage_recognition_curated, M6_CURATED_DIR),
     "recovery": (stage_recovery, M9_DIR),
