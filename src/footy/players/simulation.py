@@ -104,11 +104,13 @@ class Simulated:
 @dataclass(frozen=True)
 class ContrastBootstrap:
     """``sims``: one row per simulation, M4's output (``diff``,
-    ``diff_clipped`` and its own 90% player-bootstrap interval) plus
-    ``error = diff - planted`` and ``error_clipped``. ``summary``: rows raw and
-    clipped; the real estimate, the planted contrast, the error's mean and SD,
-    the parametric interval ``ci_low`` / ``ci_high``, and two coverages over
-    the simulations (``position_contrast`` docstring for the M4 interval)."""
+    ``diff_clipped`` and its own 90% player-bootstrap interval) plus that
+    simulation's planted contrast ``planted``, ``error = diff - planted`` and
+    ``error_clipped``. ``summary`` (``contrast_summary``): rows raw and
+    clipped; the real estimate, the planted contrast's mean and SD over the
+    simulations, ``planted_weighted``, the error's mean and SD, the parametric
+    interval ``ci_low`` / ``ci_high``, and two coverages over the simulations
+    (``position_contrast`` docstring for the M4 interval)."""
 
     sims: pd.DataFrame
     summary: pd.DataFrame
@@ -250,11 +252,18 @@ def parametric_bootstrap_contrast(
     ``lam``, ``split_halves`` with ``n_repeats`` splits) and M4
     (``position_contrast`` on ``params.component``) as on the real data.
 
-    The planted contrast is fixed: per pool, ``1 - sum(m * sd_t^2) / sum(sd_t^2)``
-    over the players entering M4 (players with at least ``min_minutes``).
+    The planted contrast is M4's own estimand under the generator, drawn anew
+    in each simulation (pre-registration A18): ``planted_share`` of the high
+    pool minus that of the low pool, over the players entering M4 (players
+    with at least ``min_minutes``). The definition before A18, the
+    variance-weighted average of the groups' shares
+    ``1 - sum(m * sd_t^2) / sum(sd_t^2)`` per pool, is reported as
+    ``planted_weighted``; it ignores that M4 fits one model across a pool's
+    groups, whose box-score means differ.
 
     Interval: basic (pivotal) bootstrap, ``[T - q_hi, T - q_lo]`` with ``T``
-    the real estimate and ``q`` the quantiles of ``estimate - planted``. M4 is
+    the real estimate and ``q`` the quantiles of ``estimate - planted`` (each
+    simulation's own planted contrast). M4 is
     biased on finite data (ridge leakage, the reliability corrections,
     clipping); the basic interval treats the error as a pivot and so removes
     the bias, where a percentile interval of the simulated estimates would add
@@ -264,14 +273,14 @@ def parametric_bootstrap_contrast(
     noisier and the interval conservative.
 
     Coverages: ``coverage_m4`` is the share of simulations whose own M4
-    interval (player bootstrap, ``n_boot`` draws) covers the planted contrast;
+    interval (player bootstrap, ``n_boot`` draws) covers its planted contrast;
     ``coverage_loo`` is the same for the parametric interval built around each
     simulation's estimate from the other simulations' errors (close to
     ``level`` by construction; its real test is across independent leagues).
     """
     entering = _played(stints, stint_players).loc[lambda s: s >= min_minutes].index
     pos = positions.reindex(entering).to_numpy()
-    planted = _planted_share(params, pos, high) - _planted_share(params, pos, low)
+    weighted = _planted_share(params, pos, high) - _planted_share(params, pos, low)
 
     rows = []
     for _ in range(n_sims):
@@ -287,21 +296,61 @@ def parametric_bootstrap_contrast(
             fit.players[c], _per90(sim.player_match), splits, attribution, positions, rng,
             high=high, low=low, estimator=estimator, n_boot=n_boot, level=level,
         )  # fmt: skip
+        contrast["planted"] = planted_share(sim.truth, entering, params, high) - planted_share(
+            sim.truth, entering, params, low
+        )
         rows.append(contrast)
     sims = pd.DataFrame(rows).reset_index(drop=True)
-    sims["error"] = sims["diff"] - planted
-    sims["error_clipped"] = sims["diff_clipped"] - planted
+    sims["error"] = sims["diff"] - sims["planted"]
+    sims["error_clipped"] = sims["diff_clipped"] - sims["planted"]
+    summary = contrast_summary(sims, real, planted_weighted=weighted, level=level)
+    return ContrastBootstrap(sims=sims, summary=summary)
 
+
+def planted_share(
+    truth: pd.DataFrame, players: pd.Index, params: SimParams, pool: Sequence[str]
+) -> float:
+    """M4's estimand for the ``players`` of the groups in ``pool`` (A18).
+
+    ``1 - R2`` of the OLS, with intercept, of the planted ``params.component``
+    on the true expected per-90 statistics M4 sees: shots ``truth.shot_rate``
+    (after the floor) and goals ``shot_rate * conversion[g]``. It is one model
+    across the pool's groups, as M4 fits, so differences between the groups'
+    box-score means that are unrelated to ``t`` count against the statistics;
+    for a single group it is close to ``1 - m`` (the floor lowers R2 a little).
+    """
+    tr = truth.set_index("player_id").reindex(players)
+    tr = tr[tr["position_group"].isin(list(pool)).to_numpy()]
+    t = tr[params.component].to_numpy(dtype=np.float64)
+    rate = tr["shot_rate"].to_numpy(dtype=np.float64)
+    goals = rate * _per(params.conversion, tr["position_group"].to_numpy())
+    x = np.column_stack([np.ones(len(t)), rate, goals])
+    resid = t - x @ np.linalg.lstsq(x, t, rcond=None)[0]
+    centred = t - t.mean()
+    return float((resid @ resid) / (centred @ centred))
+
+
+def contrast_summary(
+    sims: pd.DataFrame, real: pd.Series, *, planted_weighted: float, level: float = 0.9
+) -> pd.DataFrame:
+    """``parametric_bootstrap_contrast``'s summary of ``sims``: one row per
+    simulation with ``diff``, ``diff_clipped``, M4's interval columns and the
+    simulation's ``planted`` contrast (so simulations run in several chunks can
+    be pooled). ``real`` holds the real ``diff`` and ``diff_clipped``."""
+    planted = sims["planted"].to_numpy(dtype=np.float64)
     summary = {}
     for kind, sfx in (("raw", ""), ("clipped", "_clipped")):
-        err, t = sims[f"error{sfx}"].to_numpy(), float(real[f"diff{sfx}"])
+        err, t = sims[f"diff{sfx}"].to_numpy() - planted, float(real[f"diff{sfx}"])
         q_lo, q_hi = _quantiles(err, level)
         loo = [_quantiles(np.delete(err, s), level) for s in range(len(err))]
         covered = [lo <= e <= hi for (lo, hi), e in zip(loo, err, strict=True)]
-        m4 = (sims[f"ci_low{sfx}"] <= planted) & (planted <= sims[f"ci_high{sfx}"])
+        lo_m4, hi_m4 = (sims[f"{b}{sfx}"].to_numpy() for b in ("ci_low", "ci_high"))
+        m4 = (lo_m4 <= planted) & (planted <= hi_m4)
         summary[kind] = {
             "estimate": t,
-            "planted": planted,
+            "planted": float(planted.mean()),
+            "planted_sd": float(planted.std(ddof=1)),
+            "planted_weighted": planted_weighted,
             "mean_error": float(err.mean()),
             "sd_error": float(err.std(ddof=1)),
             "ci_low": t - q_hi,
@@ -309,7 +358,7 @@ def parametric_bootstrap_contrast(
             "coverage_m4": float(m4.mean()),
             "coverage_loo": float(np.mean(covered)),
         }
-    return ContrastBootstrap(sims=sims, summary=pd.DataFrame.from_dict(summary, orient="index"))
+    return pd.DataFrame.from_dict(summary, orient="index")
 
 
 def rank_recovery(
@@ -393,7 +442,8 @@ def _component_sd(params: SimParams, pos: NDArray[Any]) -> FloatArray:
 
 
 def _planted_share(params: SimParams, pos: NDArray[Any], pool: Sequence[str]) -> float:
-    """Population unmeasured share of a pool: 1 - sum(m * sd_t^2) / sum(sd_t^2)."""
+    """Variance-weighted average of the groups' planted shares,
+    1 - sum(m * sd_t^2) / sum(sd_t^2): ``planted_weighted`` (before A18)."""
     p = pos[pd.Series(pos).isin(list(pool)).to_numpy()]
     v = _component_sd(params, p) ** 2
     return float(1 - (_per(params.measurable_share, p) * v).sum() / v.sum())

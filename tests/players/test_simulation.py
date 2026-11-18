@@ -9,6 +9,7 @@ from footy.players.simulation import (
     SimParams,
     Simulated,
     parametric_bootstrap_contrast,
+    planted_share,
     rank_recovery,
     simulate_on_schedule,
 )
@@ -119,15 +120,18 @@ def test_parametric_interval_covers_the_planted_contrast(
     league: League, positions: pd.Series
 ) -> None:
     """CB+DM carry defence, which no statistic sees (share 1); CF+W carry
-    offence with measurable share 0.6 (share 0.4): planted contrast 0.6.
+    offence with measurable share 0.6 (share 0.4): planted contrast near 0.6,
+    exactly each generating league's own pooled value (``planted_share``, A18).
 
     Each of 20 test leagues on the same schedule is analysed as real data: M4's
     contrast, measurable shares from M4's per-pool shares (clipped), effect
     SDs taken as known, then the parametric bootstrap (30 simulations).
-    Observed here: coverage raw 0.95, clipped 0.90; the raw interval excludes 0
-    in 0.70 of leagues. Over nine batches of 20 leagues (three seeds; one or
-    two splits; CB+DM share 1 or 0.8) raw covered 0.85-1.0 and clipped only
-    0.5-0.9: clipping at share 1 makes the clipped error non-pivotal.
+    Observed here, against each league's own value (0.51-0.65): coverage raw
+    0.95, clipped 0.90; the raw interval excludes 0 in 0.70 of leagues (the
+    same as against the fixed 0.6 used before A18). Over nine batches of 20
+    leagues (three seeds; one or two splits; CB+DM share 1 or 0.8; fixed 0.6)
+    raw covered 0.85-1.0 and clipped only 0.5-0.9: clipping at share 1 makes
+    the clipped error non-pivotal.
     """
     sd, c = 0.25, 0.6
 
@@ -144,12 +148,17 @@ def test_parametric_interval_covers_the_planted_contrast(
         groups=positions.map(POOLS), halves=True,
     )  # fmt: skip
     attribution = {g: float(att["total"].to_dict()[g]) for g in ("CB+DM", "CF+W")}
+    played = league.player_match.groupby("player_id")["minutes"].sum()
+    entering = played.index[played >= MIN_MINUTES]
     rng = np.random.default_rng(10)
     covered, excludes_zero = [], []
     for _ in range(20):
         sim = simulate_on_schedule(
             league.stints, league.stint_players, positions, rng, params(0.0, c)
         )
+        truth = [planted_share(sim.truth, entering, params(0.0, c), pool)
+                 for pool in (("CB", "DM"), ("CF", "W"))]  # fmt: skip
+        target = truth[0] - truth[1]
         rapm, stats, splits = _m4_inputs(sim, rng)
         real = position_contrast(rapm, stats, splits, attribution, positions, rng, n_boot=1)
         shares = unmeasured_share(
@@ -160,13 +169,46 @@ def test_parametric_interval_covers_the_planted_contrast(
             params(1 - shares["CB+DM"], 1 - shares["CF+W"]), rng, lam=LAM,
             min_minutes=MIN_MINUTES, n_sims=30, n_repeats=N_REPEATS, n_boot=1,
         ).summary  # fmt: skip
-        assert out["planted"].to_numpy() == pytest.approx(shares["CB+DM"] - shares["CF+W"])
+        weighted = shares["CB+DM"] - shares["CF+W"]
+        assert out["planted_weighted"].to_numpy() == pytest.approx(weighted)
+        # Equal box-score means in every group: the pooled estimand is near the
+        # weighted average (the floor on the shot rate lowers R2 a little).
+        assert out["planted"].to_numpy() == pytest.approx(weighted, abs=0.05)
         lo, hi = out["ci_low"].to_numpy(), out["ci_high"].to_numpy()
-        covered.append((lo <= c) & (c <= hi))
+        covered.append((lo <= target) & (target <= hi))
         excludes_zero.append(lo > 0)
     coverage = dict(zip(out.index, np.mean(covered, axis=0), strict=True))
     assert coverage["raw"] >= 0.8
     assert np.mean(excludes_zero, axis=0)[0] >= 0.5  # raw: not covering by being uninformative
+
+
+def test_planted_share_of_a_pool_is_its_pooled_population_value() -> None:
+    """Two groups of one pool with box-score means 1.5 and 3.5 and the same
+    measurable share 0.5. One model across both, as M4 fits, sees the
+    between-group spread of the rates as noise: its estimand is the pooled
+    1 - R2, not the weighted average of the groups' shares (0.5)."""
+    lg = simulate_league(np.random.default_rng(3), n_teams=40, squad_size=25, n_seasons=1)
+    ids = pd.Index(np.sort(lg.stint_players["player_id"].unique()))
+    pos = pd.Series(np.where(ids % 2 == 0, "A", "B"), index=ids)
+    params = SimParams(
+        offence_sd=0.1, defence_sd=0.1, measurable_share=0.5,
+        shot_rate_mean={"A": 1.5, "B": 3.5}, shot_rate_sd=0.4,
+    )  # fmt: skip
+    truth = simulate_on_schedule(
+        lg.stints, lg.stint_players, pos, np.random.default_rng(4), params
+    ).truth
+    # Equal conversion makes goals proportional to shots: the OLS R2 is corr^2.
+    for pool in (("A",), ("B",), ("A", "B")):
+        sub = truth[truth["position_group"].isin(pool)]
+        direct = 1 - np.corrcoef(sub["total"], sub["shot_rate"])[0, 1] ** 2
+        assert planted_share(truth, ids, params, pool) == pytest.approx(direct)
+    # Population: within a group corr(t, rate)^2 = m = 0.5 (500 players: over
+    # eight seeds 0.46-0.58). Pooled, the rates' variance 0.4^2 gains the
+    # between-group variance (3.5 - 1.5)^2 / 4 = 1: R2 = 0.5 * 0.16 / 1.16, share
+    # 0.931 (over eight seeds 0.89-0.94), far above the weighted average 0.5.
+    pooled = planted_share(truth, ids, params, ("A", "B"))
+    assert pooled == pytest.approx(1 - 0.5 * 0.16 / 1.16, abs=0.05)
+    assert pooled - 0.5 > 0.3
 
 
 @pytest.fixture(scope="module")

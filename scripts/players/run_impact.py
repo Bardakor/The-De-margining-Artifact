@@ -60,7 +60,14 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 
-from footy.players.construct_gap import Splits, position_contrast, split_stats, unmeasured_share
+from footy.players.construct_gap import (
+    H3_HIGH,
+    H3_LOW,
+    Splits,
+    position_contrast,
+    split_stats,
+    unmeasured_share,
+)
 from footy.players.paths import PAPER, PROCESSED, RESULTS
 from footy.players.rapm import (
     COMPONENTS,
@@ -80,7 +87,9 @@ from footy.players.rapm import (
 from footy.players.simulation import (
     STATS,
     SimParams,
+    contrast_summary,
     parametric_bootstrap_contrast,
+    planted_share,
     simulate_on_schedule,
 )
 
@@ -794,6 +803,7 @@ def record_m4(shares: pd.DataFrame, contrast: pd.DataFrame, n: int) -> None:
                 label = col.replace("_clipped", " (clipped to [0, 1])")
                 entries[f"{key}_{col}"] = (r[col], f"{label}, 90% player bootstrap: {what}")
         else:
+            entries[f"{key}_a7_n"] = (r["n"], f"Players the A7 joint bootstrap uses: {what}")
             for col in ("ci_low", "ci_high", "ci_low_clipped", "ci_high_clipped"):
                 entries[f"{key}_a7_{col}"] = (r[col], f"{col}, A7 joint bootstrap: {what}")
     for _, r in contrast.iterrows():
@@ -851,25 +861,6 @@ def h3_chunk(
         n_repeats=N_REPEATS, group="group", estimator="cross", n_boot=N_BOOT, level=LEVEL,
     )  # fmt: skip
     return out.sims, out.summary
-
-
-def contrast_summary(sims: pd.DataFrame, real: pd.Series, planted: float) -> pd.DataFrame:
-    """``simulation.parametric_bootstrap_contrast``'s summary, recomputed on the pooled
-    simulations of several chunks (checked against each chunk's own summary)."""
-    rows = {}
-    for kind, sfx in (("raw", ""), ("clipped", "_clipped")):
-        err, t = sims[f"error{sfx}"].to_numpy(), float(real[f"diff{sfx}"])
-        q = [(1 - LEVEL) / 2, (1 + LEVEL) / 2]
-        q_lo, q_hi = np.quantile(err, q)
-        loo = [np.quantile(np.delete(err, s), q) for s in range(len(err))]
-        covered = [lo <= e <= hi for (lo, hi), e in zip(loo, err, strict=True)]
-        m4 = (sims[f"ci_low{sfx}"] <= planted) & (planted <= sims[f"ci_high{sfx}"])
-        rows[kind] = {
-            "estimate": t, "planted": planted, "mean_error": float(err.mean()),
-            "sd_error": float(err.std(ddof=1)), "ci_low": t - q_hi, "ci_high": t - q_lo,
-            "coverage_m4": float(m4.mean()), "coverage_loo": float(np.mean(covered)),
-        }  # fmt: skip
-    return pd.DataFrame.from_dict(rows, orient="index")
 
 
 def stage_h3() -> None:
@@ -956,12 +947,10 @@ def stage_h3() -> None:
     with ProcessPoolExecutor(max_workers=N_WORKERS) as pool_:
         results = list(pool_.map(h3_chunk, tasks))
     print(f"parametric bootstrap: {time.perf_counter() - t0:.0f} s", flush=True)
-    planted = float(results[0][1].loc["raw", "planted"])
-    for sims_k, summary_k in results:
-        check = contrast_summary(sims_k, real, planted)
-        pd.testing.assert_frame_equal(check, summary_k[check.columns], check_dtype=False)
+    weighted = {float(r[1].loc["raw", "planted_weighted"]) for r in results}
+    assert len(weighted) == 1  # a property of params and the schedule, same in every chunk
     sims = pd.concat([r[0] for r in results], ignore_index=True)
-    summary = contrast_summary(sims, real, planted)
+    summary = contrast_summary(sims, real, planted_weighted=weighted.pop(), level=LEVEL)
     to_csv(sims, GAP_DIR / "h3_sims.csv")
     to_csv(summary.rename_axis("kind").reset_index(), GAP_DIR / "h3_summary.csv")
     print(summary.round(4).to_string())
@@ -1095,6 +1084,11 @@ def h3a_chunk(
         share = unmeasured_share(rapm, stats, splits, att_groups, groups, g, n_boot=1)
         for grp, r in share.iterrows():
             row[f"share_{grp}"], row[f"r2_true_{grp}"] = float(r["share"]), float(r["r2_true"])
+        # planted values (A18): M4's estimand under the generator in this simulation
+        entering = d.players[d.players != REPLACEMENT]
+        for pool in [(x,) for x in GROUPS] + [H3_HIGH, H3_LOW]:
+            row[f"planted_{'+'.join(pool)}"] = planted_share(sim.truth, entering, params, pool)
+        row["planted"] = row["planted_CB+DM"] - row["planted_CF+W"]
         rows.append(row)
     return rows
 
@@ -1113,33 +1107,6 @@ def stage_h3_assortative() -> None:
     print(f"attribution ({time.perf_counter() - t0:.0f} s):\n"
           f"{both.drop(columns='n_players').round(3).to_string()}", flush=True)  # fmt: skip
 
-    # planted shares: with the effects fixed, R2(t, z) in a group is m r / (m r + 1 - m),
-    # r = Var(t) / sd_t^2 (r = 1 when offence and defence are independent, as in A9)
-    own = design().players
-    own = own[own != REPLACEMENT]
-    eff = effects.set_index("player_id").loc[own]
-    grp = data().positions.reindex(own)
-    t = eff["offence"] + eff["defence"]
-    planted = pd.DataFrame({"n": grp.value_counts(), "var_t": t.groupby(grp).var(ddof=0)})
-    assert isinstance(params.offence_sd, dict) and isinstance(params.defence_sd, dict)
-    assert isinstance(params.measurable_share, dict)
-    planted["sd_t2"] = [
-        params.offence_sd[g] ** 2 + params.defence_sd[g] ** 2 for g in planted.index
-    ]
-    planted["m"] = [params.measurable_share[g] for g in planted.index]
-    planted["r"] = planted["var_t"] / planted["sd_t2"]
-    mr = planted["m"] * planted["r"]
-    planted["r2_planted"] = mr / (mr + 1 - planted["m"])
-    planted["share_planted"] = 1 - planted["r2_planted"]
-    planted["share_planted_a9_definition"] = 1 - planted["m"]
-
-    def pool_share(pool: tuple[str, ...]) -> float:
-        q = planted.loc[list(pool)]
-        v = q["n"] * q["var_t"]
-        return float(1 - (v * q["r2_planted"]).sum() / v.sum())
-
-    planted_contrast = pool_share(("CB", "DM")) - pool_share(("CF", "W"))
-
     # (ii) S = 200 simulations with these effects, everything else as the A9 run
     contrast = pd.read_csv(GAP_DIR / "contrast.csv")
     real = contrast[(contrast["estimator"] == "cross") & (contrast["mode"] == "player")].iloc[0]
@@ -1154,18 +1121,37 @@ def stage_h3_assortative() -> None:
     with ProcessPoolExecutor(max_workers=N_WORKERS) as pool_:
         sims = pd.DataFrame([row for rows in pool_.map(h3a_chunk, tasks) for row in rows])
     print(f"assortative bootstrap: {time.perf_counter() - t0:.0f} s", flush=True)
-    sims["error"] = sims["diff"] - planted_contrast
-    sims["error_clipped"] = sims["diff_clipped"] - planted_contrast
+    sims["error"] = sims["diff"] - sims["planted"]
+    sims["error_clipped"] = sims["diff_clipped"] - sims["planted"]
     to_csv(sims, ASSORT_DIR / "sims.csv")
-    summary = contrast_summary(sims, real, planted_contrast)
+
+    # Before A18: per pool the average of its groups' planted shares weighted by
+    # n * Var(t) (the effects are fixed, so these weights are too).
+    own = design().players
+    own = own[own != REPLACEMENT]
+    eff = effects.set_index("player_id").loc[own]
+    grp = data().positions.reindex(own)
+    t = eff["offence"] + eff["defence"]
+    per = pd.DataFrame({"n": grp.value_counts(), "var_t": t.groupby(grp).var(ddof=0)})
+    assert isinstance(params.measurable_share, dict)
+    per["share_planted_a9_definition"] = [1 - params.measurable_share[g] for g in per.index]
+    per["planted"] = [sims[f"planted_{g}"].mean() for g in per.index]
+    per["planted_sd"] = [sims[f"planted_{g}"].std(ddof=1) for g in per.index]
+
+    def weighted(pool: tuple[str, ...]) -> float:
+        q = per.loc[list(pool)]
+        v = q["n"] * q["var_t"]
+        return float((v * q["planted"]).sum() / v.sum())
+
+    planted_weighted = weighted(H3_HIGH) - weighted(H3_LOW)
+    summary = contrast_summary(sims, real, planted_weighted=planted_weighted, level=LEVEL)
     to_csv(summary.rename_axis("kind").reset_index(), ASSORT_DIR / "contrast_summary.csv")
 
     shares = pd.read_csv(GAP_DIR / "shares.csv")
     shares = shares[(shares["component"] == "total") & (shares["estimator"] == "cross")
                     & (shares["mode"] == "player")].set_index("group")  # fmt: skip
-    per = planted.copy()
     for g in per.index:
-        err = sims[f"share_{g}"] - per.loc[g, "share_planted"]
+        err = sims[f"share_{g}"] - sims[f"planted_{g}"]
         per.loc[g, "mean_error"], per.loc[g, "sd_error"] = err.mean(), err.std(ddof=1)
         per.loc[g, "p_r2_true_gt1"] = float((sims[f"r2_true_{g}"] > 1).mean())
         per.loc[g, "share_sim_mean"] = sims[f"share_{g}"].mean()
@@ -1187,13 +1173,16 @@ def stage_h3_assortative() -> None:
         "verdict_clipped": (verdict("clipped"), "H3 under assortative planting, clipped" + note),
         "verdict_raw": (verdict("raw"), "H3 under assortative planting, raw" + note),
         "n_sims": (len(sims), "Simulations" + note),
-        "planted_contrast": (planted_contrast, "Planted CB+DM minus CF+W share" + note),
+        "planted_contrast": (
+            float(sims["planted"].mean()),
+            "Planted CB+DM minus CF+W share, mean over simulations (A18)" + note,
+        ),
     }
     for kind, row in summary.iterrows():
         for col, v in row.items():
             entries[f"contrast_{kind}_{col}"] = (v, f"H3 contrast ({kind}): {col}" + note)
     for g, row in per.iterrows():
-        for col in ("share_planted", "mean_error", "sd_error", "p_r2_true_gt1", "r",
+        for col in ("planted", "planted_sd", "mean_error", "sd_error", "p_r2_true_gt1",
                     "share_bias_corrected", "share_real_raw"):  # fmt: skip
             entries[f"{col}_{g}"] = (row[col], f"{col}, group {g}, total component" + note)
     for _, row in both.iterrows():
@@ -1206,6 +1195,7 @@ def stage_h3_assortative() -> None:
             row["total_independent"],
             "Same with independent planted effects (A9)",
         )
+    (ASSORT_DIR / "summary.json").unlink(missing_ok=True)  # sole writer: no stale keys
     record(ASSORT_DIR, entries)
     print("H3 (assortative):", verdict("clipped"), "(clipped);", verdict("raw"), "(raw)")
 
