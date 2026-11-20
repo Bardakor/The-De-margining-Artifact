@@ -295,3 +295,19 @@ timestamp.
   fixed by the fit: stint players without minutes in a covered league form
   one pseudo-league with its own mean, and the replacement column carries
   no league term.
+- **A23 (2026-11-20), after the league-adjusted ranking ran.** Three
+  records. (i) *Validation of the league levels*, descriptive: the league
+  means of A22 are compared with a least-squares rating of clubs on results
+  alone (goal difference = home rating − away rating + home term, over the
+  games between clubs of covered leagues; a league's level is the mean
+  rating of its club-seasons), which uses no player and no mover, and with
+  UEFA's association coefficients. (ii) *Teammate contamination in the
+  league-adjusted ranking*: the term of post-hoc analysis (f),
+  λ_g = (1 − A_g)/A_g × rel_g on the on-pitch share of each specification,
+  is also applied to the league-adjusted run, under both attribution
+  factors, for the reason (f) was run: the leaders of the impact family
+  owe their place to a measure whose stable part is mostly not the
+  player's own, and a game bootstrap cannot see that. (iii) The MLS fill of
+  A20 (vi) uses minutes on the 90-per-match scale of the panel (the source
+  counts stoppage time). None of this changes a verdict; H1–H8 stay
+  decided by the pre-registered analysis.
