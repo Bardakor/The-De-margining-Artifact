@@ -618,8 +618,25 @@ def macros_league_rapm() -> dict[str, str]:
     }
     for fit, name in (("primary", "Primary"), ("league", "League")):
         values = [float(s[f"club_total_{fit}_{club}"]) for club in PORTUGUESE_CLUBS]  # type: ignore[arg-type]
-        out[f"ClubRapm{name}PortugalLo"] = num(min(values))
-        out[f"ClubRapm{name}PortugalHi"] = num(max(values))
+        out[f"ClubRapm{name}PortugalLo"] = num(min(values), 3)
+        out[f"ClubRapm{name}PortugalHi"] = num(max(values), 3)
+    # A22's two checks of the design with the man-advantage column.
+    if "noise_free_bias_with_men" in s:
+        means_only = abs(float(s["noise_free_bias_means_only_with_men"]))  # type: ignore[arg-type]
+        if means_only >= 0.0005:
+            CHECKS.append(f"planted league means are not recovered exactly: bias {means_only:.4f}")
+        shifts = [abs(float(s[f"lambda_{side}_mean_shift_with_men"])) for side in ("low", "high")]  # type: ignore[arg-type]
+        largest = max(float(s[f"lambda_{side}_max_shift_with_men"]) for side in ("low", "high"))  # type: ignore[arg-type]
+        out |= {
+            "LeagueNoiseFreeBiasMen": num(abs(float(s["noise_free_bias_with_men"])), 3),  # type: ignore[arg-type]
+            "LeagueLambdaShiftMeanLo": num(min(shifts), 3),
+            "LeagueLambdaShiftMeanHi": num(max(shifts), 3),
+            "LeagueLambdaShiftMax": num(largest, 3),
+            "LeagueLambdaShiftAsWritten": num(
+                abs(float(s["lambda_low_mean_shift_as_written"])),  # type: ignore[arg-type]
+                3,
+            ),
+        }
     return out
 
 
@@ -637,9 +654,9 @@ def macros_league_validation() -> dict[str, str]:
     }
 
 
-# The six league-adjusted runs of the macro comments, then A24's club-results variant.
+# The seven league-adjusted runs of the macro comments (A24's club-results variant included).
 LEAGUE_RUNS = (
-    "league_adjusted", "league_plain", "league_uefa", "league_mls",
+    "league_adjusted", "league_plain", "league_uefa", "league_mls", "league_club",
     "league_leakage_independent", "league_leakage_assortative",
 )  # fmt: skip
 CHECKS: list[str] = []  # claims of the text that the results contradict
@@ -691,6 +708,47 @@ def macros_league_ranking() -> dict[str, str]:
         "LeagueLeakAssortLeaderPFirst": num(
             table.loc[leader, "league_leakage_assortative_p_first"]
         ),
+    }
+
+
+def macros_league_club() -> dict[str, str]:
+    """A24: the league-adjusted run with league levels from club results, beside the
+    league-adjusted run with RAPM's league means."""
+    club = summary("synthesis/league_club")
+    adjusted_leader = summary("synthesis/league_adjusted")["TopPlayerName"]
+    if club["TopPlayerName"] != adjusted_leader:
+        CHECKS.append(f"league_club is led by {club['TopPlayerName']}, not {adjusted_leader}")
+    spain = csv(RESULTS / "league" / "validation" / "levels.csv").set_index("league").loc["ES1"]
+    table = league_comparison()
+    orders = [
+        table.sort_values(f"{run}_p_first", ascending=False).index
+        for run in ("league_adjusted", "league_club")
+    ]
+    same = 0
+    while same < len(table) and orders[0][same] == orders[1][same]:
+        same += 1
+    shares = csv(RESULTS / "rapm_league_men" / "league_shares.csv")
+    la_liga = shares.loc[(shares["league"] == "ES1") & (shares["share"] > 0.5), "player_id"]
+    in_la_liga = table["player_id"].isin(la_liga)
+    gain = table["league_adjusted_median_rank"] - table["league_club_median_rank"]
+    if gain[in_la_liga].min() < 1:
+        CHECKS.append(f"a La Liga player does not gain in league_club: {gain[in_la_liga].min()}")
+    rho = table["league_adjusted_median_rank"].corr(
+        table["league_club_median_rank"], method="spearman"
+    )
+    return {
+        "LeagueClubSpainGapZ": num(
+            (spain["club_level"] - spain["mu22"]) / spain["club_level_minus_mu22_se"], 1
+        ),
+        "LeagueClubNLeagues": count(len(club["club_level_leagues"])),  # type: ignore[arg-type]
+        "LeagueClubTopPFirst": num(club["TopPlayerPFirst"]),
+        "LeagueClubTopSameOrder": count(same),
+        "LeagueClubNLaLiga": count(in_la_liga.sum()),
+        "LeagueClubLaLigaGainLo": count(gain[in_la_liga].min()),
+        "LeagueClubLaLigaGainHi": count(gain[in_la_liga].max()),
+        "LeagueClubOthersMaxMove": count(gain[~in_la_liga].abs().max()),
+        "LeagueClubSpearmanMedianRank": num(rho, 3),
+        "LeagueClubSharePairsDecided": num(club["SharePairsDecided"]),
     }
 
 
@@ -759,8 +817,8 @@ KEYED: dict[str, tuple[tuple[str, str, Callable[[object], str]], ...]] = {
         ("LeakAssortSharePairsDecided", "SharePairsDecided", num),
     ),
     "rapm_league_men/summary.json": (
-        ("ClubRapmPrimaryRealMadrid", "club_total_primary_Real Madrid", num),
-        ("ClubRapmLeagueRealMadrid", "club_total_league_Real Madrid", num),
+        ("ClubRapmPrimaryRealMadrid", "club_total_primary_Real Madrid", num3),
+        ("ClubRapmLeagueRealMadrid", "club_total_league_Real Madrid", num3),
         ("NLeaguesOwnMean", "n_leagues_own", count),
         ("UnequalMinutesShare", "unequal_minutes_share", percent),
         ("LeagueNoiseFreeBias", "noise_free_bias_as_written", num3),
@@ -2787,6 +2845,7 @@ MACRO_SOURCES: tuple[Callable[[], dict[str, str]], ...] = (
     macros_league_rapm,
     macros_league_validation,
     macros_league_ranking,
+    macros_league_club,
     macros_on_off,
 )
 
