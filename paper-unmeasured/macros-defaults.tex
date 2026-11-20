@@ -549,16 +549,16 @@
 \providecommand{\LeakIndepLeaderPFirst}{\TBD}
 
 % ---------------------------------------------------------------------------
-% Section 8, league-strength-adjusted analysis (post hoc; A20-A23)
+% Section 8, league-strength-adjusted analysis (post hoc; A20-A24)
 % ---------------------------------------------------------------------------
-% -- 8.1 the flaw: club means of RAPM total (goals per 90), results/players/rapm_league_men/summary.json
+% -- 8.1 the flaw: club means of RAPM total (goals per 90), results/players/rapm_league_men/summary.json. THREE decimals for all six, as tab-club-rapm prints them (with two, "between 0.10 and 0.11" excludes the table's 0.113)
 % Smallest of club_total_primary_{Porto, Benfica, Sporting CP}
 \providecommand{\ClubRapmPrimaryPortugalLo}{\TBD}
 % Largest of club_total_primary_{Porto, Benfica, Sporting CP}
 \providecommand{\ClubRapmPrimaryPortugalHi}{\TBD}
 % club_total_primary_Real Madrid
 \providecommand{\ClubRapmPrimaryRealMadrid}{\TBD}
-% Smallest of club_total_league_{Porto, Benfica, Sporting CP} (negative: write as $-0.03$)
+% Smallest of club_total_league_{Porto, Benfica, Sporting CP} (negative: write as $-0.030$)
 \providecommand{\ClubRapmLeaguePortugalLo}{\TBD}
 % Largest of club_total_league_{Porto, Benfica, Sporting CP}
 \providecommand{\ClubRapmLeaguePortugalHi}{\TBD}
@@ -569,10 +569,20 @@
 \providecommand{\NLeaguesOwnMean}{\TBD}
 % Leagues sharing one mean (REST); results/players/rapm_league_men/summary.json len(leagues_rest)
 \providecommand{\NLeaguesRest}{\TBD}
-% Share of stint minutes with unequal sides, as a percentage with its sign (e.g. 5.4\%); NOT in a results file yet: it is in A22's text. run_league.py should write it (e.g. rapm_league_men/summary.json unequal_minutes_share)
+% Share of stint minutes with unequal sides, as a percentage with its sign (e.g. 5.4\%); results/players/rapm_league_men/summary.json unequal_minutes_share
 \providecommand{\UnequalMinutesShare}{\TBD}
-% Bias of each league mean (goals per 90) in the noise-free fit of the A20 (i) model as first written (A22 text: 0.058); NOT in a results file yet: run_league.py should write it (e.g. rapm_league/summary.json noise_free_bias)
+% A22 check 1: mean over the free league means of refitted minus planted (goals per 90, three decimals), noise-free fit of the design as first written (A20 i); results/players/rapm_league_men/summary.json noise_free_bias_as_written
 \providecommand{\LeagueNoiseFreeBias}{\TBD}
+% Same with the A22 design, player deviations planted too, in ABSOLUTE value (three decimals, e.g. 0.005); results/players/rapm_league_men/summary.json |noise_free_bias_with_men|. The text also says the recovery is exact when only league means are planted: check |noise_free_bias_means_only_with_men| < 0.0005
+\providecommand{\LeagueNoiseFreeBiasMen}{\TBD}
+% A22 check 2: mean change of the league means of the A22 design when lambda is divided or multiplied by 10, smaller of the two in absolute value (three decimals); results/players/rapm_league_men/summary.json min(|lambda_low_mean_shift_with_men|, |lambda_high_mean_shift_with_men|)
+\providecommand{\LeagueLambdaShiftMeanLo}{\TBD}
+% Larger of the same two (three decimals); max(|lambda_low_mean_shift_with_men|, |lambda_high_mean_shift_with_men|)
+\providecommand{\LeagueLambdaShiftMeanHi}{\TBD}
+% Largest absolute change of any league mean of the A22 design over both (three decimals); results/players/rapm_league_men/summary.json max(lambda_low_max_shift_with_men, lambda_high_max_shift_with_men)
+\providecommand{\LeagueLambdaShiftMax}{\TBD}
+% Mean change of the league means of the design as first written at lambda/10, absolute value (three decimals); results/players/rapm_league_men/summary.json |lambda_low_mean_shift_as_written|
+\providecommand{\LeagueLambdaShiftAsWritten}{\TBD}
 % Number of league-mean columns with mu > 0 (above the Premier League) in the A20 (i) fit as first written; results/players/rapm_league/league_means.csv, distinct `column` with mu > 0
 \providecommand{\NLeaguesAboveAsWritten}{\TBD}
 % Coefficient of the man-advantage column (goals per 90 per extra player); results/players/rapm_league_men/summary.json men
@@ -670,7 +680,7 @@
 \providecommand{\LeagueTopRankLo}{\TBD}
 % Upper end; synthesis/league_adjusted/summary.json TopPlayerRankHi
 \providecommand{\LeagueTopRankHi}{\TBD}
-% Smallest TopPlayerPFirst over the six league runs (league_adjusted, league_plain, league_uefa, league_mls, league_leakage_independent, league_leakage_assortative); their summary.json. The text also says the same player leads all six: check TopPlayerName is identical
+% Smallest TopPlayerPFirst over the SEVEN league runs (league_adjusted, league_plain, league_uefa, league_mls, league_club, league_leakage_independent, league_leakage_assortative); their summary.json. The text also says the same player leads all seven: check TopPlayerName is identical
 \providecommand{\LeagueVariantsPFirstLo}{\TBD}
 % Largest of the same
 \providecommand{\LeagueVariantsPFirstHi}{\TBD}
@@ -696,7 +706,7 @@
 \providecommand{\LeagueTopGoalkeeperPFirst}{\TBD}
 % Share of outfield pairs decided in league_adjusted; synthesis/league_adjusted/summary.json SharePairsDecided
 \providecommand{\LeagueSharePairsDecided}{\TBD}
-% Smallest SharePairsDecided over the six league runs listed above
+% Smallest SharePairsDecided over the seven league runs listed above
 \providecommand{\LeagueVariantsDecidedLo}{\TBD}
 % Largest of the same
 \providecommand{\LeagueVariantsDecidedHi}{\TBD}
@@ -704,10 +714,31 @@
 \providecommand{\LeagueHFourRatio}{\TBD}
 % Total-order index of time aggregation for the league-adjusted leader's rank; synthesis/league_adjusted/summary.json h5_aggregation_total
 \providecommand{\LeagueHFiveAggTotal}{\TBD}
-% Largest TopPlayerPFirst over EVERY synthesis run: synthesis/summary.json and every synthesis/<variant>/summary.json (bias_corrected, europe, leakage_*, league_*)
+% Largest TopPlayerPFirst over EVERY synthesis run, twelve today: synthesis/summary.json and every synthesis/<variant>/summary.json (bias_corrected, europe, leakage_independent, leakage_assortative, and the seven league runs, league_club included)
 \providecommand{\AllVariantsMaxPFirst}{\TBD}
 % Largest SharePairsDecided over the same runs
 \providecommand{\AllVariantsMaxDecided}{\TBD}
+% -- 8.4 and 8.5, sensitivity with club-results league levels (A24); results/players/synthesis/league_club/summary.json, results/players/synthesis/league_comparison.csv (outfield pool players, columns league_adjusted_* and league_club_*)
+% La Liga: (club_level - mu22) / club_level_minus_mu22_se, one decimal (e.g. 3.3); results/players/league/validation/levels.csv, league ES1 (the same value is `z` of the ES1 entry of summary.json disagreements_mu_club)
+\providecommand{\LeagueClubSpainGapZ}{\TBD}
+% Leagues whose level comes from the club-results rating, the reference included; synthesis/league_club/summary.json len(club_level_leagues)
+\providecommand{\LeagueClubNLeagues}{\TBD}
+% P(#1) of the leader of the club-levels run; synthesis/league_club/summary.json TopPlayerPFirst. The text says he is the league-adjusted leader: check TopPlayerName equals league_adjusted's
+\providecommand{\LeagueClubTopPFirst}{\TBD}
+% Largest k such that the k outfield players with the highest P(#1) are the same, in the same order, in the two runs; synthesis/league_comparison.csv, sort by league_adjusted_p_first and by league_club_p_first (descending), length of the common prefix (integer, digits)
+\providecommand{\LeagueClubTopSameOrder}{\TBD}
+% Outfield pool players with more than half of their league minutes in La Liga; results/players/rapm_league_men/league_shares.csv, rows league == ES1 with share > 0.5, player_id in synthesis/league_comparison.csv (integer)
+\providecommand{\LeagueClubNLaLiga}{\TBD}
+% Smallest gain of median rank among those players, league_adjusted_median_rank - league_club_median_rank (integer; the text says "gain", so it must be >= 1); synthesis/league_comparison.csv
+\providecommand{\LeagueClubLaLigaGainLo}{\TBD}
+% Largest of the same (integer)
+\providecommand{\LeagueClubLaLigaGainHi}{\TBD}
+% Largest |league_adjusted_median_rank - league_club_median_rank| among the OTHER outfield pool players (La Liga share <= 0.5 or no La Liga row), integer (the text adds "places"); synthesis/league_comparison.csv
+\providecommand{\LeagueClubOthersMaxMove}{\TBD}
+% Spearman between league_adjusted_median_rank and league_club_median_rank over the outfield pool players, THREE decimals (0.995; two would print 1.00); computed from synthesis/league_comparison.csv
+\providecommand{\LeagueClubSpearmanMedianRank}{\TBD}
+% Share of outfield pairs decided in the club-levels run; synthesis/league_club/summary.json SharePairsDecided
+\providecommand{\LeagueClubSharePairsDecided}{\TBD}
 % -- 8.6 on/off description; results/players/rapm/pool_on_off.csv, rows with club == "all clubs"
 % Leader = primary TopPlayerName: gd_on_p90
 \providecommand{\OnOffLeaderOn}{\TBD}
