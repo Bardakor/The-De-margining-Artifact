@@ -17,27 +17,32 @@
 %
 % Slots. Tables: generated/<name>.tex. Figures: generated/<name>.pdf.
 %   Tables
-%     tab-coverage               4    games, games with stints, player-games per competition-season
+%     tab-coverage               4    games, games with stints, player-games per competition
 %     tab-reliability            7.1  M1 split-half reliability, k, minutes to 0.5 and 0.7, per metric
 %     tab-composite              7.2  M2 double-counting diagnostics of the V1-like composite
 %     tab-icc                    7.2  M2 team ICC(1) per metric with club-bootstrap intervals
 %     tab-rapm-reliability       7.3  M3 split-half reliability and attribution factors per group
 %     tab-unmeasured             7.4  M4 per position group: R2 terms, reliabilities, share, intervals
-%     tab-h3                     7.4  M4 H3 contrast with its three intervals and coverages
+%     tab-h3                     7.4  M4 H3 contrast with its intervals and coverages (A18 planted value)
 %     tab-multiverse             7.5  M5 P(#1), P(top-3), P(top-10) across specifications
 %     tab-recognition            7.6  M6 Shapley shares (OLS, Plackett-Luce), R2, intervals
 %     tab-visibility             7.7  M7a visibility of event metrics to box scores
 %     tab-clutch                 7.7  M7b persistence, interval, p, reliabilities, power, placebo
 %     tab-synthesis              7.8  M8 outfield pool: P(#1), P(top-3), P(top-10), ranks, sets, variance shares
-%     tab-goalkeepers            7.8  M8 goalkeeper segment, same columns
-%     tab-views                  7.8  M8 statistics, impact and recognition views, Kendall's W
+%     tab-goalkeepers            7.8  M8 goalkeeper segment
+%     tab-views                  7.8  M8 statistics, impact and recognition (A19 point shares) views
 %     tab-recovery               7.9  M9 recovery by planted top-two gap
-%     tab-v1                     7.10 exploratory comparison of V1 ranks with M8
-%     tab-verdicts               7.11 H1-H8: statistic, threshold, verdict
-%     tab-robustness             7.12 post hoc: M8 primary / bias-corrected / European leagues; H3 assortative (raw interval)
-%     tab-firsts-by-dimension    7.12 post hoc: share of M5 specs ranking each M8 leader first, by family and aggregation
-%     tab-recognition-curated    7.12 post hoc: M6 with curated team honours
-%     tab-leakage                7.12 post hoc (f): M8 with RAPM leakage propagated, independent and assortative A_g
+%     tab-verdicts               7.10 H1-H8: statistic, threshold, verdict (pre-registered analysis)
+%     tab-club-rapm              8.1  post hoc: club means of RAPM total, primary vs league means, 11 clubs
+%     tab-league-levels          8.3  post hoc: league means mu with SE and interval, 22 mu, link counts, validation columns
+%     tab-league-factors         8.3  post hoc: box-score league factors per metric, context and plain, SEs, linking players
+%     tab-league-ranking         8.5  post hoc: leading players under the primary and each league-adjusted variant
+%     tab-on-off                 8.6  post hoc: clubs' goal difference per 90 with a pool player on and off the pitch
+%     tab-robustness             9    post hoc: M8 primary / bias-corrected / European leagues; H3 assortative; M6 curated
+%     tab-leakage                9    post hoc (f): M8 with RAPM leakage propagated, independent and assortative A_g
+%     tab-firsts-by-dimension    9    post hoc: share of M5 specs ranking each M8 leader first, by family and aggregation
+%     tab-recognition-curated    9    post hoc: M6 with curated team honours
+%     tab-v1                     10   exploratory comparison of V1 ranks with the pre-registered M8
 %     tab-pool                   App. C  the pool: name, group, source, Transfermarkt match
 %   Figures
 %     fig-reliability            7.1  M1 reliability against minutes, fitted m/(m+k)
@@ -55,6 +60,7 @@
 %     fig-variance-decomposition 7.8  M8 rank variance into specification, sampling, unmeasured
 %     fig-decided-pairs          7.8  M8 pairwise P(i above j) matrix with decided cells marked
 %     fig-recovery               7.9  M9 recovery of the planted #1 against the planted gap
+%     fig-league-levels          8.3  post hoc: league means with 90% intervals, Premier League at zero
 %   Other file (not generated)
 %     logos/statsbomb.pdf        App. B  StatsBomb logo from https://statsbomb.com/media-pack/
 \documentclass[11pt,a4paper]{article}
@@ -182,38 +188,51 @@ definitions, match-bootstrap replicates and draws of the unmeasured part. A
 recovery study on the real schedule measures how often two of these estimators
 recover a planted best player from data of this size.
 
-The data do not name a best player. The outfield player most likely to rank
-first is \TopPlayerName{}, at \TopPlayerPFirst{} (H2: \VerdictHTwo{}). His lead
-rests on regularised adjusted plus-minus (RAPM): box-score definitions of
-``best'' rank other players first. The primary synthesis carries no
-uncertainty for how RAPM divides goals among teammates; a post-hoc check adds
-it. Only \SharePairsDecided{} of the pool's outfield pairwise orderings are
-decided at the 0.9 level (H1: \VerdictHOne{}), almost none of them among the
-leaders. Across the leading players, the definition of ``best'' moves ranks
-more than sampling noise on average, narrowly: the mean ratio is
-\HFourRatio{} (H4: \VerdictHFour{}) and the median \HFourMedianRatio{}. The
-decisive choice is what a score is built from, not how seasons are combined
-(H5: \VerdictHFive{}). The disattenuated share of on-pitch impact that the
+The pre-registered analysis does not name a best player. Its most likely
+number one among outfield players is \TopPlayerName{}, at \TopPlayerPFirst{}
+(H2: \VerdictHTwo{}), and his lead rests on regularised adjusted plus-minus
+(RAPM): box-score definitions of ``best'' rank other players first. Only
+\SharePairsDecided{} of the pool's outfield pairwise orderings are decided at
+the 0.9 level (H1: \VerdictHOne{}), almost none of them among the leaders.
+Across the leading players, the definition of ``best'' moves ranks more than
+sampling noise on average, narrowly: the mean ratio is \HFourRatio{} (H4:
+\VerdictHFour{}) and the median \HFourMedianRatio{}. The decisive choice is
+what a score is built from, not how seasons are combined (H5:
+\VerdictHFive{}). The disattenuated share of on-pitch impact that the
 statistics cannot see is \ShareHigh{} for centre-backs and defensive
 midfielders; for attackers the correction over-corrects and the share is
 clipped to \ShareLow{}, and both values depend on how RAPM's teammate leakage
 is corrected. The 90\% interval of the difference is
 [\ShareContrastParamLo, \ShareContrastParamHi] (H3: \VerdictHThree{}), and its
-sign survives a post-hoc model in which quality clusters on teams.
-% PENDING-RERUN: H3 interval (A18) and the assortative check (a): confirm the
-% interval excludes 0 and that both assortative intervals exclude 0.
-The Ballon d'Or vote follows individual statistics more than team success in
-our point estimates (H6: \VerdictHSix{}), but the order reverses in
+sign survives a post-hoc model in which quality clusters on teams. The
+Ballon d'Or vote follows individual statistics more than team success in our
+point estimates (H6: \VerdictHSix{}), but the order reverses in
 \ShapleyTeamAboveStatsBoot{} of bootstrap replicates
 (\CuratedTeamAboveStatsBoot{} with curated team honours) and under one reading
 of the statistics. Knockout over-performance is too noisy for its persistence
 test to refute anything (H7: \VerdictHSeven{}), although the observed
 persistence is positive, and H8 is not tested, because the coarse shot data it
-needed were withdrawn over their terms of use. In simulated leagues on the
-real schedule, pooled RAPM ranks a planted best player first in
-\RecoveryRapmFirst{} of leagues and a box-score composite in
-\RecoveryBoxFirst{}. A ranking of the best player of the 2020s is a statement
-about the definition chosen more than about the players.
+needed were withdrawn over their terms of use.
+
+After these results we found a flaw in the pre-registered analysis: nothing in
+it adjusts for league strength. Its RAPM gives the players of the three
+leading Portuguese clubs an average close to that of Real Madrid's players, and
+\QuinonesSpecShare{} of its definitions rank first a forward with two
+qualifying seasons, both in the Saudi league. A post-hoc analysis, labelled as
+such throughout, adds league means to RAPM and league factors to box-score
+counts, both estimated from our data. Under it the most likely number one is
+\LeagueTopName{}, at \LeagueTopPFirst{}; \TopPlayerName{} is second, and
+\LeagueSharePairsDecided{} of pairs are decided. Adding the uncertainty of how
+RAPM divides goals among teammates, which neither analysis carries by default,
+lowers the probabilities of the players who lead on RAPM. The hypotheses stay
+decided by the pre-registered analysis. What holds in every variant is the
+paper's main result: no player has a probability above
+\AllVariantsMaxPFirst{} of being the best, and at most \AllVariantsMaxDecided{}
+of pairwise orderings are decided. In simulated leagues on the real schedule,
+pooled RAPM ranks a planted best player first in \RecoveryRapmFirst{} of
+leagues and a box-score composite in \RecoveryBoxFirst{}. A ranking of the best
+player of the 2020s is a statement about the definition chosen more than about
+the players.
 \end{abstract}
 \clearpage
 
@@ -281,9 +300,14 @@ uncertainty to be measured rather than a choice to be hidden.
   \item \emph{A recovery study.} Simulations on the real schedule that show
     how often two of these estimators, pooled RAPM and a box-score composite,
     recover a planted best player from data of this size (M9).
+  \item \emph{A league-strength adjustment, post hoc.} League means inside
+    RAPM and league factors for box-score counts, both estimated from the data
+    and validated on synthetic leagues, added after the pre-registered results
+    showed that nothing in them adjusts for league strength
+    (Section~\ref{sec:league}).
   \item \emph{A pre-registered, reproducible pipeline.} Hypotheses and
     amendments were committed before the results they concern, except
-    A16 (ii), A16 (iii), A17 and A18, which were recorded after the analyses
+    A16 (ii), A16 (iii) and A17 to A23, which were recorded after the analyses
     they concern and are labelled so. Every number in this paper is written by
     a script from a results file; none is typed.
 \end{enumerate}
@@ -303,12 +327,25 @@ H7: ``big-game player'' is not a stable trait.
 H8: coarse shot data lose little against full event data at season level;
 it is not tested (A6, A11, A15).
 
+\paragraph{Two analyses.}
+The paper reports two analyses and keeps them apart. The first is the
+pre-registered one (Section~\ref{sec:results}); it decides the hypotheses.
+After its results we found that it has a specification flaw: it does not adjust
+for league strength. The second is a post-hoc analysis that adds that
+adjustment (Section~\ref{sec:league}). Its method was fixed before any
+league-adjusted ranking existed, but after the pre-registered results were
+known, so it is exploratory. Where the two give different answers, we report
+both and say which is which.
+
 \paragraph{Outline.}
 Section~\ref{sec:related} reviews related work.
 Section~\ref{sec:taxonomy} sets out what public numbers cannot reach.
 Section~\ref{sec:data} describes the data, Section~\ref{sec:prereg} the
 pre-registration and its amendments, and Section~\ref{sec:methods} the nine
-modules. Section~\ref{sec:results} reports results, and
+modules. Section~\ref{sec:results} reports the pre-registered results,
+Section~\ref{sec:league} the league-strength-adjusted analysis and
+Section~\ref{sec:r-posthoc} the other post-hoc analyses.
+Section~\ref{sec:r-best} gives both answers to the title's question, and
 Section~\ref{sec:limitations} the limitations. The appendices give the
 reproduction steps, the data licences and attribution, and the player pool.
 
@@ -555,7 +592,7 @@ Usage, opportunity share & M & penalty goals (TM); share of team shots (SB subse
 Teammate quality & M & RAPM co-player adjustment (M3) & Collinear lineups make individual effects imprecise and most players indistinguishable from zero in hockey \citep{gramacy2013hockey,macdonald2012ridge}; team and player ratings are complementary \citep{arntzen2021ratings}. \\
 Team strength & M & in-house Elo; market values (TM) & Elo is a usable match predictor \citep{hvattum2010elo}; squad valuations forecast national-team results better than FIFA ranking and Elo \citep{peeters2018wisdom}. \\
 Coach & M & none (absorbed in team terms) & Managers' ability differences are worth considerable points \citep{muehlheusser2018managers}. \\
-League strength & M & competition-season intercepts; cross-league Elo & No verified estimate of league-strength adjustment. \\
+League strength & M & none in the pre-registered analysis; league means and factors, post hoc (Section~\ref{sec:league}) & No verified estimate of league-strength adjustment. \\
 Opponent quality & M & opponent Elo & Possession depends on the opponent as well as on location and score \citep{lago2009possession}. \\
 Home advantage, crowd & M & home and away; empty-stadium seasons & Home advantage fell in German top-division ghost games of 2019/20 \citep{fischer2021ghost}; empty stadiums narrowed the home--away gap in cards \citep{bryson2021crowd}. \\
 Reputation, market value & M & market values (TM); previous Ballon d'Or points & Crowd valuations predict fees \citep{herm2014crowd}; talent and popularity both raise value \citep{franck2012superstar}; voting similarity bias is small in aggregate \citep{coupe2018ballondor} and rises with cultural similarity \citep{johnson2022voting}; votes concentrate on certain player types \citep{anderson2020celebrity}. \\
@@ -695,15 +732,31 @@ where $S_{\mathrm H}$ is 1, $\tfrac12$ or 0 for a home win, draw or loss,
 $G = 1$ for a goal difference $|\mathit{gd}| \le 1$, $1.5$ for $|\mathit{gd}| = 2$
 and $(11 + |\mathit{gd}|)/8$ otherwise, and the home rating gains $\Delta R$
 while the away rating loses it. Ratings run over every Transfermarkt game from
-2015-07-01, so the years before the window are a burn-in and cross-league
-European games tie the leagues together. Clubs and national teams are separate
-pools. In each, $K$ and $H$ minimise the one-step-ahead squared error of
+2015-07-01, so the years before the window are a burn-in. Clubs and national
+teams are separate pools. In each, $K$ and $H$ minimise the one-step-ahead squared error of
 $E_{\mathrm H}$ against $S_{\mathrm H}$ on games before 2020 and are then
 frozen: $K = \EloKClub$ and $H = \EloHClub$ for clubs, $K = \EloKNational$ and
 $H = \EloHNational$ for national teams. The source has no neutral-venue flag,
 so $H$ also applies to tournament games at neutral venues. Elo enters M2
 (partial correlations), M5 (the context dimension) and a robustness fit of M3;
 it is not a covariate in the primary M3 fit (A12).
+
+This Elo compares teams within a league. It does not compare leagues, a fact
+we established only after the pre-registered results
+(Section~\ref{sec:league}). The design assumed that games between clubs of
+different leagues would tie the league levels together. They do not. In
+several leagues, more rating points come in from domestic-cup games against
+clubs of lower divisions, which are in no covered league, enter at 1,500 and
+lose, than from continental games; leagues whose cups are in the data are
+inflated and the others are not. The leagues that enter the snapshot in
+2024/25 start at 1,500 and stay near it, and most leagues covered throughout
+drift upward with time in the data. The Danish league's mean rating over the
+window is above those of Serie A and Ligue 1,
+although Danish clubs lose on average against clubs of other covered leagues
+and French clubs win. Elo systems built to compare leagues let a league's
+level move only through games between leagues \citep{csato2024elo}, or
+exclude lower tiers and renormalise each season
+\citep{shelopugin2023leagues}; ours does neither.
 
 \subsection{The player pool}
 
@@ -805,18 +858,25 @@ The taxonomy, the descriptive structure of the metrics (M2), the visibility of
 on-ball value (M7a), the recovery study (M9) and the comparison with V1 were
 not pre-registered. They are exploratory and are labelled as such.
 
-Eighteen amendments followed (Table~\ref{tab:amendments}), each with its
+Twenty-three amendments followed (Table~\ref{tab:amendments}), each with its
 commit as its timestamp. A1 to A15 were committed before any real-data analysis
 they concern had run. A9 and A10 were prompted by synthetic leagues and by the
 M7a StatsBomb analysis, which is exploratory and outside the hypotheses; A10
 therefore came after a real-data run of M7a, though before any of M4. A15
 records the withdrawal of a candidate data source before any analysis used it.
 A16 (i) was committed before M5 ran but right after M1's real-data run, which
-motivated it. A16 (ii), A16 (iii), A17 and A18 were recorded after the
-analyses they concern (M2's team-share interval, H7's test level and H3's
-planted value) had run; they are not pre-registered, and the paper labels
-them so where they apply. Where the amendments and the original text differ,
-this paper follows the amendments.
+motivated it. A16 (ii), A16 (iii), A17, A18 and A19 were recorded after the
+analyses they concern (M2's team-share interval, H7's test level, H3's
+planted value and M8's recognition view) had run; they are not
+pre-registered, and the paper labels them so where they apply. A20 to A23
+define the post-hoc league-strength-adjusted analysis of
+Section~\ref{sec:league}. All four were written after the results of M5 and
+M8 were known. A20 fixed the method before any league-adjusted estimate
+existed; A21 and A22 amended it after the first estimates and before any
+league-adjusted ranking; A23 records three additions made after that ranking
+had run. They change no verdict: H1 to H8 stay decided by the pre-registered
+analysis. Where the
+amendments and the original text differ, this paper follows the amendments.
 
 The pre-registration fixes 200 match-level bootstrap replicates. That is what
 M1, M3 and M8 use. Other modules resample other units, as their designs
@@ -826,38 +886,44 @@ its module.
 
 {\small
 \setlength{\tabcolsep}{4pt}
-\begin{longtable}{@{}L{0.7cm}L{8.4cm}L{5.5cm}@{}}
-\caption{Amendments to the pre-registration, one line each, with the reason.
-A16 (ii), A16 (iii), A17 and A18 were recorded after the analyses they concern.}
+\begin{longtable}{@{}L{0.7cm}L{6.9cm}L{4.6cm}L{2.1cm}@{}}
+\caption{Amendments to the pre-registration, one line each, with the reason and
+when each was recorded relative to the result it concerns. ``Before'' means
+before any real-data analysis the amendment concerns had run.}
 \label{tab:amendments}\\
 \toprule
-& Change & Why \\
+& Change & Why & When \\
 \midrule
 \endfirsthead
 \toprule
-& Change & Why \\
+& Change & Why & When \\
 \midrule
 \endhead
 \bottomrule
 \endlastfoot
-A1 & H6 is decided by the OLS Shapley shares; Plackett--Luce shares are reported alongside, with any disagreement. & The original did not say which model decides. \\
-A2 & The 2026 edition is in the pool (voting period 2025-08-03 to 2026-07-19). & It was published before 2026-11-14 and its vote lies inside the window. \\
-A3 & For 2021, ``previous edition'' in the reputation block means 2019. & 2020 was cancelled. \\
-A4 & H7 uses non-penalty goals plus assists per 90 and requires 360 knockout minutes in each period. & The original named neither metric nor floor. \\
-A5 & H7 is concluded only if $r < 0.2$ and a true correlation of 0.3 would have been detected with at least 80\% power; otherwise it is inconclusive. & A difference score from a few hundred minutes is unreliable, so $r < 0.2$ alone would be near-automatic. \\
-A6 & H8 is tested on non-penalty xG per shot, refuted below 0.8; not tested if the shot source is withdrawn. & Season totals are driven by shot counts, so the original test was near-automatic. \\
-A7 & In M4 and H3, $R^2_{\text{true}}$ is clipped to $[0,1]$; intervals from a joint bootstrap over players and RAPM replicates; raw values reported. & Disattenuated values can leave $[0,1]$; the interval method was unstated. \\
-A8 & M3 estimates home advantage per competition-season. & Empty stadiums in 2019/20 and 2020/21. \\
-A9 & RAPM reliability is split-half reliability times an attribution factor; H3 is decided by a parametric bootstrap on the real schedule. & On synthetic leagues, split-half reliability counted teammate leakage as signal, and the A7 interval overstated the spread. \\
-A10 & M4's primary estimator is cross-half; the within-sample estimator is robustness. & On real StatsBomb data the within-sample correction exceeded 1, because the same matches drive both sides. \\
-A11 & Primary analyses use only data available for every match (Transfermarkt, plus StatsBomb stints for the 2022 World Cup and Euros); M4's statistics and M5's families are restated on them. & The primary analysis must not depend on a pending source decision and must be uniform across leagues. \\
-A12 & M3 primary specification: every stint; per competition-season terms; own columns from 900 minutes; no Elo covariate; $\lambda$ by 5-fold game-grouped CV; $B = 200$; master seed 20261114. & Fixed before the first real-data fit; adjusting for Elo would remove part of the signal. \\
-A13 & Implementation choices: M5's families and V1-like weights, M8's unmeasured draw and replicates, the A9 calibration, and the recognition view. & A9, A11 and M8 left them open. \\
-A14 & M6's universe (outfield pool players with minutes in the voted season), edition-to-season mapping, and the features of each block. & Fixed before any M6 fit; the design named the blocks but not their contents. \\
-A15 & ESPN withdrawn; H8 not tested; A4's secondary zone-xG metric and A11's ESPN-based secondary analyses not run. & Its terms of use forbid automated extraction. \\
-A16 & (i) Empirical-Bayes shrinkage in M5 uses each metric's stabilisation constant within the position group. (ii) After M2 ran: team-ICC interval changed to the basic bootstrap interval. (iii) After H7 was computed: one-sided Pearson test at $\alpha = 0.05$ and simulated power recorded. & (i) Shrinkage is toward the group mean. (ii) A shift seen on synthetic data. (iii) A5 left both open. \\
-A17 & After M2 ran: A16 (ii) withdrawn; the team-ICC interval is the standard bootstrap interval, estimate $\pm 1.645$ bootstrap SDs, reported as approximate. & On synthetic panels the basic interval mirrored the bootstrap's shift upward; the standard interval covered better. \\
-A18 & After H3 was computed: the planted value of each simulation of the H3 parametric bootstrap is the population value of M4's own pooled estimand under the generator; the basic interval is recomputed, and the assortative check uses the same definition. & A code review found that the variance-weighted average of the groups' planted shares ignores that M4 fits one model across a pool's groups. \\
+A1 & H6 is decided by the OLS Shapley shares; Plackett--Luce shares are reported alongside, with any disagreement. & The original did not say which model decides. & before \\
+A2 & The 2026 edition is in the pool (voting period 2025-08-03 to 2026-07-19). & It was published before 2026-11-14 and its vote lies inside the window. & before \\
+A3 & For 2021, ``previous edition'' in the reputation block means 2019. & 2020 was cancelled. & before \\
+A4 & H7 uses non-penalty goals plus assists per 90 and requires 360 knockout minutes in each period. & The original named neither metric nor floor. & before \\
+A5 & H7 is concluded only if $r < 0.2$ and a true correlation of 0.3 would have been detected with at least 80\% power; otherwise it is inconclusive. & A difference score from a few hundred minutes is unreliable, so $r < 0.2$ alone would be near-automatic. & before \\
+A6 & H8 is tested on non-penalty xG per shot, refuted below 0.8; not tested if the shot source is withdrawn. & Season totals are driven by shot counts, so the original test was near-automatic. & before \\
+A7 & In M4 and H3, $R^2_{\text{true}}$ is clipped to $[0,1]$; intervals from a joint bootstrap over players and RAPM replicates; raw values reported. & Disattenuated values can leave $[0,1]$; the interval method was unstated. & before \\
+A8 & M3 estimates home advantage per competition-season. & Empty stadiums in 2019/20 and 2020/21. & before \\
+A9 & RAPM reliability is split-half reliability times an attribution factor; H3 is decided by a parametric bootstrap on the real schedule. & On synthetic leagues, split-half reliability counted teammate leakage as signal, and the A7 interval overstated the spread. & before \\
+A10 & M4's primary estimator is cross-half; the within-sample estimator is robustness. & On real StatsBomb data the within-sample correction exceeded 1, because the same matches drive both sides. & before M4; after M7a \\
+A11 & Primary analyses use only data available for every match (Transfermarkt, plus StatsBomb stints for the 2022 World Cup and Euros); M4's statistics and M5's families are restated on them. & The primary analysis must not depend on a pending source decision and must be uniform across leagues. & before \\
+A12 & M3 primary specification: every stint; per competition-season terms; own columns from 900 minutes; no Elo covariate; $\lambda$ by 5-fold game-grouped CV; $B = 200$; master seed 20261114. & Fixed before the first real-data fit; adjusting for Elo would remove part of the signal. & before \\
+A13 & Implementation choices: M5's families and V1-like weights, M8's unmeasured draw and replicates, the A9 calibration, and the recognition view. & A9, A11 and M8 left them open. & before \\
+A14 & M6's universe (outfield pool players with minutes in the voted season), edition-to-season mapping, and the features of each block. & Fixed before any M6 fit; the design named the blocks but not their contents. & before \\
+A15 & ESPN withdrawn; H8 not tested; A4's secondary zone-xG metric and A11's ESPN-based secondary analyses not run. & Its terms of use forbid automated extraction. & before \\
+A16 & (i) Empirical-Bayes shrinkage in M5 uses each metric's stabilisation constant within the position group. (ii) Team-ICC interval changed to the basic bootstrap interval. (iii) One-sided Pearson test at $\alpha = 0.05$ and simulated power recorded. & (i) Shrinkage is toward the group mean. (ii) A shift seen on synthetic data. (iii) A5 left both open. & (i) before M5, after M1; (ii), (iii) after \\
+A17 & A16 (ii) withdrawn; the team-ICC interval is the standard bootstrap interval, estimate $\pm 1.645$ bootstrap SDs, reported as approximate. & On synthetic panels the basic interval mirrored the bootstrap's shift upward; the standard interval covered better. & after \\
+A18 & The planted value of each simulation of the H3 parametric bootstrap is the population value of M4's own pooled estimand under the generator; the basic interval is recomputed, and the assortative check uses the same definition. & A code review found that the variance-weighted average of the groups' planted shares ignores that M4 fits one model across a pool's groups. & after \\
+A19 & The recognition view of M8 is the sum over editions of a player's share of that edition's points, not the raw sum of points; the raw-sum value is reported beside it. & The ballot changed in 2022 and in 2024, so an edition's total points vary several-fold and the raw sum weights the last three editions most. & after M8 \\
+A20 & A league-strength-adjusted analysis, post hoc: league means inside RAPM, box-score league factors from players who change league, a shift of on-pitch goal difference, team Elo centred within competition-season, M5 and M8 rerun, and an MLS coverage fill as a separate variant. Verdicts stay with the pre-registered analysis. & Nothing in the pre-registered analysis adjusts for league strength, and the in-house Elo cannot supply league levels. & after M5 and M8; before any league-adjusted estimate \\
+A21 & The factor model gains a team-context control, the team's Elo centred within league-season; counts are still divided by the league factor alone. The factors without the control are reported as a sensitivity. & A factor is the typical mover's change in rate, which mixes the league's difficulty with the mover's change of team. & after the A20 factors; before any league-adjusted ranking \\
+A22 & The league-mean RAPM gains one unpenalised column, the number of players on the pitch, home side minus away side. The fit as first written is kept in the results and not used. & With unequal sides the league columns do not sum to zero, so every league mean also absorbed the effect of an extra player. & after the A20 fit; before any league-adjusted ranking \\
+A23 & (i) The league means are compared with a club-results rating and with UEFA's association coefficients. (ii) The teammate-contamination term of post-hoc analysis (f) is also applied to the league-adjusted run. (iii) The MLS fill uses minutes on the 90-per-match scale of the panel. & Descriptive checks and records; none changes a verdict. & after the league-adjusted ranking \\
 \end{longtable}
 }
 
@@ -1222,9 +1288,11 @@ fit's, with no match shock. The simulated box score's per-90 rate has the real
 group mean of non-penalty goals plus assists, and a standard deviation chosen
 so that its full-window reliability at the group's median minutes equals the
 real reliability of M4's statistics prediction in that group. The planted
-contrast $D_0$ follows from the planted parameters. With $\hat D$ the real
-estimate and $\varepsilon_s = \hat D^\ast_s - D_0$ the simulated errors, the
-basic (pivotal) interval is
+contrast of simulation $s$, $D_{0,s}$, is M4's own pooled estimand under the
+generator, computed from that simulation's planted effects
+(Section~\ref{sec:m9}; A18). With $\hat D$ the real estimate and
+$\varepsilon_s = \hat D^\ast_s - D_{0,s}$ the simulated errors, the basic
+(pivotal) interval is
 \begin{equation}
   \big[\hat D - Q_{0.95}(\varepsilon),\; \hat D - Q_{0.05}(\varepsilon)\big].
   \label{eq:basic}
@@ -1233,7 +1301,7 @@ M4 is biased on finite data (ridge leakage, the corrections, the clipping).
 The basic interval treats the error as a pivot and so removes that bias,
 whereas a percentile interval of the $\hat D^\ast_s$ would add it a second time.
 Two coverages are reported: the share of simulations whose own player-bootstrap
-interval covers $D_0$, and the leave-one-out coverage of the parametric
+interval covers its $D_{0,s}$, and the leave-one-out coverage of the parametric
 interval.
 
 % ---------------------------------------------------------------------------
@@ -1646,8 +1714,12 @@ percentile intervals of bootstrap ranks, which can be inconsistent near ties
 \paragraph{Agreement of views.}
 Three views rank the pool: statistics (a player's mean rank over the box-family
 specifications), impact (over the impact-family specifications), and
-recognition (Ballon d'Or points summed over 2021--2026, zero for unranked pool
-players; A13 (v)). The box+GD and hybrid families mix the two kinds of measure
+recognition. The recognition view is the sum, over the editions of 2021 to
+2026, of the player's share of that edition's total points, zero for unranked
+pool players (A19). A13 (v) had fixed the raw sum of points; the ballot changed
+in 2022 and in 2024, so an edition's total points vary several-fold and the raw
+sum weights the last three editions most. The correction was made after M8
+had run, and the raw-sum value is reported beside the corrected one. The box+GD and hybrid families mix the two kinds of measure
 and enter neither view. Agreement is Kendall's $W$ with the tie correction
 \citep{kendall1939rankings}: with $m = 3$ views, $n$ players, $R_i$ the sum of
 player $i$'s mid-ranks over views and $T_v = \sum (t^3 - t)$ over the tie groups of
@@ -1698,8 +1770,8 @@ stint $\ell$ are Poisson with per-90 rate
 \end{equation}
 with $+$ for the home side and $-$ for the away side, scaled by $d_\ell / 90$;
 $\epsilon_0 > 0$ is a small floor. Box score and stint goals are independent given
-the effects. For H3, the planted contrast of a simulation is
-$D_0 = (1 - R^2_{\mathcal H}) - (1 - R^2_{\mathcal W})$, where $R^2_{\mathcal P}$
+the effects. For H3, the planted contrast of simulation $s$ is
+$D_{0,s} = (1 - R^2_{\mathcal H}) - (1 - R^2_{\mathcal W})$, where $R^2_{\mathcal P}$
 is the $R^2$ of an OLS, with intercept, of the planted total effect $\beta_i$
 on the player's expected per-90 statistics, over the players entering M4 in
 pool $\mathcal P$: CB+DM ($\mathcal H$) or CF+W ($\mathcal W$). This is M4's own
@@ -1721,6 +1793,10 @@ in bins of $\Delta_{12}$ with equal numbers of simulations.
 \section{Results}
 \label{sec:results}
 
+This section reports the pre-registered analysis, which decides the
+hypotheses. It does not adjust for league strength; Section~\ref{sec:league}
+shows why that is a flaw and what an adjustment changes.
+
 The data do not name a best player. Under the mixture of definitions, samples
 and unmeasured draws (M8), the outfield player most likely to rank first is
 \TopPlayerName{}, with a probability of \TopPlayerPFirst{}, and only
@@ -1734,8 +1810,9 @@ attackers and is sensitive for defenders. The leader's lead rests on RAPM,
 whose division of goals among teammates the primary synthesis does not treat
 as uncertain. In the point estimates the Ballon d'Or vote follows individual
 statistics more than team success, but that order is fragile.
-The subsections below follow the modules; Section~\ref{sec:r-posthoc} collects
-the analyses added after the results were seen, each with its motivation.
+The subsections below follow the modules. Sections~\ref{sec:league}
+and~\ref{sec:r-posthoc} hold the analyses added after the results were seen,
+each with its motivation.
 
 % ---------------------------------------------------------------------------
 \subsection{M1: sampling noise}
@@ -1977,24 +2054,30 @@ what the analysis supports.
 
 The H3 contrast is \ShareContrast{} (raw: \ShareContrastRaw{}). Its 90\%
 parametric basic interval, which decides H3, is
-[\ShareContrastParamLo, \ShareContrastParamHi]; the player bootstrap gives
+[\ShareContrastParamLo, \ShareContrastParamHi]; for the raw contrast it is
+[\ShareContrastParamRawLo, \ShareContrastParamRawHi]. The player bootstrap gives
 [\ShareContrastPlayerLo, \ShareContrastPlayerHi] and the A7 joint bootstrap
 [\ShareContrastJointLo, \ShareContrastJointHi] (Table~\ref{tab:h3},
-Figure~\ref{fig:h3-parametric}). H3: \VerdictHThree{}. The planted value of
-each simulation is M4's own pooled estimand under the generator, a definition
-corrected after the result (A18). The leave-one-out coverage of the parametric
-interval is \ParamCoverageLoo{}, while the player-bootstrap interval covers the
-planted contrast in \ParamCoverageMFour{} of simulations.
+Figure~\ref{fig:h3-parametric}). H3: \VerdictHThree{}.
+
+The planted value of each simulation is M4's own pooled estimand under the
+generator, a definition corrected after the result (A18). It averages
+\HThreePlanted{} over the simulations; the earlier definition, the
+variance-weighted average of the groups' shares, gave \HThreePlantedWeighted{}.
+Against the corrected value the estimator is biased upward by
+\HThreeMeanError{} on average, a bias the basic interval removes. The
+leave-one-out coverage of the parametric interval is \ParamCoverageLoo{}, while
+the player-bootstrap interval covers the planted contrast in
+\ParamCoverageMFour{} of simulations.
 
 The generator fits the real data imperfectly. On the real data the CF+W pool
 is clipped; in the simulations either pool is clipped in \HThreeSimClipped{} of
 runs, and the simulated raw contrast reaches the real one in only
-\HThreeSimReachReal{} of them. The parametric interval treats the estimator's
-error as a pivot, and that assumption is least safe where the real estimate
-sits outside what the generator produces.
-% PENDING-RERUN (A18): check \HThreeSimClipped and \HThreeSimReachReal on the
-% new h3_sims.csv; keep the misfit statement only if they stay low, and do not
-% claim a small bias unless the new mean error supports it.
+\HThreeSimReachReal{} of them. The real estimate sits in the far tail of what
+this generator produces. The parametric interval treats the estimator's error
+as a pivot, and that assumption is least safe exactly there. The assortative
+planting of Section~\ref{sec:r-posthoc} (a), which keeps the real teammate
+structure, does reach the real level.
 
 The rows of Table~\ref{tab:h3} are not on the same footing. The A7 joint
 bootstrap uses only the players present in every RAPM replicate's split
@@ -2280,9 +2363,10 @@ interval spans a large part of the pool. His lead rests on RAPM
 (Section~\ref{sec:r-m5}), and this mixture carries no uncertainty for how RAPM
 divides goals among teammates: that leakage is stable across game resamples,
 so the sampling layer does not contain it, and the impact family has no
-unmeasured draw. Section~\ref{sec:r-posthoc} (f) adds it.
-% PENDING-RERUN (f): once leakage_independent/ and leakage_assortative/ exist,
-% say here whether the leader and H1/H2 change, in one neutral sentence.
+unmeasured draw. Section~\ref{sec:r-posthoc} (f) adds it: his probability
+falls, and under the larger of the two leakage estimates he is no longer
+first, while the statistics of H1, H2 and H4 stay on the same side of their
+thresholds.
 
 Of \NPairsOutfield{} outfield pairs, \NPairsDecided{} are decided, a share of
 \SharePairsDecided{} (Figure~\ref{fig:decided-pairs}). H1: \VerdictHOne{}.
@@ -2309,8 +2393,11 @@ marginal 90\% rank confidence set at [\TopPlayerMarginalLo, \TopPlayerMarginalHi
 The three views disagree. The statistics view ranks \StatsViewTopName{} best,
 the impact view \ImpactViewTopName{} and recognition \RecognitionTopName{}
 (Table~\ref{tab:views}). Kendall's $W$ is \KendallW{}, a mean pairwise Spearman
-correlation of \KendallMeanSpearman{}. \TopPlayerName{} owes his lead to the
-impact view: he received few Ballon d'Or points over the period. Among
+correlation of \KendallMeanSpearman{}. The recognition view is the corrected
+one (A19, made after the result): with the raw sum of points that A13 (v) had
+fixed, it put \RecognitionTopNameRaw{} first, on the strength of the three most
+recent editions, and $W$ was \KendallWRaw{}. \TopPlayerName{} owes his lead to
+the impact view: he received very few Ballon d'Or points over the period. Among
 goalkeepers, \TopGoalkeeperName{} has the highest $P(\#1)$, at
 \TopGoalkeeperPFirst{} (Table~\ref{tab:goalkeepers}). That ranking rests on
 RAPM and on box metrics that say little about goalkeeping, and M4's estimated
@@ -2360,7 +2447,8 @@ paper.
   \centering
   \caption{The three views of the outfield pool: mean rank over the box-family
   specifications (statistics), over the impact-family specifications (impact),
-  and Ballon d'Or points summed over 2021--2026 with their rank (recognition).}
+  and the sum over the 2021--2026 editions of the player's share of each
+  edition's Ballon d'Or points, with its rank (recognition; A19).}
   \label{tab:views}
   \small
   \IfFileExists{generated/tab-views.tex}{\input{generated/tab-views.tex}}{\pendingtable{tab-views}}
@@ -2421,51 +2509,6 @@ surprising for data of this size.
 \FloatBarrier
 
 % ---------------------------------------------------------------------------
-\subsection{Who was the best player of the 2020s?}
-\label{sec:r-best}
-
-Public match data cannot name him. The most likely number one is
-\TopPlayerName{}, with $P(\#1)$ = \TopPlayerPFirst{}, a median rank of
-\TopPlayerMedianRank{} and a 90\% rank interval from \TopPlayerRankLo{} to
-\TopPlayerRankHi{}. His lead rests on one kind of evidence. He has the highest
-pooled RAPM of the outfield pool, and the two families that contain RAPM rank
-him first far more often than the box-score families: the impact family
-\TopFirstImpact{} of the time, the box family \TopFirstBox{}. A reader who
-trusts RAPM's attribution of goals to the players on the pitch will rank him
-first more often than anyone else; a reader who trusts box scores will rank
-prolific scorers first instead; the Ballon d'Or voters ranked him low. The
-primary mixture does not treat RAPM's attribution as uncertain; post-hoc
-analysis (f) does. The second most likely number one owes his place to two
-Saudi league seasons that the multiverse has no way to discount
-(Section~\ref{sec:r-posthoc} (c)). Without leagues outside UEFA, and with a far
-larger unmeasured share, \TopPlayerName{} still leads, but his probability stays
-low (Table~\ref{tab:robustness}).
-% PENDING-RERUN (f): add whether he still leads with leakage propagated.
-
-The honest answer is therefore a distribution, not a name: a handful of
-players each have a modest chance of being first, the ordering among the
-leaders is undecided, and much of what moves it is the choice of what to
-measure. In the recovery study, two of our estimators recover a planted best
-player in a minority of simulated leagues, so this outcome is what data of
-this size would lead one to expect.
-
-The comparison with V1 is exploratory. Over V1's outfield players, the Spearman
-correlation between V1's rank and the median rank in the mixture is
-\VOneSpearman{} (Table~\ref{tab:v1}). V1 agrees with the mixture loosely, and
-disagrees most at its top: several of V1's top ten have median ranks outside
-the mixture's top twenty.
-
-\begin{table}[htbp]
-  \centering
-  \caption{Exploratory: V1's rank of each of its outfield players beside his
-  median rank, 90\% rank interval and $P(\#1)$ in the mixture.}
-  \label{tab:v1}
-  \small
-  \IfFileExists{generated/tab-v1.tex}{\input{generated/tab-v1.tex}}{\pendingtable{tab-v1}}
-\end{table}
-\FloatBarrier
-
-% ---------------------------------------------------------------------------
 \subsection{Hypothesis verdicts}
 \label{sec:r-verdicts}
 
@@ -2484,10 +2527,16 @@ individual statistics more than team success in the point estimates (H6:
 replicates and under one reading of the statistics with curated honours. The
 big-game test could not have refuted H7 at these reliabilities (H7:
 \VerdictHSeven{}), and the observed persistence leans against it; H8 is not
-tested. The robustness runs of Section~\ref{sec:r-posthoc} leave the verdicts of
-H1 to H5 unchanged, and the curated honours of (e) leave H6 refuted.
-% PENDING-RERUN: H3 under A18 and the leakage runs (f) may change these
-% statements; recheck H1, H2, H3 against the new summaries.
+tested.
+
+None of the later analyses decides a verdict, but they bear on how firmly each
+one stands. In the robustness runs of Section~\ref{sec:r-posthoc}, the
+statistics behind H1, H2, H4 and H5 stay on the same side of their thresholds,
+including when RAPM's teammate leakage is propagated (f); H3's interval
+excludes zero under both plantings (a); and the curated honours of (e) leave
+H6 refuted. The league-strength-adjusted analysis of Section~\ref{sec:league}
+changes who leads, and leaves the statistics behind H1, H2, H4 and H5 on the
+same side as well.
 
 \begin{table}[htbp]
   \centering
@@ -2500,13 +2549,481 @@ H1 to H5 unchanged, and the curated honours of (e) leave H6 refuted.
 \end{table}
 \FloatBarrier
 
+% ===========================================================================
+\section{League-strength-adjusted analysis (post hoc)}
+\label{sec:league}
+
+The pre-registered analysis has a specification flaw, found after its results:
+nothing in it adjusts for the strength of the league a player plays in. This
+section shows the flaw, describes an adjustment, and reports what it changes.
+The method was written down before any league-adjusted estimate existed (A20)
+and amended twice before any league-adjusted ranking existed (A21, A22); a
+validation and a contamination term were added after the ranking had run
+(A23). All of it came after the results of Section~\ref{sec:results} were
+known. Everything in this section is therefore post hoc and exploratory. The
+hypotheses stay decided by the pre-registered analysis.
+
 % ---------------------------------------------------------------------------
-\subsection{Post-hoc and robustness analyses}
+\subsection{The flaw}
+\label{sec:league-flaw}
+
+\paragraph{In RAPM.}
+Take the model of Equation~\eqref{eq:rapm-model} and add a constant $c$ to the
+offence and the defence of every player of one league. Every domestic row is
+unchanged: the attacking eleven gain $11c$ and the defending eleven remove
+$11c$. A league's level is therefore not identified by its own games. Only
+rows with players of two leagues on the pitch constrain it, and the ridge
+charges $\lambda c^2$ for every one of the league's player columns. The ridge
+wins: every league is centred near zero, and dominating any league looks the
+same. The competition-season intercept does not help, because it absorbs the
+league's scoring level, not its quality.
+
+The club means show it (Table~\ref{tab:club-rapm}). In the pre-registered fit,
+the players of Porto, Benfica and Sporting average between
+\ClubRapmPrimaryPortugalLo{} and \ClubRapmPrimaryPortugalHi{} goals per 90 of
+RAPM total, against \ClubRapmPrimaryRealMadrid{} for Real Madrid's. The
+pre-registered leader and the third-ranked player of the pool by RAPM both
+played Portuguese-league seasons in the window.
+
+\paragraph{In the box-score families.}
+A goal counts the same in every league. The multiverse has no league-strength
+dimension, and its context dimension removes the effect of the player's own
+team's Elo, not the strength of his opposition. Julián Quiñones is ranked first
+by \QuinonesSpecShare{} of the specifications on two qualifying seasons, both
+in the Saudi league.
+
+\paragraph{Why the in-house Elo cannot supply league levels.}
+The Elo of Section~\ref{sec:elo} orders teams within a league. Its league
+levels are an artefact of how it is fed: domestic-cup games against clubs
+outside the covered leagues, leagues that enter late at the starting rating,
+and drift with time in the data. Any quantity that pools team Elo across
+leagues inherits the artefact. That includes the Elo-partialled level of the
+context dimension and M2's partial correlations (Section~\ref{sec:limitations}).
+
+\begin{table}[htbp]
+  \centering
+  \caption{Post hoc. Minutes-weighted mean RAPM total (goals per 90) of the
+  players of eleven clubs, in the pre-registered fit and in the fit with league
+  means.}
+  \label{tab:club-rapm}
+  \small
+  \IfFileExists{generated/tab-club-rapm.tex}{\input{generated/tab-club-rapm.tex}}{\pendingtable{tab-club-rapm}}
+\end{table}
+\FloatBarrier
+
+% ---------------------------------------------------------------------------
+\subsection{Method}
+\label{sec:league-method}
+
+\paragraph{RAPM with league means (A20 (i), A22).}
+We follow the league term of \citet{pantuso2021transfer};
+\citet{kharrat2020plusminus} likewise estimate one coefficient per league
+jointly with the players. Each player's effects are his leagues' mean plus a
+deviation, and only the deviation is penalised:
+\begin{equation}
+  o_i = \tilde o_i + \sum_L s_{iL}\, \mu_L, \qquad
+  \delta_i = \tilde\delta_i + \sum_L s_{iL}\, \mu_L ,
+  \label{eq:league-effects}
+\end{equation}
+where $s_{iL}$ is the share of player $i$'s league minutes in the window played
+in league $L$, and $\mu_L$ is the league mean (not the competition-season
+intercept $\mu_\kappa$ of Equation~\eqref{eq:rapm-model}). With
+$n_{\ell a, L} = \sum_{i \in \mathcal L_{\ell a}} s_{iL}$ the number of side $a$'s
+players who belong to league $L$, and $N_{\ell a}$ the number of players side
+$a$ has on the pitch,
+\begin{equation}
+\begin{aligned}
+  \E[y_{\ell a}] ={}& \sum_{i \in \mathcal L_{\ell a}} \tilde o_i
+    - \sum_{j \in \mathcal L_{\ell \bar a}} \tilde\delta_j
+    + \sum_L \mu_L \big(n_{\ell a, L} - n_{\ell \bar a, L}\big)
+    + \nu \big(N_{\ell a} - N_{\ell \bar a}\big) \\
+    &+ h_{\kappa(\ell)}\, \mathbb 1[a = \mathrm H] + \mu_{\kappa(\ell)} ,
+\end{aligned}
+\label{eq:league-rapm}
+\end{equation}
+with the ridge penalty $\lambda \sum_i (\tilde o_i^2 + \tilde\delta_i^2)$ at the
+primary $\lambda$, and $\mu_L$, $\nu$, $h_\kappa$ and the intercepts unpenalised.
+The ridge now shrinks a player toward his league's mean, not toward zero. With
+eleven players a side the league columns sum to zero in every row, so one
+league is the reference: $\mu_L = 0$ for the Premier League. A reported rating
+is $\beta_i = \tilde o_i + \tilde\delta_i + 2 \sum_L s_{iL} \mu_L$.
+
+A league mean is identified by every row in which the two sides differ in
+their league composition: games between clubs of two leagues, domestic games
+with a player who has minutes in two leagues, and national-team games. A
+league has its own mean if it has at least 100 stint games against clubs of
+other covered leagues, or at least 150 players with 450 minutes in it and in
+another league; the remaining leagues share one mean. \NLeaguesOwnMean{}
+leagues have their own mean, the reference included, and \NLeaguesRest{} share
+one. Stint players without minutes in a covered league form one pseudo-league
+with its own mean, and the replacement column carries no league term. Standard
+errors come from the same 200 game resamples as the primary bootstrap. The
+per-season fits keep the pooled means.
+
+The column $N_{\ell a} - N_{\ell \bar a}$ was added by A22, after the first fit
+and before any league-adjusted ranking. In \UnequalMinutesShare{} of stint
+minutes the sides are unequal, after a dismissal. There the league columns sum
+to the difference in players, not to zero, so fixing the reference at zero is a
+constraint, and every other league's mean also absorbs the effect of an extra
+player. A noise-free fit of a known truth on the real schedule returned each
+mean \LeagueNoiseFreeBias{} goals per 90 too high, and the fitted means put
+\NLeaguesAboveAsWritten{} leagues above the Premier League and moved with
+$\lambda$. With the extra column the same check recovers the truth and the
+means are stable from $\lambda/10$ to $10\lambda$. Its coefficient is
+\LeagueMen{} goals per 90 per extra player (bootstrap SE \LeagueMenSe{}). The
+first fit is kept in the results and not used.
+
+\paragraph{Box-score league factors from players who change league (A20 (ii), A21).}
+Translating a rate from one league to another through the players seen in both
+is established practice in hockey
+\citep{desjardins2005equivalencies,bacon2021nhle}. We estimate it as a
+regression. For each metric (goals, non-penalty goals, assists), a conditional
+fixed-effects Poisson model \citep{hausman1984count} is fitted on the counts
+$Y_{iqL}$ of player $i$ in season $q$ and league $L$, over league matches with
+minutes $M_{iqL}$:
+\begin{equation}
+  \log \E[Y_{iqL}] = \log\frac{M_{iqL}}{90} + \alpha_i + \gamma_L
+  + b_1\, a_{iq} + b_2\, a_{iq}^2 + c\, e_{iqL},
+  \label{eq:league-factor}
+\end{equation}
+where $\alpha_i$ is a player effect removed by the conditional likelihood,
+$\gamma_L$ the league effect with $\gamma_L = 0$ for the Premier League,
+$a_{iq}$ the player's age minus 26, and $e_{iqL}$ the minutes-weighted pre-match
+Elo of his team in that cell, centred within league-season. A league has its
+own $\gamma_L$ with at least 100 players observed in it and in another league;
+the others share one. \NLeaguesOwnFactor{} leagues have their own factor and
+\NLeaguesPooledFactor{} share one. League-match counts are divided by
+$\exp(\hat\gamma_L)$; European-cup and national-team matches are left as they
+are. Standard errors come from a bootstrap over players, and $\hat\gamma_L$ is
+held fixed across M8's replicates.
+
+Only players observed in two or more leagues identify $\gamma_L$. Effects of a
+group identified from those who move between groups are standard in labour
+economics \citep{abowd1999wage}, and are known to be noisy when movers are few
+\citep{andrews2008mobility}. A factor is the typical mover's change in rate, so
+it mixes the league's difficulty with the mover's change of team. Players who
+arrive in the Premier League usually leave a dominant club for a less dominant
+one, and those who leave it do the reverse, which overstates its difficulty.
+The team term $c\, e_{iqL}$ was added for that reason (A21), after the factors
+without it had been estimated and before any league-adjusted ranking existed.
+Within-league Elo differences are usable (Section~\ref{sec:elo}). The team term
+enters only the estimation of $\gamma_L$: counts are divided by the league
+factor alone, so a player is not adjusted for his own team. The ranking uses
+the factors with the team term; those without it are reported beside them, with
+the ranking they give, as a sensitivity.
+
+\paragraph{The rest of the adjustment (A20 (iii) to (vi)).}
+On-pitch goal difference in league matches is shifted by $22\,\hat\mu_L$ per 90:
+against average Premier League opposition, a team of league $L$ would meet
+eleven players each better by $2\mu_L$ in total effect. In the context
+dimension, team Elo is centred within competition-season. M5 and M8 are then
+rerun exactly as the primary: the same factorial, the unmeasured shares of the
+primary M4, the same $\omega$, $U$, $B$ and seeds. M4, M6 and M7 are not rerun.
+
+A separate variant fills one coverage hole. The MLS seasons before 2025 of
+pool players come from the American Soccer Analysis interface
+\citep{asa2026api}: \NMlsFillRows{} player-seasons of \NMlsFillPlayers{}
+players, with minutes, goals, penalty goals and primary assists. The source
+has no line-ups, so these seasons have no stints: they take the player's
+pooled RAPM and the group-season mean of on-pitch goal difference, the
+existing rule for rows without stints. Minutes are rescaled to 90 per match,
+because the source counts stoppage time (A23 (iii)). The Saudi league before
+2024/25 remains a hole: we found no source with minutes and line-ups under
+terms we could use.
+
+\paragraph{Validation on synthetic leagues (A20 (vii), A21).}
+Both estimators had to recover planted league levels before they were used.
+% The numbers of this paragraph are those recorded in the comments of
+% tests/players/test_rapm.py (league means) and tests/players/test_league_factors.py
+% (factors); they come from synthetic data, not from results/players/.
+For the league means, on four synthetic leagues linked by a cup and by 3\% of
+players changing league each season, the slope of the estimated on the planted
+means averaged 0.97 over 16 seeds (SD 0.13), and the correlation of the
+estimated with the true total effect, players of all linked leagues pooled,
+was higher with the league columns than without them in each of the 16. With
+every planted mean at zero the estimated means stayed near zero and the
+ranking was almost unchanged. A fifth league with ten movers and no cup game had a
+bootstrap standard deviation 6 to 21 times that of a linked league, which is
+why weakly linked leagues are pooled.
+
+For the factors, with movers drawn at random the bias of $\hat\gamma$ was at
+most 0.01 in absolute value and the 90\% interval covered the truth in 0.86 to
+0.90 of datasets, slightly under nominal. When movers also change team
+strength with league, the model without the team term was biased upward by
+0.11 to 0.15, and the team term reduced the bias to 0.02 or less. Two biases
+remain. When moves are selected on form, the factor of the league the movers
+leave is biased by about 0.08, and neither of our two checks (a dummy for the
+season before a move, and dropping that season) removes it; in simulation the
+two bracket the truth. And the age terms matter: without them, a league that
+players join late in their careers looks harder than it is. On the real data,
+the largest shift of a goal factor of a league that holds a pool player-season
+is \FactorShiftDummyMaxSe{} standard errors with the dummy and
+\FactorShiftDroppedMaxSe{} without the season before a move.
+
+% ---------------------------------------------------------------------------
+\subsection{League levels and factors}
+\label{sec:league-levels}
+
+Every estimated league mean is below the Premier League's
+(Table~\ref{tab:league-levels}, Figure~\ref{fig:league-levels}). The nearest is
+the Bundesliga's, at \LeagueMuGermany{} goals per 90 per player; the Portuguese
+league's is \LeagueMuPortugal{}, which puts an average team of that league
+\LeagueGapPortugal{} goals per 90 below an average Premier League team. With
+the league means the clubs separate: the players of Porto, Benfica and
+Sporting now average between \ClubRapmLeaguePortugalLo{} and
+\ClubRapmLeaguePortugalHi{}, against \ClubRapmLeagueRealMadrid{} for Real
+Madrid's (Table~\ref{tab:club-rapm}). Over all players with their own columns,
+the rank correlation between the two RAPM totals is \LeagueRapmSpearmanAll{};
+within the pool, most of whose players are in the five largest leagues, it is
+\LeagueRapmSpearmanPool{}.
+
+The box-score factors are in Table~\ref{tab:league-factors}. A goal in La Liga
+counts \FactorGoalsSpain{} of a Premier League goal, a goal in the Bundesliga
+\FactorGoalsGermany{}, a goal in the Portuguese league \FactorGoalsPortugal{}
+and a goal in MLS \FactorGoalsMls{}. Without the team term every factor is
+lower (the Portuguese goal factor is \FactorGoalsPortugalPlain{}), which is the
+direction A21 expected. The team term itself is clear: a team 100 Elo points
+above its league-season mean raises a player's expected goals by a log rate of
+\FactorTeamEloGoals{}.
+
+Several of these estimates look wrong, and we say so plainly.
+\begin{itemize}
+  \item \emph{Brazil, Saudi Arabia and MLS.} Their league means and factors
+    rest on a handful of Club World Cup games and on moves in one direction,
+    mostly of older players who leave Europe. Brazil's league mean is level
+    with those of Serie A and La Liga, and the means of MLS and the Saudi
+    league are above the Portuguese league's. The Saudi goal factor,
+    \FactorGoalsSaudi{}, is level with the Bundesliga's. These three leagues
+    have the largest standard errors of all the leagues with their own mean.
+    RAPM has no age curve, so a player who moves down late in his career is
+    worse on arrival than his window average, which makes the league he
+    joins look stronger than it is; the factors depend on the age curve being
+    right for ageing stars.
+  \item \emph{Assists.} Assist factors differ between leagues of similar
+    level: \FactorAssistsSpain{} for La Liga, \FactorAssistsItaly{} for Serie A
+    and \FactorAssistsGermany{} for the Bundesliga. We have no explanation.
+  \item \emph{Penalties.} Goals are deflated more than non-penalty goals in
+    every league. The goal factor therefore also carries who takes the
+    penalties after a move, which is a matter of role, not of league
+    difficulty.
+  \item \emph{The reference league.} The Premier League gains through every
+    channel at once: the league term of RAPM, the shift of on-pitch goal
+    difference, and the three factors. If its level is overstated, for
+    instance because the team term corrects the movers' change of team only in
+    part, all three err in the same direction, in favour of its players.
+\end{itemize}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Post hoc. League means of the RAPM with league means (A22 fit):
+  $\hat\mu_L$ in goals per 90 per player with its bootstrap standard error and
+  90\% interval, the implied team gap $22\,\hat\mu_L$, the two link counts of the
+  pooling rule, and the validation columns of Section~\ref{sec:league-validation}:
+  the club-results level with its standard error, the head-to-head goal
+  difference against Premier League clubs with the number of games, and the
+  mean UEFA association coefficient. The Premier League is the reference.}
+  \label{tab:league-levels}
+  \small
+  \IfFileExists{generated/tab-league-levels.tex}{\input{generated/tab-league-levels.tex}}{\pendingtable{tab-league-levels}}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \IfFileExists{generated/fig-league-levels.pdf}{\includegraphics[width=0.85\linewidth]{generated/fig-league-levels.pdf}}{\pendingfigure{fig-league-levels}}
+  \caption{Post hoc. Estimated league means $\hat\mu_L$ with 90\% bootstrap
+  intervals, the Premier League at zero, for the leagues with their own mean.}
+  \label{fig:league-levels}
+\end{figure}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Post hoc. Box-score league factors $\exp(-\hat\gamma_L)$ per metric
+  (goals, non-penalty goals, assists), with and without the team term, with
+  player-bootstrap standard errors of $\hat\gamma_L$ and the number of linking
+  players. The Premier League is the reference.}
+  \label{tab:league-factors}
+  \small
+  \IfFileExists{generated/tab-league-factors.tex}{\input{generated/tab-league-factors.tex}}{\pendingtable{tab-league-factors}}
+\end{table}
+\FloatBarrier
+
+% ---------------------------------------------------------------------------
+\subsection{Validation of the league levels}
+\label{sec:league-validation}
+
+The league means are compared, descriptively, with levels that use no player
+and no mover (A23 (i)). The first is a least-squares rating of clubs on results
+alone: goal difference equals home rating minus away rating plus a home term,
+fitted on the club games between clubs of covered leagues, with one rating per
+club over the window. A league's level is the mean rating of its club-seasons
+minus the Premier League's, in goals per game, the scale of $22\,\hat\mu_L$.
+A league is rated if it has at least 100 games against clubs of other covered
+leagues. The second is the raw goal difference in the league's games against
+Premier League clubs. The third is UEFA's association coefficient
+\citep{uefa2026coefficients}, which counts results in European competition
+only and exists only for UEFA's members.
+
+Over the \ValNLeaguesClub{} leagues with both values, the correlation between
+$22\,\hat\mu_L$ and the club-results level is \ValPearsonClub{} (Spearman
+\ValSpearmanClub{}), and the slope of the second on the first, through the
+reference, is \ValSlopeClub{}. For most leagues the two agree within their
+standard errors, the Bundesliga, the Portuguese league and the Eredivisie among
+them. They differ by two standard errors or more for \ValNTwoSeClub{} leagues.
+The largest difference is for \ValMaxGapLeague{}, which the league mean puts
+\ValMaxGapRapm{} goals per 90 below the Premier League at team level and the
+club results \ValMaxGapClub{}; the Scottish and Swedish leagues differ in the
+same direction. La Liga differs in the other direction: the league mean puts
+it \ValGapSpainRapm{} below the Premier League, the club results
+\ValGapSpainClub{}. If the club results are right, the league term is too
+harsh on La Liga's players, who are many in the pool, and too kind to players
+of a few smaller leagues, who are not.
+
+With UEFA's coefficient, over \ValNLeaguesUefa{} leagues, the Spearman
+correlation of the league means is \ValSpearmanUefa{}, against
+\ValSpearmanClubUefa{} for the club-results levels. The league means agree
+less with UEFA's ordering than the club results do, which is expected: both of
+those use results only, and the league means also use players who move.
+
+The same club data give a check of the goal factors. A Poisson model of goals
+with an attack and a defence per club gives, for each league, what a goal
+against its defences is worth in goals against Premier League defences. Over
+\ValNFactorGoals{} leagues these multipliers and the movers' goal factors
+correlate at \ValPearsonFactorGoals{} (Spearman \ValSpearmanFactorGoals{}), and
+they differ by two standard errors or more for \ValNTwoSeFactorGoals{} leagues;
+for non-penalty goals, for \ValNTwoSeFactorNpGoals{}. Where they differ, the
+movers' factor is the higher one: it discounts the league less than club
+results would. The two are not the same quantity, since a mover also changes
+team-mates, but the direction is the one the caveats of
+Section~\ref{sec:league-levels} lead one to expect.
+% PENDING-RERUN (validation, A23 i): written from
+% results/players/league/validation/{levels.csv,summary.json} as of 2026-11-20
+% 04:31, produced by an uncommitted run_league.py stage. Recheck every
+% qualitative claim of this subsection if those files change: which leagues
+% agree within SEs (L1, PO1, NL1), which differ by >= 2 SE (NO1, SC1, SE1 lower
+% on club results; ES1 higher), and that the movers' factor exceeds the club
+% multiplier wherever the two differ by >= 2 SE.
+
+% ---------------------------------------------------------------------------
+\subsection{The league-adjusted ranking}
+\label{sec:league-ranking}
+
+Table~\ref{tab:league-ranking} sets the leading players of the pre-registered
+mixture beside the same players in each league-adjusted variant: the
+adjustment with the team term in the factors, the one without it, the one
+restricted to UEFA leagues, and the one with the MLS fill.
+
+With the adjustment, the outfield player with the highest probability of being
+ranked first is \LeagueTopName{}, at \LeagueTopPFirst{}, with a median rank of
+\LeagueTopMedianRank{} and a 90\% rank interval from \LeagueTopRankLo{} to
+\LeagueTopRankHi{}. He has the highest $P(\#1)$ in every league-adjusted
+variant, between \LeagueVariantsPFirstLo{} and \LeagueVariantsPFirstHi{}. The
+pre-registered leader, \TopPlayerName{}, is second at \LeagueSecondPFirst{}. By
+median rank, \LeagueMedianTopThree{} lead.
+
+Three players leave the leading group. Julián Quiñones, second in the
+pre-registered mixture, falls to a $P(\#1)$ of \LeagueQuinonesPFirst{}: his
+Saudi league goals are discounted. Viktor Gyökeres, whose goals were mostly in the
+Portuguese league in our data, falls in the same way. Lionel Messi's median rank goes from
+\MessiMedianRank{} to \LeagueMessiMedianRank{}: his goals in Ligue 1 and MLS
+are discounted, and his RAPM is low. The MLS fill, which restores his missing
+MLS seasons, moves him little, to \LeagueMlsMessiMedianRank{}.
+
+The three views change at the top. The statistics view is now led by
+\LeagueStatsViewTopFive{}, and the impact view by \LeagueImpactViewTopTwo{}.
+Among goalkeepers, \LeagueTopGoalkeeperName{} still has the highest $P(\#1)$, at
+\LeagueTopGoalkeeperPFirst{}.
+
+What does not change is the shape of the answer. The share of decided outfield
+pairs is \LeagueSharePairsDecided{}, and between \LeagueVariantsDecidedLo{} and
+\LeagueVariantsDecidedHi{} across the variants; no player approaches a
+probability of one half; over the median specification's top ten the mean ratio
+of specification to sampling variance is \LeagueHFourRatio{}; and the family
+still has the largest total-order index for the leader's rank, with time
+aggregation at \LeagueHFiveAggTotal{}. The statistics behind H1, H2, H4 and H5
+stay on the same side of their thresholds in every variant. This is reported
+for information: the verdicts are those of the pre-registered analysis.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Post hoc. The leading outfield pool players under the
+  pre-registered mixture and under each league-adjusted variant: $P(\#1)$,
+  $P(\text{top-3})$, median rank and 90\% rank interval. Variants: league
+  adjustment with the team term in the factors (A21); without it; restricted
+  to UEFA leagues; with the MLS fill; and with the teammate-contamination term
+  under each attribution factor (A23 (ii)).}
+  \label{tab:league-ranking}
+  \small
+  \IfFileExists{generated/tab-league-ranking.tex}{\input{generated/tab-league-ranking.tex}}{\pendingtable{tab-league-ranking}}
+\end{table}
+\FloatBarrier
+
+% ---------------------------------------------------------------------------
+\subsection{Why the impact view ranks as it does}
+\label{sec:league-onoff}
+
+The league adjustment leaves \TopPlayerName{} near the top of the impact view.
+To see what RAPM rewards, Table~\ref{tab:on-off} gives, for pool players, their
+clubs' goal difference per 90 with the player on the pitch and off it, over
+club matches with stints. This is a description, not an estimate of anything.
+
+\TopPlayerName{}'s clubs score \OnOffLeaderOn{} goals per 90 more than they
+concede with him on the pitch and \OnOffLeaderOff{} without him, a difference
+of \OnOffLeaderDiff{}. He played \OnOffLeaderShare{} of his clubs' minutes, so
+the comparison rests on many minutes off. For Mohamed Salah the difference is
+\OnOffSalahDiff{}, with \OnOffSalahShare{} of his club's minutes played and
+therefore few minutes off. For Lionel Messi it is \OnOffMessiDiff{}.
+
+RAPM is a regularised version of this contrast. It can credit a player only
+through the difference between the stints he plays and the stints he does
+not, given who else is on the pitch. For a player who rarely leaves the pitch
+that difference is poorly determined, and the ridge shares his team's results
+among its regulars: RAPM cannot separate an ever-present star from his team.
+For a player with many minutes off, the difference is well determined, but it
+is not all his doing. It also reflects when he was absent: an injury during a
+poor spell, a rotation against weaker opposition, or a different squad in a
+different season all enter the contrast. Across the outfield pool, the rank
+correlation of pooled RAPM total with on-minus-off goal difference is
+\OnOffSpearmanDiff{}, and with the share of the team's minutes played
+\OnOffSpearmanShare{}. The second is positive: within the pool, players who
+play more of their team's minutes tend to have a higher RAPM, so RAPM does not
+simply penalise regulars. The point concerns what it can identify, player by
+player.
+
+This is the teammate contamination that post-hoc analysis (f) of
+Section~\ref{sec:r-posthoc} adds to the mixture, and A23 (ii) applies the same
+term to the league-adjusted run. With the attribution factors of independent
+planting, \LeagueLeakIndepTopName{} still has the highest $P(\#1)$, at
+\LeagueLeakIndepTopPFirst{}; \LeagueLeakIndepSecondName{} is second, at
+\LeagueLeakIndepSecondPFirst{}; and \TopPlayerName{} falls to
+\LeagueLeakIndepLeaderPFirst{}. The share of decided pairs falls to
+\LeagueLeakIndepSharePairsDecided{}. With the attribution factors of the real
+teammate structure, which imply less contamination, the leader's $P(\#1)$ is
+\LeagueLeakAssortTopPFirst{}, \TopPlayerName{}'s is
+\LeagueLeakAssortLeaderPFirst{}, and \LeagueLeakAssortSharePairsDecided{} of
+pairs are decided. The players who lose most are those who lead on RAPM; the
+players who lead on box scores hardly move.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Post hoc, descriptive. Goal difference per 90 of a pool player's
+  clubs with him on the pitch and off it, the difference, and the share of his
+  clubs' stint minutes that he played, over club matches with stints: the ten
+  leading players of the pre-registered impact view and five other leading
+  players.}
+  \label{tab:on-off}
+  \small
+  \IfFileExists{generated/tab-on-off.tex}{\input{generated/tab-on-off.tex}}{\pendingtable{tab-on-off}}
+\end{table}
+\FloatBarrier
+
+% ===========================================================================
+\section{Other post-hoc and robustness analyses}
 \label{sec:r-posthoc}
 
-Every analysis in this subsection was added after the primary results were
+Every analysis in this section was added after the primary results were
 seen, and each was prompted by them. Each is exploratory, and none is used to
-decide a pre-registered verdict. Table~\ref{tab:robustness} gives the numbers
+decide a pre-registered verdict. They concern the pre-registered analysis,
+not the league-adjusted one, unless stated. Table~\ref{tab:robustness} gives the numbers
 of (a), (b), (c) and (e), and Table~\ref{tab:leakage} those of (f).
 
 \paragraph{(a) H3 under assortative planting.}
@@ -2527,16 +3044,18 @@ and attacking midfielders. Rescaled RAPM carries the ridge's own leakage, so it
 plants more teammate structure than the truth has. The truth likely lies
 between the two plantings.
 
-Under this planting the planted contrast is \AssortPlanted{} and the mean error
-of the raw estimate is \AssortMeanErrorRaw{}. The 90\% basic interval is
-[\AssortRawLo, \AssortRawHi] for the raw contrast and
-[\AssortClippedLo, \AssortClippedHi] for the clipped one. The player-bootstrap
-interval covers the planted contrast in \AssortCoverageRaw{} of simulations for
-the raw contrast and in \AssortCoverageClipped{} for the clipped one. Both basic
-intervals exclude zero, so H3's direction holds under both plantings.
-% PENDING-RERUN (assortative under A18): confirm both basic intervals exclude 0;
-% keep the size of the difference out of the prose; recheck the claim that the
-% mean simulated R2_true exceeds 1 in every outfield group.
+Under this planting the planted contrast averages \AssortPlanted{}, and the
+raw estimate is biased upward by \AssortMeanErrorRaw{} on average. A pool is
+clipped in \AssortSimClipped{} of the simulations, and the simulated raw
+contrast reaches the real one in \AssortSimReachReal{} of them: this planting
+produces estimates as extreme as the real one, which the independent planting
+of A9 does not. The 90\% basic interval is [\AssortRawLo, \AssortRawHi] for
+the raw contrast and [\AssortClippedLo, \AssortClippedHi] for the clipped one.
+M4's own player-bootstrap interval covers the planted contrast in only
+\AssortCoverageRaw{} of simulations for the raw contrast and in
+\AssortCoverageClipped{} for the clipped one, so it should not be trusted
+under this planting. Both basic intervals exclude zero: H3's direction holds
+under both plantings, and its size does not.
 
 \paragraph{(b) M8 with bias-corrected unmeasured shares.}
 \emph{Motivation.} If the planting of (a) were the truth, M4 would understate
@@ -2560,16 +3079,16 @@ the specifications on the strength of his two qualifying seasons, both in the
 Saudi league (2024/25 and 2025/26), mostly under the mean and recency
 aggregations. The
 factorial has no league-strength dimension, and its context dimension partials
-out the player's own team's Elo, not the strength of the opposition; Elo is
-also poorly comparable between Europe and leagues it rarely meets
-(Section~\ref{sec:limitations}). \emph{Analysis.} We reran M5 and M8 after
+out the player's own team's Elo, not the strength of the opposition, and that
+Elo does not compare leagues (Section~\ref{sec:elo}). \emph{Analysis.} We reran M5 and M8 after
 dropping the league seasons of leagues outside UEFA; Champions League and
 national-team matches are kept, and RAPM is unchanged. \NPoolLostSeasons{} pool
 players lose at least one qualifying season: \EuropeLostPlayers{}. Quiñones keeps
 no qualifying season and falls to the bottom of the ranking. \emph{Reading.}
 The player with the highest $P(\#1)$ and every verdict of M8 are unchanged.
 The primary result is not driven by leagues outside Europe, but its second
-place was.
+place was. This restriction is blunt; the league-adjusted analysis of
+Section~\ref{sec:league} replaces it with estimated league levels.
 
 \paragraph{(d) H7 with continental and international knockouts only.}
 \emph{Motivation.} This sensitivity is post hoc and prompted by the data. After
@@ -2637,16 +3156,22 @@ $\omega_s$; it is noisier than RAPM, so the term is conservative for the box+GD
 and hybrid families. We run M8 twice: with the attribution factors of
 independent planting (M3) and with those of the assortative planting of (a),
 which are larger and give less leakage. \emph{Reading.} With the
-independent-planting factors, the outfield player with the highest $P(\#1)$ is
-\LeakIndepTopName{}, at \LeakIndepTopPFirst{}, and \LeakIndepSharePairsDecided{}
-of outfield pairs are decided. With the assortative factors, the leader is
-\LeakAssortTopName{}, at \LeakAssortTopPFirst{}, and \LeakAssortSharePairsDecided{}
-of pairs are decided (Table~\ref{tab:leakage}).
-% PENDING-RERUN (f): results/players/synthesis/leakage_independent/ and
-% leakage_assortative/summary.json. Once they exist, add one neutral sentence:
-% whether the leader, H1, H2 and H4 change, and what that says about how much
-% the primary lead depends on treating RAPM's attribution as certain. Keep the
-% size neutral until then.
+independent-planting factors, $\lambda_g$ lies between \LeakLambdaIndepLo{} and
+\LeakLambdaIndepHi{} across outfield groups: the added draw is of the same
+order as the visible spread of RAPM. The pre-registered leader's $P(\#1)$ falls
+from \TopPlayerPFirst{} to \LeakIndepLeaderPFirst{}, and the player with the
+highest $P(\#1)$ becomes \LeakIndepTopName{}, at \LeakIndepTopPFirst{}. He leads
+by default: his place comes from the box-score families, which carry no
+leakage term, and from two Saudi league seasons. \LeakIndepSharePairsDecided{}
+of outfield pairs are decided. With the assortative factors, $\lambda_g$ lies
+between \LeakLambdaAssortLo{} and \LeakLambdaAssortHi{}; the leader is
+\LeakAssortTopName{}, at \LeakAssortTopPFirst{}, and
+\LeakAssortSharePairsDecided{} of pairs are decided
+(Table~\ref{tab:leakage}). In both runs the statistics behind H1, H2, H4 and H5
+stay on the same side of their thresholds. The pre-registered lead therefore
+depends on treating RAPM's attribution as certain. Once it is not, the lead
+shrinks, or passes to a player whose own place does not survive the league
+adjustment of Section~\ref{sec:league}.
 
 \begin{table}[htbp]
   \centering
@@ -2691,6 +3216,77 @@ of pairs are decided (Table~\ref{tab:leakage}).
 \FloatBarrier
 
 % ===========================================================================
+\section{Who was the best player of the 2020s?}
+\label{sec:r-best}
+
+Public match data cannot name him. The paper gives two answers, and they are
+not on the same footing.
+
+\paragraph{The pre-registered answer.}
+The most likely number one is \TopPlayerName{}, with $P(\#1)$ =
+\TopPlayerPFirst{}, a median rank of \TopPlayerMedianRank{} and a 90\% rank
+interval from \TopPlayerRankLo{} to \TopPlayerRankHi{}. His lead rests on one
+kind of evidence. He has the highest pooled RAPM of the outfield pool, and the
+two families that contain RAPM rank him first far more often than the
+box-score families: the impact family \TopFirstImpact{} of the time, the box
+family \TopFirstBox{}. The second most likely number one,
+\SecondPlayerName{}, owes his place to two Saudi league seasons that the
+pre-registered multiverse has no way to discount. This is the answer that
+decides the hypotheses. It has a flaw we can demonstrate: it does not adjust
+for league strength.
+
+\paragraph{The league-adjusted answer (post hoc).}
+With league means in RAPM and league factors in the box score, the most likely
+number one is \LeagueTopName{}, with $P(\#1)$ = \LeagueTopPFirst{}, a median
+rank of \LeagueTopMedianRank{} and a 90\% rank interval from \LeagueTopRankLo{}
+to \LeagueTopRankHi{}. \TopPlayerName{} is second, at \LeagueSecondPFirst{}. By
+median rank, \LeagueMedianTopThree{} lead (Table~\ref{tab:league-ranking}). This
+answer corrects the flaw, but it was built after the results were known, its
+league levels are poorly determined outside Europe, and it favours the
+reference league through every channel at once
+(Section~\ref{sec:league-levels}).
+
+\paragraph{What the two answers share.}
+In neither is any player a likely number one, and in neither are more than a
+small share of pairwise orderings decided. Across every variant we ran, the
+highest $P(\#1)$ of any player is \AllVariantsMaxPFirst{}, and the largest share
+of decided outfield pairs is \AllVariantsMaxDecided{}. Both answers also depend
+on how far one trusts RAPM's division of goals among teammates. When that
+uncertainty is added, the players who lead on RAPM lose probability. In the
+pre-registered mixture, under the larger of the two leakage estimates,
+\TopPlayerName{} falls to \LeakIndepLeaderPFirst{} and is no longer first
+(Section~\ref{sec:r-posthoc} (f)). In the league-adjusted mixture
+\LeagueTopName{}, whose lead rests mostly on box scores, stays first under both
+estimates
+(Section~\ref{sec:league-onoff}). A reader who trusts RAPM's attribution will
+rank \TopPlayerName{} first or second; a reader who trusts box scores will rank
+prolific scorers first; the Ballon d'Or voters ranked \TopPlayerName{} low.
+
+The honest answer is therefore a distribution, not a name: a handful of
+players each have a modest chance of being first, the ordering among the
+leaders is undecided, and much of what moves it is the choice of what to
+measure and of how to compare leagues. In the recovery study, two of our
+estimators recover a planted best player in a minority of simulated leagues,
+so this outcome is what data of this size would lead one to expect.
+
+\paragraph{Comparison with V1 (exploratory).}
+Over V1's outfield players, the Spearman correlation between V1's rank and the
+median rank in the pre-registered mixture is \VOneSpearman{}
+(Table~\ref{tab:v1}). V1 agrees with the mixture loosely, and disagrees most at
+its top: several of V1's top ten have median ranks outside the mixture's top
+twenty.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Exploratory: V1's rank of each of its outfield players beside his
+  median rank, 90\% rank interval and $P(\#1)$ in the mixture.}
+  \label{tab:v1}
+  \small
+  \IfFileExists{generated/tab-v1.tex}{\input{generated/tab-v1.tex}}{\pendingtable{tab-v1}}
+\end{table}
+\FloatBarrier
+
+% ===========================================================================
 \section{Limitations}
 \label{sec:limitations}
 
@@ -2706,26 +3302,48 @@ team's honours. \NPoolStructuralHole{} of the \NPool{} pool players have a
 season whose club league is absent or partly absent. Missing matches lower a
 player's minutes and can move him below the 900- or 1,800-minute thresholds.
 StatsBomb-based estimates (M7a) come from tournaments plus three clubs, not
-from leagues.
+from leagues. A post-hoc variant fills the MLS seasons before 2025 of pool
+players from another source (Section~\ref{sec:league-method}); nothing fills
+the others.
 
-\paragraph{League strength and Elo.}
-Elo ties leagues together only through the games between their teams. Leagues
-outside Europe meet European teams rarely, for instance at the Club World Cup,
-so their Elo levels are weakly identified relative to Europe. The national-team
-pool was calibrated on few games, and its home advantage sits at the edge of
-the search grid. The multiverse has no league-strength dimension, and its
-context dimension partials out own-team Elo, not the opposition. A strong
-season in a weak league can therefore rank very high, as
-Section~\ref{sec:r-posthoc} (c) shows.
+\paragraph{No league-strength adjustment in the pre-registered analysis.}
+This is the main flaw of the pre-registered analysis, and we found it after
+the results (Section~\ref{sec:league}). Its RAPM centres every league near
+zero, its box-score families count a goal the same in every league, and its
+multiverse has no league-strength dimension. A strong season in a weak league
+can therefore rank very high. The hypotheses were decided by this analysis all
+the same, as pre-registered; the league-adjusted results are reported beside
+it.
 
-\paragraph{RAPM across leagues.}
-RAPM compares players in different leagues only through the players who move
-between them and the games between their teams. Each competition-season has
-its own intercept, and the ridge shrinks every player toward zero, so a player
-in a weakly connected league is compared mostly with his own league, and the
-league's level is weakly identified. The three highest pooled RAPM totals in
-the pool include players with Portuguese-league seasons in the window, a league
-connected to the others mostly through European competition and transfers.
+\paragraph{Elo pooled across leagues.}
+The in-house Elo orders teams within a league and does not compare leagues
+(Section~\ref{sec:elo}). Two parts of the pre-registered analysis pool team Elo
+across leagues anyway: the Elo-partialled level of M5's context dimension, and
+the partial correlations of M2. Both therefore remove a mixture of real team
+strength and league artefact. The league-adjusted analysis centres team Elo
+within competition-season; M2 was not rerun. The national-team pool was
+calibrated on few games, and its home advantage sits at the edge of the search
+grid.
+
+\paragraph{Limits of the league adjustment.}
+The adjustment is post hoc. It gives one level per league for the whole
+window, so a league that changes, as the Saudi league did after 2023, gets
+its average. It gives the same shift to every player of a league, and the same
+to offence and defence. The levels of Brazil, MLS and the Saudi league rest on
+a handful of Club World Cup games and on one-way moves of older players, and
+they look too high; no club-results rating can check them, for lack of games.
+Where a check exists, it agrees for most leagues, but it puts La Liga closer
+to the Premier League than the league mean does
+(Section~\ref{sec:league-validation}), and many pool players are in La Liga. The box-score factors are the typical mover's change in
+rate, so they mix league difficulty with the mover's change of team and role;
+the team term corrects this only in part, and selection of moves on form
+biases them in a way our checks bracket but do not remove. The assist factors
+differ between leagues of similar level for reasons we cannot explain. The
+Premier League, as the reference, gains through the league term of RAPM, the
+shift of goal difference and the factors at once. M4, M6 and M7 were not rerun,
+so the league-adjusted mixture uses the unmeasured shares of the
+pre-registered M4, and nothing in it corrects the recognition model. The MLS
+fill has no line-ups, and the Saudi league before 2024/25 remains a hole.
 
 \paragraph{Teammate leakage.}
 Ridge RAPM spreads a player's effect over his usual teammates and opponents.
@@ -2740,7 +3358,11 @@ midfielders, so their unmeasured share is clipped at zero and not resolved,
 and the defenders' share is equally sensitive to the factor. The size of the H3
 contrast is therefore uncertain beyond its interval. The primary synthesis
 also treats RAPM's attribution as certain; Section~\ref{sec:r-posthoc} (f)
-relaxes that. RAPM's additivity ignores chemistry, although the evidence that
+relaxes that, and the pre-registered leader does not keep his place under the
+larger of the two leakage estimates. More generally, RAPM credits a player
+through the contrast between the minutes he plays and those he does not, so
+it cannot separate an ever-present player from his team
+(Section~\ref{sec:league-onoff}). RAPM's additivity ignores chemistry, although the evidence that
 chemistry matters beyond team strength is mixed
 \citep{mukherjee2019shared,lecoz2025shared}.
 
@@ -2815,10 +3437,13 @@ uncertainty. The match bootstrap of ranks can be inconsistent near ties
 are reported beside it at one specification.
 
 \paragraph{Post-hoc analyses.}
-The robustness analyses of Section~\ref{sec:r-posthoc} were prompted by the
-results, and they are not a neutral sample of the checks one could run. Most
-probe choices that the results made salient; (f) is the one aimed at the
-measure on which the leader's lead rests.
+The analyses of Sections~\ref{sec:league} and~\ref{sec:r-posthoc} were
+prompted by the results, and they are not a neutral sample of the checks one
+could run. Most probe choices that the results made salient: the league
+adjustment was prompted by an implausible second place and by club means that
+did not separate leagues, and (f) is aimed at the measure on which the
+pre-registered leader's lead rests. A reader should weigh the league-adjusted
+answer as a correction made with the answer in view.
 
 \paragraph{Other choices.}
 Elo applies home advantage to neutral-venue tournament games, because the
@@ -2827,42 +3452,52 @@ robustness fit. Name linking between sources can err; medium-confidence pool
 matches are listed. The taxonomy's sizes come from the literature, mostly from
 abstracts, and many cells have no verified size. Several analysis choices were
 made after the data were seen; each is labelled where it applies, and those
-that bear on a hypothesis are recorded as amendments A16, A17 and A18.
+that bear on a hypothesis or on a reported view are recorded as amendments A16
+to A23.
 
 % ===========================================================================
 \section{Conclusion}
 \label{sec:conclusion}
 
 Who was the best footballer of 2020--2026? On public match data, the answer is
-a distribution. \TopPlayerName{} is the most likely number one, at
-\TopPlayerPFirst{}, ahead of a group of players whose chances are each smaller
-and close together; only \SharePairsDecided{} of the pool's pairwise orderings
-are decided, and almost none among the leaders. The lead itself depends on
-trusting RAPM, the measure on which \TopPlayerName{} is usually first, and on
-treating its division of goals among teammates as certain, which the primary
-analysis does.
+a distribution, and it depends on an analysis choice we got wrong the first
+time. The pre-registered analysis makes \TopPlayerName{} the most likely number
+one, at \TopPlayerPFirst{}. It does not adjust for league strength, a flaw we
+found after its results. A post-hoc analysis that adds league means to RAPM
+and league factors to the box score makes \LeagueTopName{} the most likely
+number one, at \LeagueTopPFirst{}, with \TopPlayerName{} second. We report both
+and claim neither as the answer: the first is flawed, and the second was built
+with the first in view and rests on league levels that are weak outside
+Europe.
 
-Much of what moves a leading player's rank is the definition of ``best'', and
-within it the choice of what is measured: box scores, on-pitch goal difference
-or adjusted plus-minus. On average over the leaders, sampling noise comes
-second, narrowly; for several of them individually it is as large or larger.
+What the two analyses share is the paper's result. In every variant we ran,
+no player has a probability above \AllVariantsMaxPFirst{} of being the best,
+at most \AllVariantsMaxDecided{} of the pool's pairwise orderings are decided,
+and almost none among the leaders. Much of what moves a leading player's rank
+is the definition of ``best'', and within it the choice of what is measured:
+box scores, on-pitch goal difference or adjusted plus-minus. On average over
+the leaders, sampling noise comes second, narrowly; for several of them
+individually it is as large or larger. A lead that rests on RAPM also depends
+on treating its division of goals among teammates as certain; when that
+uncertainty is added, such leads shrink.
+
 The unmeasured remainder is large where statistics have least to count. For
 centre-backs and defensive midfielders, the box score misses most of their
 on-pitch impact (\ShareHigh{} pooled); for attackers our correction
 over-corrects and cannot resolve the share. Under an extreme bound, in which
 quality is assumed to cluster on teams as strongly as in the real RAPM, the
 remainder is large almost everywhere, and the ranking is even less decided.
-
 M4 measures the size of the remainder, not its content. It may include what
 the tracking-only rows of the taxonomy describe: off-ball runs, space
 creation, positional defending and pressing; it may also include leakage,
-league effects and noise that our corrections miss. In simulated leagues on
-the real schedule, pooled RAPM recovers a planted best player in
-\RecoveryRapmFirst{} of leagues and a box-score composite in
+league effects and noise that our corrections miss.
+
+In simulated leagues on the real schedule, pooled RAPM recovers a planted best
+player in \RecoveryRapmFirst{} of leagues and a box-score composite in
 \RecoveryBoxFirst{}, so data of this size rarely single out the best player even
 when one exists. Until richer data are public, a ranking of the best player of
-the 2020s should be read as a statement about the definition chosen more than
-about the players.
+the 2020s should be read as a statement about the definition chosen, and about
+how leagues are compared, more than about the players.
 
 % ===========================================================================
 \clearpage
@@ -2898,6 +3533,11 @@ redefines it from a results file. Every table and figure that depends on
 results is read from \path{generated/}. A slot that renders as pending has
 not been produced by a run.
 
+The post-hoc league-strength-adjusted analysis is run by
+\path{scripts/players/run_league.py} (league means and factors) and by the
+league stages of \path{scripts/players/run_ranking.py}; the MLS fill is fetched
+by \path{scripts/players/acquire_asa.py}.
+
 Each analysis module is pure and tested on synthetic data with a planted
 truth, and the repository's checks (\texttt{ruff}, \texttt{mypy --strict},
 \texttt{pytest}) run with \texttt{make verify}.
@@ -2932,10 +3572,23 @@ and Euros 2020 and 2024, M7a, and the links between the two sources. No raw
 StatsBomb event, and no per-event derived file, is published. Results derived
 from StatsBomb data may not be used commercially, betting included.
 
-\paragraph{Ballon d'Or.}
-Results compiled by hand from the sources listed per row in
+\paragraph{American Soccer Analysis.}
+MLS regular-season minutes, goals, penalty goals and primary assists for 2022
+to 2024, used only in the coverage-fill variant of
+Section~\ref{sec:league-method}: American Soccer Analysis
+(\path{americansocceranalysis.com}), from its public interface
+(\path{app.americansocceranalysis.com/api/v1}) \citep{asa2026api}, licensed
+CC BY-SA 4.0 (\path{creativecommons.org/licenses/by-sa/4.0/}); retrieved
+2026-11-18. Changes: season totals are used as served, and minutes are rescaled
+by us to a 90-minute match. Any table or file we publish that contains these
+values, or values computed from them, carries the same licence.
+
+\paragraph{Ballon d'Or and team honours.}
+Ballon d'Or results compiled by hand from the sources listed per row in
 \path{paper-unmeasured/data/ballon_dor.csv} and
-\path{paper-unmeasured/data/ballon_dor_sources.md}.
+\path{paper-unmeasured/data/ballon_dor_sources.md}; curated team honours and
+their sources in \path{paper-unmeasured/data/team_honours.csv} and
+\path{paper-unmeasured/data/team_honours_sources.md}.
 
 \paragraph{Statement.}
 No raw third-party data is redistributed with this paper; the code reproduces

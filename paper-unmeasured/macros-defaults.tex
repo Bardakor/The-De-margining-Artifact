@@ -169,9 +169,9 @@
 \providecommand{\ShareContrast}{\TBD}
 % H3 contrast from the raw (unclipped) shares; construct_gap.position_contrast; results/players/construct_gap/
 \providecommand{\ShareContrastRaw}{\TBD}
-% Lower bound of the 90% basic interval of the clipped contrast from the A9 parametric bootstrap (decides H3); simulation.parametric_bootstrap_contrast; results/players/simulation/
+% Lower bound of the 90% basic interval of the clipped contrast from the A9 parametric bootstrap with the A18 planted value (decides H3); results/players/construct_gap/summary.json h3_param_clipped_ci_low
 \providecommand{\ShareContrastParamLo}{\TBD}
-% Upper bound of the same interval; simulation.parametric_bootstrap_contrast; results/players/simulation/
+% Upper bound of the same interval; results/players/construct_gap/summary.json h3_param_clipped_ci_high
 \providecommand{\ShareContrastParamHi}{\TBD}
 % Lower bound of the 90% player-bootstrap percentile interval of the clipped contrast; construct_gap.position_contrast; results/players/construct_gap/
 \providecommand{\ShareContrastPlayerLo}{\TBD}
@@ -295,7 +295,7 @@
 \providecommand{\HSevenAlpha}{\TBD}
 
 % ---------------------------------------------------------------------------
-% Section 6.8 / 7.8 and 7.10, M8 synthesis (synthesis.py)
+% Section 6.8 / 7.8 and 10, M8 synthesis (synthesis.py)
 % ---------------------------------------------------------------------------
 % Outfield pool player with the highest P(#1) in the (s, b, u) mixture (name); synthesis.synthesise players; results/players/synthesis/
 \providecommand{\TopPlayerName}{\TBD}
@@ -337,9 +337,9 @@
 \providecommand{\HFourNPlayers}{\TBD}
 % Text: the median specification's eight levels, e.g. "hybrid, equal-z, within-group z, ..."; synthesis.median_specification; results/players/synthesis/
 \providecommand{\MedianSpecLabel}{\TBD}
-% Kendall's W of the statistics, impact and recognition views (tie-corrected); synthesis.view_agreement; results/players/synthesis/
+% Kendall's W of the statistics, impact and recognition views (tie-corrected), recognition = per-edition point shares (A19); results/players/synthesis/summary.json KendallW
 \providecommand{\KendallW}{\TBD}
-% Mean pairwise Spearman correlation of the three views, (3W - 1) / 2; results/players/synthesis/
+% Mean pairwise Spearman correlation of the three views, (3W - 1) / 2, same recognition view (A19); results/players/synthesis/summary.json KendallMeanSpearman
 \providecommand{\KendallMeanSpearman}{\TBD}
 % Goalkeeper with the highest P(#1) in the goalkeeper segment (name); results/players/synthesis/
 \providecommand{\TopGoalkeeperName}{\TBD}
@@ -389,7 +389,7 @@
 \providecommand{\StatsViewTopName}{\TBD}
 % Name of the outfield pool player with the best impact-view mean rank; results/players/synthesis/players.csv (min impact_view, segment outfield)
 \providecommand{\ImpactViewTopName}{\TBD}
-% Name of the outfield pool player with the most Ballon d'Or points summed over 2021-2026 (recognition view, A13 v); paper-unmeasured/data/ballon_dor.csv joined to the pool
+% Name of the outfield pool player first in the recognition view of A19 (sum over the 2021-2026 editions of his share of each edition's points); results/players/synthesis/recognition_view.csv, segment outfield, max share_sum
 \providecommand{\RecognitionTopName}{\TBD}
 % H7: sqrt(rel_a rel_b), the expected observed r for a true r of 1; results/players/clutch/summary.json attenuation
 \providecommand{\ClutchAttenuation}{\TBD}
@@ -397,13 +397,13 @@
 \providecommand{\ClutchRDisatt}{\TBD}
 
 % ---------------------------------------------------------------------------
-% Section 7.12, post-hoc and robustness analyses (exploratory)
+% Section 9, other post-hoc and robustness analyses (exploratory)
 % ---------------------------------------------------------------------------
 % (a) Smallest full-data attribution factor of RAPM total over the seven outfield groups, assortative planting; results/players/construct_gap/assortative/attribution.csv (kind groups, full data, group != GK, column total, min)
 \providecommand{\AssortAttrLo}{\TBD}
 % (a) Largest of the same; same file, max
 \providecommand{\AssortAttrHi}{\TBD}
-% (a) Planted H3 contrast under assortative planting; results/players/construct_gap/assortative/summary.json contrast_raw_planted
+% (a) Mean over simulations of the planted H3 contrast under assortative planting (A18 estimand); results/players/construct_gap/assortative/summary.json contrast_raw_planted
 \providecommand{\AssortPlanted}{\TBD}
 % (a) Mean error of the raw contrast under assortative planting (estimate - planted); assortative/summary.json contrast_raw_mean_error
 \providecommand{\AssortMeanErrorRaw}{\TBD}
@@ -495,7 +495,7 @@
 \providecommand{\HThreeSimReachReal}{\TBD}
 % H3: M4 players in the CB+DM pool (player and parametric rows); construct_gap/summary.json m4_cross_total_CB+DM_n
 \providecommand{\NHThreeHigh}{\TBD}
-% H3: CB+DM players in the A7 joint bootstrap (present in every RAPM replicate's split, construct_gap.py _estimate ids); to be written by run_impact.py into construct_gap/summary.json (e.g. m4_cross_total_CB+DM_a7_n)
+% H3: CB+DM players in the A7 joint bootstrap (present in every RAPM replicate's split); results/players/construct_gap/summary.json m4_cross_total_CB+DM_a7_n
 \providecommand{\NHThreeHighJoint}{\TBD}
 % H7: lower bound of the player-bootstrap interval of r divided by the attenuation; clutch/summary.json h7_ci_low / attenuation
 \providecommand{\ClutchRDisattLo}{\TBD}
@@ -517,7 +517,238 @@
 \providecommand{\LeakAssortSharePairsDecided}{\TBD}
 
 % ---------------------------------------------------------------------------
-% Section 7.11, hypothesis verdicts (text: "supported", "refuted" or, for H7
+% Reruns of 2026-11-18 (A18, A19, leakage): additions for Sections 7.4, 7.8, 9
+% ---------------------------------------------------------------------------
+% H3: lower bound of the 90% parametric basic interval of the RAW contrast (A18); results/players/construct_gap/summary.json h3_param_raw_ci_low
+\providecommand{\ShareContrastParamRawLo}{\TBD}
+% H3: upper bound of the same; results/players/construct_gap/summary.json h3_param_raw_ci_high
+\providecommand{\ShareContrastParamRawHi}{\TBD}
+% H3: mean over the S = 200 simulations of the planted contrast, A18 estimand; results/players/construct_gap/summary.json h3_param_raw_planted
+\providecommand{\HThreePlanted}{\TBD}
+% H3: planted contrast under the pre-A18 definition (variance-weighted average of the groups' shares); results/players/construct_gap/summary.json h3_param_raw_planted_weighted
+\providecommand{\HThreePlantedWeighted}{\TBD}
+% H3: mean error of the simulated contrast against its A18 planted value (estimate - planted); results/players/construct_gap/summary.json h3_param_raw_mean_error
+\providecommand{\HThreeMeanError}{\TBD}
+% (a) Share of the assortative simulations in which a pool is clipped (diff != diff_clipped); results/players/construct_gap/assortative/sims.csv
+\providecommand{\AssortSimClipped}{\TBD}
+% (a) Share of the assortative simulations whose raw contrast (diff) is >= the real raw contrast; results/players/construct_gap/assortative/sims.csv diff vs contrast_summary.csv (kind raw, estimate)
+\providecommand{\AssortSimReachReal}{\TBD}
+% M8: name of the outfield pool player first by the raw sum of Ballon d'Or points (A13 (v), before A19); results/players/synthesis/recognition_view.csv, segment outfield, max raw_sum
+\providecommand{\RecognitionTopNameRaw}{\TBD}
+% M8: Kendall's W with the raw-sum recognition view (before A19); results/players/synthesis/summary.json KendallWRawPoints
+\providecommand{\KendallWRaw}{\TBD}
+% (f) Smallest leakage ratio lambda_g over the seven outfield groups, independent-planting A_g; results/players/synthesis/leakage_independent/summary.json lambda_{AM,CB,CF,CM,DM,FB,W}, min
+\providecommand{\LeakLambdaIndepLo}{\TBD}
+% (f) Largest of the same; same keys, max
+\providecommand{\LeakLambdaIndepHi}{\TBD}
+% (f) Smallest lambda_g over the outfield groups, assortative A_g; results/players/synthesis/leakage_assortative/summary.json lambda_*, min over outfield groups
+\providecommand{\LeakLambdaAssortLo}{\TBD}
+% (f) Largest of the same; same keys, max
+\providecommand{\LeakLambdaAssortHi}{\TBD}
+% (f) P(#1) of the pre-registered leader (primary TopPlayerName) in the run with independent-planting leakage; results/players/synthesis/leakage_independent/players.csv p_first, that player's row
+\providecommand{\LeakIndepLeaderPFirst}{\TBD}
+
+% ---------------------------------------------------------------------------
+% Section 8, league-strength-adjusted analysis (post hoc; A20-A23)
+% ---------------------------------------------------------------------------
+% -- 8.1 the flaw: club means of RAPM total (goals per 90), results/players/rapm_league_men/summary.json
+% Smallest of club_total_primary_{Porto, Benfica, Sporting CP}
+\providecommand{\ClubRapmPrimaryPortugalLo}{\TBD}
+% Largest of club_total_primary_{Porto, Benfica, Sporting CP}
+\providecommand{\ClubRapmPrimaryPortugalHi}{\TBD}
+% club_total_primary_Real Madrid
+\providecommand{\ClubRapmPrimaryRealMadrid}{\TBD}
+% Smallest of club_total_league_{Porto, Benfica, Sporting CP} (negative: write as $-0.03$)
+\providecommand{\ClubRapmLeaguePortugalLo}{\TBD}
+% Largest of club_total_league_{Porto, Benfica, Sporting CP}
+\providecommand{\ClubRapmLeaguePortugalHi}{\TBD}
+% club_total_league_Real Madrid
+\providecommand{\ClubRapmLeagueRealMadrid}{\TBD}
+% -- 8.2 method
+% Leagues with their own RAPM mean, the reference included; results/players/rapm_league_men/summary.json n_leagues_own
+\providecommand{\NLeaguesOwnMean}{\TBD}
+% Leagues sharing one mean (REST); results/players/rapm_league_men/summary.json len(leagues_rest)
+\providecommand{\NLeaguesRest}{\TBD}
+% Share of stint minutes with unequal sides, as a percentage with its sign (e.g. 5.4\%); NOT in a results file yet: it is in A22's text. run_league.py should write it (e.g. rapm_league_men/summary.json unequal_minutes_share)
+\providecommand{\UnequalMinutesShare}{\TBD}
+% Bias of each league mean (goals per 90) in the noise-free fit of the A20 (i) model as first written (A22 text: 0.058); NOT in a results file yet: run_league.py should write it (e.g. rapm_league/summary.json noise_free_bias)
+\providecommand{\LeagueNoiseFreeBias}{\TBD}
+% Number of league-mean columns with mu > 0 (above the Premier League) in the A20 (i) fit as first written; results/players/rapm_league/league_means.csv, distinct `column` with mu > 0
+\providecommand{\NLeaguesAboveAsWritten}{\TBD}
+% Coefficient of the man-advantage column (goals per 90 per extra player); results/players/rapm_league_men/summary.json men
+\providecommand{\LeagueMen}{\TBD}
+% Its bootstrap SE; results/players/rapm_league_men/summary.json men_se
+\providecommand{\LeagueMenSe}{\TBD}
+% Leagues with their own box-score factor, the reference not counted; results/players/league/summary.json factors_leagues_own
+\providecommand{\NLeaguesOwnFactor}{\TBD}
+% Leagues sharing one factor; results/players/league/summary.json factors_leagues_pooled
+\providecommand{\NLeaguesPooledFactor}{\TBD}
+% MLS-fill player-seasons from American Soccer Analysis; results/players/synthesis/league_mls/summary.json count_mls_fill_rows
+\providecommand{\NMlsFillRows}{\TBD}
+% Pool players in the MLS fill; results/players/synthesis/league_mls/summary.json count_mls_fill_players
+\providecommand{\NMlsFillPlayers}{\TBD}
+% Largest |gamma with the before-a-move dummy - gamma| over the pool's leagues, in SEs, context model, goals; results/players/league/summary.json factors_context_goals_shift_dummy_max_se
+\providecommand{\FactorShiftDummyMaxSe}{\TBD}
+% Same without the cells before a move; results/players/league/summary.json factors_context_goals_shift_dropped_max_se
+\providecommand{\FactorShiftDroppedMaxSe}{\TBD}
+% -- 8.3 levels and factors
+% League mean of the Bundesliga (goals per 90 per player, three decimals, negative: $-0.029$); results/players/rapm_league_men/summary.json mu_L1
+\providecommand{\LeagueMuGermany}{\TBD}
+% League mean of the Portuguese league (three decimals, negative); results/players/rapm_league_men/summary.json mu_PO1
+\providecommand{\LeagueMuPortugal}{\TBD}
+% Team gap of the Portuguese league to the Premier League, 22 x |mu_PO1| (goals per 90, positive); computed from mu_PO1
+\providecommand{\LeagueGapPortugal}{\TBD}
+% Spearman between primary and league-adjusted RAPM total, own-column players; results/players/rapm_league_men/summary.json spearman_total_all
+\providecommand{\LeagueRapmSpearmanAll}{\TBD}
+% Same, pool players; results/players/rapm_league_men/summary.json spearman_total_pool
+\providecommand{\LeagueRapmSpearmanPool}{\TBD}
+% Goal factor exp(-gamma), context model (A21), La Liga; results/players/league/summary.json factors_context_goals_multiplier_ES1
+\providecommand{\FactorGoalsSpain}{\TBD}
+% Same, Bundesliga; factors_context_goals_multiplier_L1
+\providecommand{\FactorGoalsGermany}{\TBD}
+% Same, Portuguese league; factors_context_goals_multiplier_PO1
+\providecommand{\FactorGoalsPortugal}{\TBD}
+% Same, MLS; factors_context_goals_multiplier_MLS1
+\providecommand{\FactorGoalsMls}{\TBD}
+% Same, Saudi league; factors_context_goals_multiplier_SA1
+\providecommand{\FactorGoalsSaudi}{\TBD}
+% Goal factor of the Portuguese league WITHOUT the team term (plain model, A20 ii); results/players/league/summary.json factors_plain_goals_multiplier_PO1
+\providecommand{\FactorGoalsPortugalPlain}{\TBD}
+% Coefficient of the team's centred Elo per 100 points, context model, goals (log rate, three decimals); results/players/league/summary.json factors_context_goals_team_elo
+\providecommand{\FactorTeamEloGoals}{\TBD}
+% Assist factor, context model, La Liga; results/players/league/summary.json factors_context_assists_multiplier_ES1
+\providecommand{\FactorAssistsSpain}{\TBD}
+% Same, Serie A; factors_context_assists_multiplier_IT1
+\providecommand{\FactorAssistsItaly}{\TBD}
+% Same, Bundesliga; factors_context_assists_multiplier_L1
+\providecommand{\FactorAssistsGermany}{\TBD}
+% -- 8.4 validation (A23 i); results/players/league/validation/summary.json and levels.csv (stage "validate" of run_league.py)
+% Leagues with both the club-results level and 22 mu; summary.json n_mu_club
+\providecommand{\ValNLeaguesClub}{\TBD}
+% Pearson correlation between the club-results level and 22 mu over those leagues; summary.json pearson_mu_club
+\providecommand{\ValPearsonClub}{\TBD}
+% Spearman correlation of the same; summary.json spearman_mu_club
+\providecommand{\ValSpearmanClub}{\TBD}
+% Least-squares slope through the reference of the club-results level on 22 mu; summary.json slope_mu_club
+\providecommand{\ValSlopeClub}{\TBD}
+% Leagues where the club-results level and 22 mu differ by 2 SEs or more; summary.json n_2se_mu_club
+\providecommand{\ValNTwoSeClub}{\TBD}
+% Name of the league with the largest |z| in summary.json disagreements_mu_club (first entry), written as a league name with its article, e.g. "the Norwegian league"
+\providecommand{\ValMaxGapLeague}{\TBD}
+% That league's |mu22| (22 x |mu|, goals per 90, positive); levels.csv mu22, that league
+\providecommand{\ValMaxGapRapm}{\TBD}
+% That league's |club_level| (goals per game below the Premier League, positive); levels.csv club_level, that league
+\providecommand{\ValMaxGapClub}{\TBD}
+% La Liga's |mu22|; levels.csv mu22, league ES1
+\providecommand{\ValGapSpainRapm}{\TBD}
+% La Liga's |club_level|; levels.csv club_level, league ES1
+\providecommand{\ValGapSpainClub}{\TBD}
+% Leagues with 22 mu and the UEFA coefficient; summary.json n_mu_uefa
+\providecommand{\ValNLeaguesUefa}{\TBD}
+% Spearman correlation between 22 mu and the mean UEFA association coefficient; summary.json spearman_mu_uefa
+\providecommand{\ValSpearmanUefa}{\TBD}
+% Spearman correlation between the club-results level and the UEFA coefficient; summary.json spearman_club_uefa
+\providecommand{\ValSpearmanClubUefa}{\TBD}
+% Leagues with the goal multiplier from club results and the movers' goal factor; summary.json n_multiplier_goals
+\providecommand{\ValNFactorGoals}{\TBD}
+% Pearson correlation between the two; summary.json pearson_multiplier_goals
+\providecommand{\ValPearsonFactorGoals}{\TBD}
+% Spearman correlation between the two; summary.json spearman_multiplier_goals
+\providecommand{\ValSpearmanFactorGoals}{\TBD}
+% Leagues where they differ by 2 SEs or more, goals; summary.json n_2se_multiplier_goals
+\providecommand{\ValNTwoSeFactorGoals}{\TBD}
+% Same for non-penalty goals; summary.json n_2se_multiplier_np_goals
+\providecommand{\ValNTwoSeFactorNpGoals}{\TBD}
+% -- 8.5 league-adjusted ranking; summaries in results/players/synthesis/<variant>/summary.json, per-player values in results/players/synthesis/league_comparison.csv
+% Leader (name) of the league-adjusted mixture; synthesis/league_adjusted/summary.json TopPlayerName
+\providecommand{\LeagueTopName}{\TBD}
+% His P(#1); synthesis/league_adjusted/summary.json TopPlayerPFirst
+\providecommand{\LeagueTopPFirst}{\TBD}
+% His median rank; synthesis/league_adjusted/summary.json TopPlayerMedianRank
+\providecommand{\LeagueTopMedianRank}{\TBD}
+% Lower end of his 90% rank interval; synthesis/league_adjusted/summary.json TopPlayerRankLo
+\providecommand{\LeagueTopRankLo}{\TBD}
+% Upper end; synthesis/league_adjusted/summary.json TopPlayerRankHi
+\providecommand{\LeagueTopRankHi}{\TBD}
+% Smallest TopPlayerPFirst over the six league runs (league_adjusted, league_plain, league_uefa, league_mls, league_leakage_independent, league_leakage_assortative); their summary.json. The text also says the same player leads all six: check TopPlayerName is identical
+\providecommand{\LeagueVariantsPFirstLo}{\TBD}
+% Largest of the same
+\providecommand{\LeagueVariantsPFirstHi}{\TBD}
+% P(#1) in league_adjusted of the pre-registered leader (primary TopPlayerName); synthesis/league_comparison.csv league_adjusted_p_first, his row. The text says he is second: check against league_adjusted SecondPlayerName
+\providecommand{\LeagueSecondPFirst}{\TBD}
+% The three outfield players with the lowest league_adjusted_median_rank (ties: higher league_adjusted_p_first), as "A, B and C"; synthesis/league_comparison.csv
+\providecommand{\LeagueMedianTopThree}{\TBD}
+% P(#1) of Julian Quinones in league_adjusted; synthesis/league_comparison.csv league_adjusted_p_first, his row
+\providecommand{\LeagueQuinonesPFirst}{\TBD}
+% Median rank of Lionel Messi in the pre-registered mixture; synthesis/league_comparison.csv primary_median_rank, his row
+\providecommand{\MessiMedianRank}{\TBD}
+% Same in league_adjusted; league_adjusted_median_rank
+\providecommand{\LeagueMessiMedianRank}{\TBD}
+% Same with the MLS fill; league_mls_median_rank
+\providecommand{\LeagueMlsMessiMedianRank}{\TBD}
+% The five players with the best (lowest) league_adjusted_stats_view, in order, as "A, B, C, D and E"; synthesis/league_comparison.csv
+\providecommand{\LeagueStatsViewTopFive}{\TBD}
+% The two players with the best league_adjusted_impact_view, as "A and B"; synthesis/league_comparison.csv
+\providecommand{\LeagueImpactViewTopTwo}{\TBD}
+% Goalkeeper with the highest P(#1) in league_adjusted (name); synthesis/league_adjusted/summary.json TopGoalkeeperName
+\providecommand{\LeagueTopGoalkeeperName}{\TBD}
+% His P(#1); synthesis/league_adjusted/summary.json TopGoalkeeperPFirst
+\providecommand{\LeagueTopGoalkeeperPFirst}{\TBD}
+% Share of outfield pairs decided in league_adjusted; synthesis/league_adjusted/summary.json SharePairsDecided
+\providecommand{\LeagueSharePairsDecided}{\TBD}
+% Smallest SharePairsDecided over the six league runs listed above
+\providecommand{\LeagueVariantsDecidedLo}{\TBD}
+% Largest of the same
+\providecommand{\LeagueVariantsDecidedHi}{\TBD}
+% Mean specification / sampling variance over the median specification's top ten, league_adjusted; synthesis/league_adjusted/summary.json HFourRatio
+\providecommand{\LeagueHFourRatio}{\TBD}
+% Total-order index of time aggregation for the league-adjusted leader's rank; synthesis/league_adjusted/summary.json h5_aggregation_total
+\providecommand{\LeagueHFiveAggTotal}{\TBD}
+% Largest TopPlayerPFirst over EVERY synthesis run: synthesis/summary.json and every synthesis/<variant>/summary.json (bias_corrected, europe, leakage_*, league_*)
+\providecommand{\AllVariantsMaxPFirst}{\TBD}
+% Largest SharePairsDecided over the same runs
+\providecommand{\AllVariantsMaxDecided}{\TBD}
+% -- 8.6 on/off description; results/players/rapm/pool_on_off.csv, rows with club == "all clubs"
+% Leader = primary TopPlayerName: gd_on_p90
+\providecommand{\OnOffLeaderOn}{\TBD}
+% Leader: gd_off_p90
+\providecommand{\OnOffLeaderOff}{\TBD}
+% Leader: on_minus_off
+\providecommand{\OnOffLeaderDiff}{\TBD}
+% Leader: minutes_share (decimal)
+\providecommand{\OnOffLeaderShare}{\TBD}
+% Mohamed Salah: on_minus_off
+\providecommand{\OnOffSalahDiff}{\TBD}
+% Mohamed Salah: minutes_share
+\providecommand{\OnOffSalahShare}{\TBD}
+% Lionel Messi: on_minus_off (negative: write as $-0.08$)
+\providecommand{\OnOffMessiDiff}{\TBD}
+% Spearman of pooled RAPM total with on-minus-off goal difference, outfield pool; results/players/rapm/summary.json on_off_spearman_rapm_on_minus_off
+\providecommand{\OnOffSpearmanDiff}{\TBD}
+% Spearman of pooled RAPM total with the share of the team's stint minutes played; results/players/rapm/summary.json on_off_spearman_rapm_minutes_share
+\providecommand{\OnOffSpearmanShare}{\TBD}
+% -- 8.6 contamination term on the league-adjusted run (A23 ii)
+% Leader (name), independent-planting A_g; synthesis/league_leakage_independent/summary.json TopPlayerName
+\providecommand{\LeagueLeakIndepTopName}{\TBD}
+% His P(#1); same file TopPlayerPFirst
+\providecommand{\LeagueLeakIndepTopPFirst}{\TBD}
+% Second player (name); same file SecondPlayerName
+\providecommand{\LeagueLeakIndepSecondName}{\TBD}
+% His P(#1); same file SecondPlayerPFirst
+\providecommand{\LeagueLeakIndepSecondPFirst}{\TBD}
+% P(#1) of the pre-registered leader (primary TopPlayerName) in that run; synthesis/league_comparison.csv league_leakage_independent_p_first, his row
+\providecommand{\LeagueLeakIndepLeaderPFirst}{\TBD}
+% Share of outfield pairs decided; synthesis/league_leakage_independent/summary.json SharePairsDecided
+\providecommand{\LeagueLeakIndepSharePairsDecided}{\TBD}
+% Leader's P(#1), assortative A_g; synthesis/league_leakage_assortative/summary.json TopPlayerPFirst
+\providecommand{\LeagueLeakAssortTopPFirst}{\TBD}
+% P(#1) of the pre-registered leader in that run; synthesis/league_comparison.csv league_leakage_assortative_p_first, his row
+\providecommand{\LeagueLeakAssortLeaderPFirst}{\TBD}
+% Share of outfield pairs decided; synthesis/league_leakage_assortative/summary.json SharePairsDecided
+\providecommand{\LeagueLeakAssortSharePairsDecided}{\TBD}
+
+% ---------------------------------------------------------------------------
+% Section 7.10, hypothesis verdicts (text: "supported", "refuted" or, for H7
 % only, "inconclusive (underpowered)"), from synthesis.verdicts and the M4,
 % M5, M6, M7b outputs. H8 has no macro: it is not tested (A6, A11, A15).
 % ---------------------------------------------------------------------------

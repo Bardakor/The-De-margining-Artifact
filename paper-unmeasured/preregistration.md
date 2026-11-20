@@ -287,7 +287,8 @@ timestamp.
   at zero is a constraint and every other league's mean also absorbs the
   effect of an extra player. A noise-free fit of a known truth on the real
   schedule returns each mean 0.058 too high, and the fitted means put the
-  Premier League below six leagues and move with λ. The league-adjusted
+  Premier League below eight leagues by point estimate (six of them
+  clearly) and move with λ. The league-adjusted
   RAPM therefore has one more unpenalised column, the number of players on
   the pitch, home side minus away side. With it the same noise-free check
   recovers the truth and the means are stable from λ/10 to 10λ. The fit as
