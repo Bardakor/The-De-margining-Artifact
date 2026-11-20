@@ -156,12 +156,17 @@ def sort_key(name: str) -> str:
 # --------------------------------------------------------------------------
 
 
-def summary(module: str) -> dict[str, object]:
-    """A module's summary.json as key -> value (raises if the run has not happened)."""
-    payload = json.loads((RESULTS / module / "summary.json").read_text())
+def json_values(path: Path) -> dict[str, object]:
+    """A results JSON as key -> value, with or without the value/description wrapper."""
+    payload = json.loads(path.read_text())
     return {
         k: (v["value"] if isinstance(v, dict) and "value" in v else v) for k, v in payload.items()
     }
+
+
+def summary(module: str) -> dict[str, object]:
+    """A module's summary.json as key -> value (raises if the run has not happened)."""
+    return json_values(RESULTS / module / "summary.json")
 
 
 def descriptions(module: str) -> dict[str, str]:
@@ -216,12 +221,19 @@ def macros_data() -> dict[str, str]:
     cov = csv(RESULTS / "coverage" / "tm_coverage.csv")
     tm_stints = csv(PROCESSED / "tm_stints.csv.gz", usecols=["game_id"])
     sb_stints = csv(PROCESSED / "sb_stints.csv.gz", usecols=["game_id"])
-    panel = csv(PROCESSED / "panel_player_match.csv.gz", usecols=["player_id"])
+    panel = csv(
+        PROCESSED / "panel_player_match.csv.gz", usecols=["player_id", "competition_id", "scope"]
+    )
     seasons = csv(PROCESSED / "panel_player_season.csv.gz", usecols=["scope", "minutes"])
     with_stints = set(tm_stints["game_id"]) | set(sb_stints["game_id"])
     qualifying = (seasons["scope"] == "all") & (seasons["minutes"] >= 900)
     elo = csv(RESULTS / "elo" / "report.csv").set_index("pool")
+    leagues = set(panel.loc[panel["scope"] == "league", "competition_id"])
+    in_leagues = cov[cov["competition_id"].isin(leagues)]
+    first_season = in_leagues.groupby("competition_id")["season"].min()
     return {
+        "NLeaguesPanel": count(len(first_season)),
+        "NLeaguesLateStart": count((first_season >= "2024/25").sum()),
         "EloKClub": count(elo.loc["club", "k"]),
         "EloHClub": count(elo.loc["club", "home_advantage"]),
         "EloKNational": count(elo.loc["national", "k"]),
@@ -330,12 +342,16 @@ def macros_m3() -> dict[str, str]:
 def macros_m4() -> dict[str, str]:
     shares = m4_total()
     con = contrast()
-    h3 = csv(RESULTS / "construct_gap" / "h3_summary.csv").set_index("kind").loc["clipped"]
+    h3_kinds = csv(RESULTS / "construct_gap" / "h3_summary.csv").set_index("kind")
+    h3 = h3_kinds.loc["clipped"]
+    sims = csv(RESULTS / "construct_gap" / "h3_sims.csv")
     s = summary("construct_gap")
     groups = shares.loc[list(GROUPS)]
     outside = (groups["r2_true"] < 0) | (groups["r2_true"] > 1)
     r2_full = shares.loc[list(OUTFIELD), "r2_full"]
     return {
+        "HThreeSimClipped": num((sims["diff"] != sims["diff_clipped"]).mean()),
+        "HThreeSimReachReal": num((sims["diff"] >= h3_kinds.loc["raw", "estimate"]).mean()),
         "RTwoFullMin": num(r2_full.min()),
         "RTwoFullMax": num(r2_full.max()),
         "ShareHigh": num(shares.loc["CB+DM", "share_clipped"]),
@@ -384,6 +400,8 @@ def macros_m7b() -> dict[str, str]:
         "VerdictHSeven": tex(s["h7_verdict"]),
         "ClutchAttenuation": num(s["attenuation"]),
         "ClutchRDisatt": num(s["h7_r_disattenuated"]),
+        "ClutchRDisattLo": num(float(s["h7_ci_low"]) / float(s["attenuation"])),  # type: ignore[arg-type]
+        "ClutchRDisattHi": num(float(s["h7_ci_high"]) / float(s["attenuation"])),  # type: ignore[arg-type]
         # Post hoc (d): knockouts of continental and international competitions only.
         "NPlayersClutchMajor": count(s["h7_major_n"]),
         "ClutchMajorR": num(s["h7_major_r"]),
@@ -413,16 +431,22 @@ def macros_m8_views() -> dict[str, str]:
     lead = firsts[(firsts["player_id"] == leader) & (firsts["aggregation"] == "all")]
     lead = lead.set_index("family")["share_first"]
     quinones = pool.loc[pool["player"] == "Julián Quiñones", "tm_player_id"].item()
-    points = recognition_view()
+    recognition = recognition_view()
+    leaders = synthesis_leaders()
+    spec_largest = leaders["share_specification"] >= leaders[
+        ["share_sampling", "share_unmeasured"]
+    ].max(axis=1)
     return {
         "TopFirstImpact": num(lead["impact"]),
         "TopFirstBox": num(lead["box"]),
+        "TopFirstHybrid": num(lead["hybrid"]),
+        "NLeaders": count(len(leaders)),
+        "NLeadersSpecLargest": count(spec_largest.sum()),
         "QuinonesSpecShare": num(probs.loc[quinones, "p_first"]),
         "StatsViewTopName": tex(players.loc[players["stats_view"].idxmin(), "player"]),
         "ImpactViewTopName": tex(players.loc[players["impact_view"].idxmin(), "player"]),
-        "RecognitionTopName": tex(
-            pool.set_index("tm_player_id").loc[points.idxmax(), "player"]  # type: ignore[call-overload]
-        ),
+        "RecognitionTopName": tex(recognition.loc[recognition["share_sum"].idxmax(), "player"]),
+        "RecognitionTopNameRaw": tex(recognition.loc[recognition["raw_sum"].idxmax(), "player"]),
     }
 
 
@@ -440,7 +464,13 @@ def macros_assortative() -> dict[str, str]:
     a = summary("construct_gap/assortative")
     attr = csv(RESULTS / "construct_gap" / "assortative" / "attribution.csv")
     attr = attr[(attr["kind"] == "groups") & ~attr["halves"] & attr["group"].isin(OUTFIELD)]
+    sims = csv(RESULTS / "construct_gap" / "assortative" / "sims.csv")
+    real = csv(RESULTS / "construct_gap" / "assortative" / "contrast_summary.csv")
+    real_raw = real.set_index("kind").loc["raw", "estimate"]
     return {
+        "AssortSimClipped": num((sims["diff"] != sims["diff_clipped"]).mean()),
+        "AssortSimReachReal": num((sims["diff"] >= real_raw).mean()),
+        "AssortCoverageRaw": num(a["contrast_raw_coverage_m4"]),
         "AssortAttrLo": num(attr["total"].min()),
         "AssortAttrHi": num(attr["total"].max()),
         "AssortPlanted": num(a["contrast_raw_planted"]),
@@ -506,11 +536,314 @@ def macros_curated() -> dict[str, str]:
     }
 
 
-def macros_named(declared: set[str], done: set[str]) -> dict[str, str]:
-    """Keys of any summary.json that are macro names themselves (ranking stage)."""
+def macros_rapm_seasons() -> dict[str, str]:
+    """Spread of per-season RAPM total within and between players with own columns
+    and at least two seasons, as the macro comments define it."""
+    own = csv(RESULTS / "rapm" / "rapm_pooled.csv", usecols=["player_id"])["player_id"]
+    season = csv(RESULTS / "rapm" / "rapm_season.csv", usecols=["player_id", "total"])
+    season = season[season["player_id"].isin(own[own != -1])]
+    by_player = season.groupby("player_id")["total"]
+    several = by_player.size() >= 2
+    return {
+        # Three decimals: the within-player SD is a few thousandths of a goal.
+        "RapmSeasonWithinSd": num(np.sqrt(by_player.var(ddof=0)[several].mean()), 3),
+        "RapmSeasonBetweenSd": num(by_player.mean()[several].std(ddof=1), 3),
+    }
+
+
+def macros_point_ranks() -> dict[str, str]:
+    """M5 and H4 counts that need the rank of every pool player under every specification."""
+    ranks = csv(RESULTS / "multiverse" / "point_ranks.csv.gz")
+    ranks = ranks[ranks["segment"] == "outfield"]
+    grid = csv(RESULTS / "multiverse" / "spec_grid.csv").set_index("spec_id")
+    impact = ranks[ranks["spec_id"].map(grid["family"]) == "impact"]
+    vectors = impact.pivot(index="spec_id", columns="player_id", values="rank").to_numpy()
+    median_spec = summary("synthesis")["median_spec_id"]
+    top = ranks[(ranks["spec_id"] == median_spec) & (ranks["rank"] <= 10)]["player_id"]
+    players = synthesis_players("outfield").set_index("player_id").loc[top]
+    ratio = players["var_specification"] / players["var_sampling"]
+    return {
+        "NDistinctRankingsImpact": count(len(np.unique(vectors, axis=0))),
+        "HFourNSpecAbove": count((players["var_specification"] > players["var_sampling"]).sum()),
+        "HFourMedianRatio": num(ratio.median()),
+    }
+
+
+def macros_leakage() -> dict[str, str]:
+    """Post hoc (f): the leakage ratios and the pre-registered leader's P(#1)."""
     out: dict[str, str] = {}
-    for path in sorted(RESULTS.glob("*/summary.json")):
-        for key, value in summary(path.parent.name).items():
+    for run, name in (("leakage_independent", "Indep"), ("leakage_assortative", "Assort")):
+        s = summary(f"synthesis/{run}")
+        ratios = [float(s[f"lambda_{g}"]) for g in OUTFIELD]  # type: ignore[arg-type]
+        out[f"LeakLambda{name}Lo"] = num(min(ratios))
+        out[f"LeakLambda{name}Hi"] = num(max(ratios))
+    leader = summary("synthesis")["TopPlayerName"]
+    players = csv(RESULTS / "synthesis" / "leakage_independent" / "players.csv")
+    out["LeakIndepLeaderPFirst"] = num(players.set_index("player").loc[leader, "p_first"])
+    return out
+
+
+LEAGUE_NAME = {
+    "GB1": "Premier League", "L1": "Bundesliga", "IT1": "Serie A", "ES1": "La Liga",
+    "FR1": "Ligue 1", "NL1": "Eredivisie", "MLS1": "MLS", "BRA1": "Brazilian league",
+    "NO1": "Norwegian league", "SA1": "Saudi league", "PO1": "Portuguese league",
+    "SE1": "Swedish league", "DK1": "Danish league", "RU1": "Russian league",
+    "BE1": "Belgian league", "TS1": "Czech league", "PL1": "Polish league",
+    "TR1": "Turkish league", "C1": "Swiss league", "SC1": "Scottish league",
+    "A1": "Austrian league", "GR1": "Greek league", "UKR1": "Ukrainian league",
+    "RO1": "Romanian league", "RSK1": "South Korean league", "ARG1": "Argentine league",
+    "KR1": "Croatian league", "JAP1": "Japanese league", "SER1": "Serbian league",
+    "COL1": "Colombian league", "AUS1": "Australian league", "MEX1": "Mexican league",
+}  # fmt: skip
+NO_ARTICLE = {"Serie A", "La Liga", "Ligue 1", "MLS"}
+
+
+def league_name(code: str, *, article: bool = False) -> str:
+    name = LEAGUE_NAME.get(code, code)
+    return f"the {name}" if article and name not in NO_ARTICLE else name
+
+
+PORTUGUESE_CLUBS = ("Porto", "Benfica", "Sporting CP")
+
+
+def macros_league_rapm() -> dict[str, str]:
+    """Section 8.1--8.3: club means and league means of the RAPM with league means."""
+    s = summary("rapm_league_men")
+    as_written = csv(RESULTS / "rapm_league" / "league_means.csv")
+    above = as_written.loc[as_written["mu"] > 0, "column"].nunique()
+    out = {
+        "NLeaguesRest": count(len(s["leagues_rest"])),  # type: ignore[arg-type]
+        "NLeaguesAboveAsWritten": count(above),
+        "LeagueGapPortugal": num(22 * abs(float(s["mu_PO1"]))),  # type: ignore[arg-type]
+    }
+    for fit, name in (("primary", "Primary"), ("league", "League")):
+        values = [float(s[f"club_total_{fit}_{club}"]) for club in PORTUGUESE_CLUBS]  # type: ignore[arg-type]
+        out[f"ClubRapm{name}PortugalLo"] = num(min(values))
+        out[f"ClubRapm{name}PortugalHi"] = num(max(values))
+    return out
+
+
+def macros_league_validation() -> dict[str, str]:
+    """Section 8.4: the leagues the text singles out in the validation of the levels."""
+    s = summary("league/validation")
+    levels = csv(RESULTS / "league" / "validation" / "levels.csv").set_index("league")
+    worst = s["disagreements_mu_club"][0]["league"]  # type: ignore[index]
+    return {
+        "ValMaxGapLeague": tex(league_name(worst, article=True)),
+        "ValMaxGapRapm": num(abs(levels.loc[worst, "mu22"])),
+        "ValMaxGapClub": num(abs(levels.loc[worst, "club_level"])),
+        "ValGapSpainRapm": num(abs(levels.loc["ES1", "mu22"])),
+        "ValGapSpainClub": num(abs(levels.loc["ES1", "club_level"])),
+    }
+
+
+# The six league-adjusted runs of the macro comments, then A24's club-results variant.
+LEAGUE_RUNS = (
+    "league_adjusted", "league_plain", "league_uefa", "league_mls",
+    "league_leakage_independent", "league_leakage_assortative",
+)  # fmt: skip
+CHECKS: list[str] = []  # claims of the text that the results contradict
+
+
+def league_comparison() -> pd.DataFrame:
+    return csv(RESULTS / "synthesis" / "league_comparison.csv").set_index("player")
+
+
+def macros_league_ranking() -> dict[str, str]:
+    """Section 8.5--8.6: the league-adjusted runs beside the pre-registered mixture."""
+    primary = summary("synthesis")
+    runs = {run: summary(f"synthesis/{run}") for run in LEAGUE_RUNS}
+    variants = sorted((RESULTS / "synthesis").glob("*/summary.json"))
+    every = [primary, *(json_values(path) for path in variants)]
+    table = league_comparison()
+    leader = str(primary["TopPlayerName"])
+    adjusted = "league_adjusted"
+
+    def best(column: str, n: int, *, ascending: bool = True) -> str:
+        order = table.sort_values([column, f"{adjusted}_p_first"], ascending=[ascending, False])
+        return _and_list([tex(name) for name in order.index[:n]])
+
+    leaders = {str(s["TopPlayerName"]) for s in runs.values()}
+    if len(leaders) > 1:
+        CHECKS.append(f"the league runs do not share one leader: {sorted(leaders)}")
+    if runs[adjusted]["SecondPlayerName"] != leader:
+        CHECKS.append(
+            f"{leader} is not second in league_adjusted: {runs[adjusted]['SecondPlayerName']} is"
+        )
+    p_first = [float(s["TopPlayerPFirst"]) for s in runs.values()]  # type: ignore[arg-type]
+    decided = [float(s["SharePairsDecided"]) for s in runs.values()]  # type: ignore[arg-type]
+    return {
+        "LeagueVariantsPFirstLo": num(min(p_first)),
+        "LeagueVariantsPFirstHi": num(max(p_first)),
+        "LeagueVariantsDecidedLo": num(min(decided)),
+        "LeagueVariantsDecidedHi": num(max(decided)),
+        "AllVariantsMaxPFirst": num(max(float(s["TopPlayerPFirst"]) for s in every)),  # type: ignore[arg-type]
+        "AllVariantsMaxDecided": num(max(float(s["SharePairsDecided"]) for s in every)),  # type: ignore[arg-type]
+        "LeagueSecondPFirst": num(table.loc[leader, f"{adjusted}_p_first"]),
+        "LeagueMedianTopThree": best(f"{adjusted}_median_rank", 3),
+        "LeagueStatsViewTopFive": best(f"{adjusted}_stats_view", 5),
+        "LeagueImpactViewTopTwo": best(f"{adjusted}_impact_view", 2),
+        "LeagueQuinonesPFirst": num(table.loc["Julián Quiñones", f"{adjusted}_p_first"]),
+        "MessiMedianRank": count(table.loc["Lionel Messi", "primary_median_rank"]),
+        "LeagueMessiMedianRank": count(table.loc["Lionel Messi", f"{adjusted}_median_rank"]),
+        "LeagueMlsMessiMedianRank": count(table.loc["Lionel Messi", "league_mls_median_rank"]),
+        "LeagueLeakIndepLeaderPFirst": num(table.loc[leader, "league_leakage_independent_p_first"]),
+        "LeagueLeakAssortLeaderPFirst": num(
+            table.loc[leader, "league_leakage_assortative_p_first"]
+        ),
+    }
+
+
+def on_off() -> pd.DataFrame:
+    """Pooled on/off figures of the outfield pool players, one row per player."""
+    table = csv(RESULTS / "rapm" / "pool_on_off.csv")
+    return table[table["club"] == "all clubs"].set_index("player")
+
+
+def macros_on_off() -> dict[str, str]:
+    table = on_off()
+    leader = table.loc[str(summary("synthesis")["TopPlayerName"])]
+    return {
+        "OnOffLeaderOn": num(leader["gd_on_p90"]),
+        "OnOffLeaderOff": num(leader["gd_off_p90"]),
+        "OnOffLeaderDiff": num(leader["on_minus_off"]),
+        "OnOffLeaderShare": num(leader["minutes_share"]),
+        "OnOffSalahDiff": num(table.loc["Mohamed Salah", "on_minus_off"]),
+        "OnOffSalahShare": num(table.loc["Mohamed Salah", "minutes_share"]),
+        "OnOffMessiDiff": num(table.loc["Lionel Messi", "on_minus_off"]),
+    }
+
+
+def num3(x: object) -> str:
+    return num(x, 3)
+
+
+def percent(x: object) -> str:
+    """A share in [0, 1] as a percentage with one decimal."""
+    return num(100 * float(x), 1) + r"\%"  # type: ignore[arg-type]
+
+
+# Macros that are one key of one results JSON: file -> (macro, key, format). A file or
+# key that does not exist yet leaves its macros pending.
+KEYED: dict[str, tuple[tuple[str, str, Callable[[object], str]], ...]] = {
+    "rapm/cv_season.json": (("RapmLambdaSeason", "lam_season", count),),
+    "coverage/pool_coverage_summary.json": (
+        ("NPoolStructuralHole", "n_players_with_structural_hole", count),
+        ("NPoolIntlHoleSeasons", "n_intl_hole_seasons", count),
+    ),
+    "construct_gap/summary.json": (
+        ("ShareGK", "m4_cross_total_GK_share_clipped", num),
+        ("ShareGKLo", "m4_cross_total_GK_ci_low_clipped", num),
+        ("ShareGKHi", "m4_cross_total_GK_ci_high_clipped", num),
+        ("NHThreeHigh", "m4_cross_total_CB+DM_n", count),
+        ("NHThreeHighJoint", "m4_cross_total_CB+DM_a7_n", count),
+        ("ShareContrastParamRawLo", "h3_param_raw_ci_low", num),
+        ("ShareContrastParamRawHi", "h3_param_raw_ci_high", num),
+        ("HThreePlanted", "h3_param_raw_planted", num),
+        ("HThreePlantedWeighted", "h3_param_raw_planted_weighted", num),
+        ("HThreeMeanError", "h3_param_raw_mean_error", num),
+    ),
+    "synthesis/summary.json": (("KendallWRaw", "KendallWRawPoints", num),),
+    "rapm/summary.json": (
+        ("OnOffSpearmanDiff", "on_off_spearman_rapm_on_minus_off", num),
+        ("OnOffSpearmanShare", "on_off_spearman_rapm_minutes_share", num),
+    ),
+    "synthesis/leakage_independent/summary.json": (
+        ("LeakIndepTopName", "TopPlayerName", tex),
+        ("LeakIndepTopPFirst", "TopPlayerPFirst", num),
+        ("LeakIndepSharePairsDecided", "SharePairsDecided", num),
+    ),
+    "synthesis/leakage_assortative/summary.json": (
+        ("LeakAssortTopName", "TopPlayerName", tex),
+        ("LeakAssortTopPFirst", "TopPlayerPFirst", num),
+        ("LeakAssortSharePairsDecided", "SharePairsDecided", num),
+    ),
+    "rapm_league_men/summary.json": (
+        ("ClubRapmPrimaryRealMadrid", "club_total_primary_Real Madrid", num),
+        ("ClubRapmLeagueRealMadrid", "club_total_league_Real Madrid", num),
+        ("NLeaguesOwnMean", "n_leagues_own", count),
+        ("UnequalMinutesShare", "unequal_minutes_share", percent),
+        ("LeagueNoiseFreeBias", "noise_free_bias_as_written", num3),
+        ("LeagueMen", "men", num),
+        ("LeagueMenSe", "men_se", num),
+        ("LeagueMuGermany", "mu_L1", num3),
+        ("LeagueMuPortugal", "mu_PO1", num3),
+        ("LeagueRapmSpearmanAll", "spearman_total_all", num),
+        ("LeagueRapmSpearmanPool", "spearman_total_pool", num),
+    ),
+    "league/summary.json": (
+        ("NLeaguesOwnFactor", "factors_leagues_own", count),
+        ("NLeaguesPooledFactor", "factors_leagues_pooled", count),
+        ("FactorShiftDummyMaxSe", "factors_context_goals_shift_dummy_max_se", num),
+        ("FactorShiftDroppedMaxSe", "factors_context_goals_shift_dropped_max_se", num),
+        ("FactorGoalsSpain", "factors_context_goals_multiplier_ES1", num),
+        ("FactorGoalsGermany", "factors_context_goals_multiplier_L1", num),
+        ("FactorGoalsPortugal", "factors_context_goals_multiplier_PO1", num),
+        ("FactorGoalsMls", "factors_context_goals_multiplier_MLS1", num),
+        ("FactorGoalsSaudi", "factors_context_goals_multiplier_SA1", num),
+        ("FactorGoalsPortugalPlain", "factors_plain_goals_multiplier_PO1", num),
+        ("FactorTeamEloGoals", "factors_context_goals_team_elo", num3),
+        ("FactorAssistsSpain", "factors_context_assists_multiplier_ES1", num),
+        ("FactorAssistsItaly", "factors_context_assists_multiplier_IT1", num),
+        ("FactorAssistsGermany", "factors_context_assists_multiplier_L1", num),
+    ),
+    "league/validation/summary.json": (
+        ("ValNLeaguesClub", "n_mu_club", count),
+        ("ValPearsonClub", "pearson_mu_club", num),
+        ("ValSpearmanClub", "spearman_mu_club", num),
+        ("ValSlopeClub", "slope_mu_club", num),
+        ("ValNTwoSeClub", "n_2se_mu_club", count),
+        ("ValNLeaguesUefa", "n_mu_uefa", count),
+        ("ValSpearmanUefa", "spearman_mu_uefa", num),
+        ("ValSpearmanClubUefa", "spearman_club_uefa", num),
+        ("ValNFactorGoals", "n_multiplier_goals", count),
+        ("ValPearsonFactorGoals", "pearson_multiplier_goals", num),
+        ("ValSpearmanFactorGoals", "spearman_multiplier_goals", num),
+        ("ValNTwoSeFactorGoals", "n_2se_multiplier_goals", count),
+        ("ValNTwoSeFactorNpGoals", "n_2se_multiplier_np_goals", count),
+    ),
+    "synthesis/league_mls/summary.json": (
+        ("NMlsFillRows", "count_mls_fill_rows", count),
+        ("NMlsFillPlayers", "count_mls_fill_players", count),
+    ),
+    "synthesis/league_adjusted/summary.json": (
+        ("LeagueTopName", "TopPlayerName", tex),
+        ("LeagueTopPFirst", "TopPlayerPFirst", num),
+        ("LeagueTopMedianRank", "TopPlayerMedianRank", count),
+        ("LeagueTopRankLo", "TopPlayerRankLo", count),
+        ("LeagueTopRankHi", "TopPlayerRankHi", count),
+        ("LeagueTopGoalkeeperName", "TopGoalkeeperName", tex),
+        ("LeagueTopGoalkeeperPFirst", "TopGoalkeeperPFirst", num),
+        ("LeagueSharePairsDecided", "SharePairsDecided", num),
+        ("LeagueHFourRatio", "HFourRatio", num),
+        ("LeagueHFiveAggTotal", "h5_aggregation_total", num),
+    ),
+    "synthesis/league_leakage_independent/summary.json": (
+        ("LeagueLeakIndepTopName", "TopPlayerName", tex),
+        ("LeagueLeakIndepTopPFirst", "TopPlayerPFirst", num),
+        ("LeagueLeakIndepSecondName", "SecondPlayerName", tex),
+        ("LeagueLeakIndepSecondPFirst", "SecondPlayerPFirst", num),
+        ("LeagueLeakIndepSharePairsDecided", "SharePairsDecided", num),
+    ),
+    "synthesis/league_leakage_assortative/summary.json": (
+        ("LeagueLeakAssortTopPFirst", "TopPlayerPFirst", num),
+        ("LeagueLeakAssortSharePairsDecided", "SharePairsDecided", num),
+    ),
+}
+
+
+# The ranking stage's primary runs. Robustness runs (subfolders, rapm_league*, league)
+# reuse the same key names and are never read into a primary macro.
+NAMED_MODULES = ("multiverse", "recognition", "synthesis", "recovery")
+
+
+def macros_named(declared: set[str], done: set[str]) -> dict[str, str]:
+    """Keys of the ranking stage's summary.json files that are macro names themselves."""
+    out: dict[str, str] = {}
+    for module in NAMED_MODULES:
+        if not (RESULTS / module / "summary.json").exists():
+            continue
+        for key, value in summary(module).items():
             if key not in declared or key in done or key in out:
                 continue
             if isinstance(value, str):
@@ -857,8 +1190,33 @@ def table_h3() -> str:
         r"  \midrule",
         rf"  \multicolumn{{5}}{{@{{}}l}}{{\textit{{Parametric bootstrap, $S$ = {n_sims}"
         r" simulations}} \\",
-        row(["Planted contrast $D_0$", num(raw["planted"]), "", num(clip["planted"]), ""]),
-        row(["Mean error", num(raw["mean_error"]), "", num(clip["mean_error"]), ""]),
+        row(
+            [
+                "Planted contrast, mean over simulations (A18)",
+                num(raw["planted"]),
+                "",
+                num(clip["planted"]),
+                "",
+            ]
+        ),
+        row(
+            [
+                "Planted contrast, earlier variance-weighted definition",
+                num(raw["planted_weighted"]),
+                "",
+                num(clip["planted_weighted"]),
+                "",
+            ]
+        ),
+        row(
+            [
+                "Mean error against the A18 planted value",
+                num(raw["mean_error"]),
+                "",
+                num(clip["mean_error"]),
+                "",
+            ]
+        ),
         row(["SD of the error", num(raw["sd_error"]), "", num(clip["sd_error"]), ""]),
         row(
             [
@@ -871,7 +1229,7 @@ def table_h3() -> str:
         ),
         row(
             [
-                "Coverage of $D_0$ by the player-bootstrap interval",
+                "Coverage of the planted contrast by the player-bootstrap interval",
                 num(raw["coverage_m4"]),
                 "",
                 num(clip["coverage_m4"]),
@@ -884,7 +1242,8 @@ def table_h3() -> str:
         r"  \cmidrule(lr){2-3}\cmidrule(lr){4-5}",
         row(["", "$D$", r"90\% interval", "$D$", r"90\% interval"]),
     ]
-    return tabular("@{}lrcrc@{}", header, body) + "\n"
+    label = "@{}>{\\raggedright\\arraybackslash}p{6.4cm}"
+    return tabular(label + "rcrc@{}", header, body) + "\n"
 
 
 def table_visibility() -> str:
@@ -1091,14 +1450,16 @@ def _rank_set(lo: object, hi: object) -> str:
     return f"[{count(lo)}, {count(hi)}]"
 
 
-def _synthesis_table(players: pd.DataFrame, note: str) -> str:
+def _synthesis_table(players: pd.DataFrame, note: str, *, top10: bool = True) -> str:
+    """``top10=False`` drops P(top-10), which is 1 for every one of the eight goalkeepers."""
+    probabilities = ["p_first", "p_top3", *(["p_top10"] if top10 else [])]
+    labels = {"p_first": r"$P(\#1)$", "p_top3": r"$P(\text{top-3})$",
+              "p_top10": r"$P(\text{top-10})$"}  # fmt: skip
     body = [
         row(
             [
                 tex(r["player"]),
-                num(r["p_first"]),
-                num(r["p_top3"]),
-                num(r["p_top10"]),
+                *(num(r[p]) for p in probabilities),
                 count(r["median_rank"]) + " " + _rank_set(r["rank_lo"], r["rank_hi"]),
                 _rank_set(r["marginal_lo"], r["marginal_hi"]),
                 num(r["share_specification"]),
@@ -1108,15 +1469,15 @@ def _synthesis_table(players: pd.DataFrame, note: str) -> str:
         )
         for _, r in players.iterrows()
     ]
+    k = 1 + len(probabilities)
     header = [
-        r"  & & & & \multicolumn{2}{c}{Rank} & \multicolumn{3}{c}{Share of rank variance} \\",
-        r"  \cmidrule(lr){5-6}\cmidrule(lr){7-9}",
+        "  " + "& " * k + r"\multicolumn{2}{c}{Rank} & \multicolumn{3}{c}{Share of rank variance}"
+        r" \\",
+        rf"  \cmidrule(lr){{{k + 1}-{k + 2}}}\cmidrule(lr){{{k + 3}-{k + 5}}}",
         row(
             [
                 "Player",
-                r"$P(\#1)$",
-                r"$P(\text{top-3})$",
-                r"$P(\text{top-10})$",
+                *(labels[p] for p in probabilities),
                 r"median [90\%]",
                 "marginal set",
                 "spec.",
@@ -1127,7 +1488,7 @@ def _synthesis_table(players: pd.DataFrame, note: str) -> str:
     ]
     return (
         "{\\footnotesize\\setlength{\\tabcolsep}{3.5pt}\n"
-        + tabular("@{}lrrrrcrrr@{}", header, body)
+        + tabular("@{}l" + "r" * len(probabilities) + "rcrrr@{}", header, body)
         + note
         + "\\par}\n"
     )
@@ -1153,34 +1514,33 @@ def table_synthesis() -> str:
 def table_goalkeepers() -> str:
     note = (
         r"\par\smallskip{\footnotesize Marginal set: 90\% rank confidence set at the median "
-        r"specification.\par}"
+        r"specification. $P(\text{top-10})$ is 1 for each of the eight goalkeepers and is "
+        r"left out.\par}"
     )
-    return _synthesis_table(synthesis_players("goalkeeper"), note)
+    return _synthesis_table(synthesis_players("goalkeeper"), note, top10=False)
 
 
-def recognition_view() -> pd.Series:
-    """Ballon d'Or points summed over 2021--2026 per pool player, 0 if unranked
-    (A13 (v), as run_ranking.py computes it for Kendall's W)."""
-    pool = csv(POOL).set_index("player")["tm_player_id"]
-    bdo = csv(PAPER / "data" / "ballon_dor.csv")
-    bdo = bdo[bdo["edition"].between(2021, 2026)]
-    points = bdo.groupby(bdo["player"].map(pool))["points"].sum()
-    return points.reindex(pool.to_numpy(), fill_value=0).astype(int)
+def recognition_view() -> pd.DataFrame:
+    """The recognition view of the outfield pool: share_sum is the sum over the
+    2021--2026 editions of the player's share of each edition's Ballon d'Or points
+    (A19); raw_sum the earlier sum of points (A13 (v))."""
+    view = csv(RESULTS / "synthesis" / "recognition_view.csv")
+    return view[view["segment"] == "outfield"].reset_index(drop=True)
 
 
 def table_views() -> str:
-    players = synthesis_players("outfield").set_index("player_id")
-    points = recognition_view().reindex(players.index)
-    players = players.assign(points=points, recognition=points.rank(ascending=False, method="min"))
-    players = players.sort_values(["recognition", "stats_view"])
+    players = synthesis_players("outfield").merge(
+        recognition_view()[["player_id", "share_sum", "rank_share_sum"]], on="player_id"
+    )
+    players = players.sort_values(["rank_share_sum", "stats_view"])
     lines = [
         row(
             [
                 tex(r["player"]),
                 num(r["stats_view"], 1),
                 num(r["impact_view"], 1),
-                count(r["points"]),
-                count(r["recognition"]),
+                num(r["share_sum"], 3),
+                count(r["rank_share_sum"]),
             ]
         )
         for _, r in players.iterrows()
@@ -1189,13 +1549,14 @@ def table_views() -> str:
     header = [
         r"  & \multicolumn{2}{c}{Mean rank} & \multicolumn{2}{c}{Ballon d'Or} \\",
         r"  \cmidrule(lr){2-3}\cmidrule(lr){4-5}",
-        row(["Player", "stats", "impact", "points", "rank"]),
+        row(["Player", "stats", "impact", "shares", "rank"]),
     ]
     colspec = "@{}lrrrr@{}"
     note = (
-        r"\par\smallskip\raggedright Ordered by Ballon d'Or rank (points summed over "
-        r"2021--2026; ties share the best rank). Kendall's $W$ = \KendallW{} (mean pairwise "
-        r"Spearman correlation \KendallMeanSpearman{})."
+        r"\par\smallskip\raggedright Ballon d'Or shares: sum over the 2021--2026 editions "
+        r"of the player's share of each edition's points (A19); ordered by its rank, ties "
+        r"sharing the best rank. Kendall's $W$ = \KendallW{} (mean pairwise Spearman "
+        r"correlation \KendallMeanSpearman{})."
     )
     return (
         "{\\scriptsize\\setlength{\\tabcolsep}{3pt}\n"
@@ -1587,7 +1948,7 @@ def figure_h3_parametric(width: float) -> Figure:
     sims = csv(RESULTS / "construct_gap" / "h3_sims.csv")
     h3 = csv(RESULTS / "construct_gap" / "h3_summary.csv").set_index("kind").loc["clipped"]
     values = sims["diff_clipped"].to_numpy(float)
-    fig, ax = plt.subplots(figsize=(width, 2.9))
+    fig, ax = plt.subplots(figsize=(width, 3.3))
     _clean(ax)
     ax.grid(axis="y", zorder=0)
     ax.axvspan(h3["ci_low"], h3["ci_high"], color=BLUE, alpha=0.12, lw=0, zorder=0,
@@ -1595,13 +1956,12 @@ def figure_h3_parametric(width: float) -> Figure:
     ax.hist(values, bins=24, color=INK_MUTED, edgecolor=SURFACE, linewidth=0.6, zorder=2,
             label=f"simulated estimates (S = {values.size})")  # fmt: skip
     ax.axvline(h3["planted"], color=INK, lw=1.3, ls=(0, (4, 2)), zorder=3,
-               label=f"planted contrast {h3['planted']:.2f}")  # fmt: skip
+               label=f"planted contrast, mean over simulations {h3['planted']:.2f}")  # fmt: skip
     ax.axvline(h3["estimate"], color=BLUE, lw=1.8, zorder=3,
                label=f"real estimate {h3['estimate']:.2f}")  # fmt: skip
     ax.set_xlabel("H3 contrast, clipped share CB+DM minus CF+W")
     ax.set_ylabel("Simulations")
-    ax.legend(loc="upper left", fontsize=6.5)
-    ax.set_ylim(0, ax.get_ylim()[1] * 1.35)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=2, fontsize=6.5)
     fig.tight_layout()
     return fig
 
@@ -1883,8 +2243,8 @@ def figure_recovery(width: float) -> Figure:
 
 def table_robustness() -> str:
     """Post-hoc robustness: the M8 headline numbers under each alternative synthesis
-    next to the primary; H3 under assortative planting, by the raw contrast (the
-    clipped contrast's error is not pivotal there); M6 with curated honours."""
+    next to the primary; H3 under assortative planting, raw and clipped; M6 with
+    curated honours."""
     variants = {"Primary": RESULTS / "synthesis"}
     for name, label in (
         ("bias_corrected", r"Bias-corrected $\sigma_g$"),
@@ -1917,30 +2277,27 @@ def table_robustness() -> str:
         [row(["M8 synthesis", *labels])],
         body,
     )
-    blocks: list[tuple[str, list[tuple[str, str]], str]] = []
+    blocks: list[tuple[str, list[tuple[str, str]]]] = []
     if (RESULTS / "construct_gap" / "assortative" / "summary.json").exists():
         a = summary("construct_gap/assortative")
+
+        def both(key: str) -> str:
+            return num(a[f"contrast_raw_{key}"]) + "; " + num(a[f"contrast_clipped_{key}"])
+
         h3 = [
-            ("Planted contrast $D_0$", num(a["contrast_raw_planted"])),
+            ("Planted contrast, mean over simulations (A18)", num(a["contrast_raw_planted"])),
             (r"Raw contrast and its 90\% basic interval",
              num(a["contrast_raw_estimate"]) + " "
              + interval(a["contrast_raw_ci_low"], a["contrast_raw_ci_high"])),
-            ("Mean error of the raw contrast", num(a["contrast_raw_mean_error"])),
-            ("Leave-one-out coverage; player-bootstrap coverage of $D_0$",
-             num(a["contrast_raw_coverage_loo"]) + "; " + num(a["contrast_raw_coverage_m4"])),
-            ("H3 verdict (raw contrast)", tex(a["verdict_raw"])),
+            (r"Clipped contrast and its 90\% basic interval",
+             num(a["contrast_clipped_estimate"]) + " "
+             + interval(a["contrast_clipped_ci_low"], a["contrast_clipped_ci_high"])),
+            ("Mean error: raw; clipped", both("mean_error")),
+            ("Coverage of the planted contrast by the player-bootstrap interval: raw; clipped",
+             both("coverage_m4")),
+            ("H3 verdict: raw; clipped", tex(a["verdict_raw"]) + "; " + tex(a["verdict_clipped"])),
         ]  # fmt: skip
-        note = (
-            r"Clipped contrast "
-            + num(a["contrast_clipped_estimate"])
-            + r", basic interval "
-            + interval(a["contrast_clipped_ci_low"], a["contrast_clipped_ci_high"])
-            + r": under this planting the clipped error is not pivotal, so the raw "
-            r"interval is the one read."
-        )
-        blocks.append(
-            (r"H3 with planted effects on the real teammate structure (assortative)", h3, note)
-        )
+        blocks.append((r"H3 with planted effects on the real teammate structure (assortative)", h3))
     if (RESULTS / "recognition" / "curated" / "summary.json").exists():
         c = summary("recognition/curated")
         m6 = [
@@ -1948,15 +2305,13 @@ def table_robustness() -> str:
              num(c["ShapleyTeamOls"]) + " vs " + num(c["ShapleyStatsOls"])),
             ("H6 verdict", tex(c["VerdictHSix"])),
         ]  # fmt: skip
-        blocks.append(("M6 with curated team honours", m6, ""))
-    for title, lines, note in blocks:
+        blocks.append(("M6 with curated team honours", m6))
+    for title, lines in blocks:
         out += "\\par\\medskip\n" + tabular(
             "@{}>{\\raggedright\\arraybackslash}p{7.8cm}l@{}",
             [row([title, ""])],
             [row([label, value]) for label, value in lines],
         )
-        if note:
-            out += "\\par\\smallskip{\\footnotesize " + note + "\\par}\n"
     return out + "\\par}\n"
 
 
@@ -2067,6 +2422,302 @@ def table_firsts_by_dimension() -> str:
     )
 
 
+def table_club_rapm() -> str:
+    s = summary("rapm_league_men")
+    prefix = "club_total_primary_"
+    clubs = sorted((k.removeprefix(prefix) for k in s if k.startswith(prefix)),
+                   key=lambda club: -float(s[prefix + club]))  # type: ignore[arg-type]  # fmt: skip
+    body = [
+        row([tex(club), num(s[prefix + club], 3), num(s[f"club_total_league_{club}"], 3)])
+        for club in clubs
+    ]
+    header = [row(["Club", "Pre-registered fit", "Fit with league means"])]
+    return tabular("@{}lrr@{}", header, body) + "\n"
+
+
+def league_levels() -> pd.DataFrame:
+    """The A22 fit's league means, best first, joined with the validation columns."""
+    means = csv(RESULTS / "rapm_league_men" / "league_means.csv")
+    levels = csv(RESULTS / "league" / "validation" / "levels.csv")
+    keep = ["league", "mu22", "club_level", "club_level_se", "h2h_games", "h2h_gd", "uefa_mean"]
+    return means.merge(levels[keep], on="league", how="left").sort_values("mu", ascending=False)
+
+
+def _or_dash(value: object, text: str) -> str:
+    return text if pd.notna(value) else "{--}"
+
+
+def table_league_levels() -> str:
+    def line(r: pd.Series) -> str:
+        reference = r["se"] == 0
+        if r["league"] == "OTHER":
+            name = "No covered league"
+        else:
+            name = tex(league_name(r["league"])) + (r"$^\dagger$" if r["column"] == "REST" else "")
+        played = pd.notna(r["h2h_gd"])
+        return row(
+            [
+                name,
+                "0" if reference else num(r["mu"], 3),
+                "{--}" if reference else num(r["se"], 3),
+                "{--}" if reference else interval(r["ci_low"], r["ci_high"], 3),
+                "0" if reference else num(r["mu22"]),
+                _or_dash(r["games_other_leagues"], count(np.nan_to_num(r["games_other_leagues"]))),
+                _or_dash(r["linking_players"], count(np.nan_to_num(r["linking_players"]))),
+                "0"
+                if reference
+                else _or_dash(
+                    r["club_level"], f"{num(r['club_level'])} ({num(r['club_level_se'])})"
+                ),
+                f"{num(r['h2h_gd'])} ({count(r['h2h_games'])})" if played else "{--}",
+                num(r["uefa_mean"], 1),
+            ]
+        )
+
+    header = [
+        r"  & \multicolumn{4}{c}{League mean (goals per 90)} & \multicolumn{2}{c}{Links}"
+        r" & \multicolumn{3}{c}{Validation} \\",
+        r"  \cmidrule(lr){2-5}\cmidrule(lr){6-7}\cmidrule(lr){8-10}",
+        row(
+            [
+                "League",
+                r"$\hat\mu_L$",
+                "SE",
+                r"90\% interval",
+                r"$22\,\hat\mu_L$",
+                "games",
+                "players",
+                "clubs (SE)",
+                "H2H (games)",
+                "UEFA",
+            ]
+        ),
+    ]
+    note = (
+        r"\par\smallskip\raggedright $^\dagger$~Leagues sharing one mean. No covered league: "
+        r"stint players without minutes in a covered league. Links: the two counts of the "
+        r"pooling rule of Section~\ref{sec:league-method}. Clubs: the club-results level, in "
+        r"goals per game relative to the Premier League; H2H: goal difference per game "
+        r"against Premier League clubs; UEFA: mean association coefficient."
+    )
+    body = [line(r) for _, r in league_levels().iterrows()]
+    return (
+        "{\\scriptsize\\setlength{\\tabcolsep}{3pt}\n"
+        + tabular("@{}lrrcrrrccr@{}", header, body)
+        + note
+        + "\\par}\n"
+    )
+
+
+FACTOR_METRICS = ("goals", "np_goals", "assists")
+
+
+def table_league_factors() -> str:
+    factors = csv(RESULTS / "league" / "factors.csv")
+    wide = factors.pivot(index="league", columns=["metric", "model"], values=["multiplier", "se"])
+    info = factors.drop_duplicates("league").set_index("league")[["n_linking", "status"]]
+    order = wide[("multiplier", "goals", "context")].sort_values(ascending=False).index
+
+    def cells(league: str) -> list[str]:
+        return [
+            num(wide.loc[league, ("multiplier", metric, model)])
+            + " ("
+            + num(wide.loc[league, ("se", metric, model)])
+            + ")"
+            for metric in FACTOR_METRICS
+            for model in ("context", "plain")
+        ]
+
+    reference = info.index[info["status"] == "reference"][0]
+    pooled = [league for league in order if info.loc[league, "status"] == "pooled"]
+    body = [
+        row([tex(league_name(reference)), count(info.loc[reference, "n_linking"]), *["1"] * 6]),
+        *(
+            row([tex(league_name(league)), count(info.loc[league, "n_linking"]), *cells(league)])
+            for league in order
+            if info.loc[league, "status"] == "own"
+        ),
+        r"  \midrule",
+        row([f"{count(len(pooled))} other leagues$^\\dagger$", "{--}", *cells(pooled[0])]),
+    ]
+    header = [
+        "  & & "
+        + " & ".join(rf"\multicolumn{{2}}{{c}}{{{METRIC_LABEL[m]}}}" for m in FACTOR_METRICS)
+        + r" \\",
+        r"  \cmidrule(lr){3-4}\cmidrule(lr){5-6}\cmidrule(lr){7-8}",
+        row(["League", "Players", *["team term", "none"] * 3]),
+    ]
+    note = (
+        r"\par\smallskip\raggedright Factor $\exp(-\hat\gamma_L)$ with the standard error of "
+        r"$\hat\gamma_L$ in parentheses, with the team term (A21) and without it. Players: "
+        r"players observed in the league and in another. $^\dagger$~One factor shared by: "
+        + ", ".join(tex(league_name(league)) for league in sorted(pooled, key=league_name))
+        + "."
+    )
+    return (
+        "{\\footnotesize\\setlength{\\tabcolsep}{4pt}\n"
+        + tabular("@{}lr" + "c" * 6 + "@{}", header, body)
+        + note
+        + "\\par}\n"
+    )
+
+
+# Column groups of tab-league-ranking, in the caption's order; a run that has not
+# happened (no columns in league_comparison.csv) is left out.
+RANKING_VARIANTS = (
+    ("primary", "Pre-registered"),
+    ("league_adjusted", "League-adjusted (A21)"),
+    ("league_plain", "No team term"),
+    ("league_uefa", "UEFA leagues only"),
+    ("league_mls", "MLS fill"),
+    ("league_leakage_independent", r"\shortstack{Contamination,\\independent $A_g$}"),
+    ("league_leakage_assortative", r"\shortstack{Contamination,\\assortative $A_g$}"),
+    ("league_club", r"\shortstack{Club-results\\levels (A24)}"),
+)
+RANKING_PER_PANEL = 4  # variants side by side that fit \linewidth
+
+
+def table_league_ranking() -> str:
+    """Players in the top ten by median rank or by P(#1) under the pre-registered or the
+    league-adjusted run, by pre-registered P(#1); the variants in stacked panels."""
+    table = league_comparison()
+    chosen: set[str] = set()
+    for run in ("primary", "league_adjusted"):
+        chosen |= set(table.nlargest(10, f"{run}_p_first").index)
+        by_rank = table.sort_values([f"{run}_median_rank", f"{run}_p_first"],
+                                    ascending=[True, False])  # fmt: skip
+        chosen |= set(by_rank.index[:10])
+    players = table.loc[sorted(chosen, key=lambda name: -table.loc[name, "primary_p_first"])]
+    variants = [(k, label) for k, label in RANKING_VARIANTS if f"{k}_p_first" in table.columns]
+    panels = []
+    for start in range(0, len(variants), RANKING_PER_PANEL):
+        part = variants[start : start + RANKING_PER_PANEL]
+        header = [
+            "  & " + " & ".join(rf"\multicolumn{{3}}{{c}}{{{label}}}" for _, label in part)
+            + r" \\",
+            "  " + "".join(rf"\cmidrule(lr){{{2 + 3 * i}-{4 + 3 * i}}}" for i in range(len(part))),
+            row(["Player", *[r"\#1", "top 3", "rank"] * len(part)]),
+        ]  # fmt: skip
+        body = [
+            row(
+                [
+                    tex(name),
+                    *(
+                        cell
+                        for k, _ in part
+                        for cell in (
+                            num(r[f"{k}_p_first"]),
+                            num(r[f"{k}_p_top3"]),
+                            count(r[f"{k}_median_rank"])
+                            + " "
+                            + _rank_set(r[f"{k}_rank_lo"], r[f"{k}_rank_hi"]),
+                        )
+                    ),
+                ]
+            )
+            for name, r in players.iterrows()
+        ]
+        # A wider gap before each variant keeps its three columns together.
+        panels.append(tabular("@{}l" + r"@{\hspace{10pt}}rrr" * len(part) + "@{}", header, body))
+    note = (
+        r"\par\smallskip\raggedright \#1 and top 3: $P(\#1)$ and $P(\text{top-3})$; rank: "
+        r"median rank [90\% rank interval]. Players in the top ten by median rank or by "
+        r"$P(\#1)$ under the pre-registered or the league-adjusted mixture."
+    )
+    return (
+        "{\\scriptsize\\setlength{\\tabcolsep}{2pt}\n"
+        + "\\par\\medskip\n".join(panels)
+        + note
+        + "\\par}\n"
+    )
+
+
+def table_on_off() -> str:
+    """The run's own list (rapm summary on_off_players): the impact view's top ten,
+    then the other players it names."""
+    listed = [str(r["player"]) for r in summary("rapm")["on_off_players"]]  # type: ignore[union-attr]
+    ten = set(synthesis_players("outfield").nsmallest(10, "impact_view")["player"])
+    table = on_off()
+
+    def line(name: str) -> str:
+        r = table.loc[name]
+        return row(
+            [
+                tex(name),
+                num(r["gd_on_p90"]),
+                num(r["gd_off_p90"]),
+                num(r["on_minus_off"]),
+                num(r["minutes_share"]),
+            ]
+        )
+
+    header = [
+        r"  & \multicolumn{3}{c}{Goal difference per 90} & Share of his \\",
+        r"  \cmidrule(lr){2-4}",
+        row(["Player", "on the pitch", "off it", "on minus off", "clubs' minutes"]),
+    ]
+    body = [
+        *(line(name) for name in listed if name in ten),
+        r"  \midrule",
+        *(line(name) for name in listed if name not in ten),
+    ]
+    return tabular("@{}lrrrr@{}", header, body) + "\n"
+
+
+def table_leakage() -> str:
+    runs = {
+        "Primary": summary("synthesis"),
+        r"Independent-planting $A_g$": summary("synthesis/leakage_independent"),
+        r"Assortative-planting $A_g$": summary("synthesis/leakage_assortative"),
+    }
+    lines = (
+        (r"Player with the highest $P(\#1)$", lambda s: tex(s["TopPlayerName"])),
+        (r"His $P(\#1)$", lambda s: num(s["TopPlayerPFirst"])),
+        ("Share of outfield pairs decided", lambda s: num(s["SharePairsDecided"])),
+        ("Verdicts H1, H2, H4, H5",
+         lambda s: ", ".join(tex(s[k]) for k in ("VerdictHOne", "VerdictHTwo", "VerdictHFour",
+                                                  "VerdictHFive"))),
+    )  # fmt: skip
+    body = [row([label, *(f(s) for s in runs.values())]) for label, f in lines]
+    return (
+        "{\\setlength{\\tabcolsep}{4pt}\n"
+        + tabular(
+            "@{}>{\\raggedright\\arraybackslash}p{4.6cm}"
+            + ">{\\raggedright\\arraybackslash}p{3.1cm}" * len(runs)
+            + "@{}",
+            [row(["", *runs])],
+            body,
+        )
+        + "\\par}\n"
+    )
+
+
+def figure_league_levels(width: float) -> Figure:
+    levels = league_levels()
+    levels = levels[levels["own_mean"] & (levels["league"] != "OTHER")].reset_index(drop=True)
+    y = np.arange(len(levels))[::-1]
+    reference = (levels["se"] == 0).to_numpy()
+    fig, ax = plt.subplots(figsize=(width, 0.19 * len(levels) + 0.8))
+    _clean(ax)
+    ax.grid(axis="x", zorder=0)
+    ax.axvline(0.0, color=INK_MUTED, lw=0.8, zorder=1)
+    ax.hlines(y[~reference], levels["ci_low"][~reference], levels["ci_high"][~reference],
+              color=BLUE, lw=1.3, zorder=2)  # fmt: skip
+    ax.plot(levels["mu"][~reference], y[~reference], "o", ms=4.6, color=BLUE, mec=SURFACE,
+            mew=0.6, zorder=3, label="league mean")  # fmt: skip
+    ax.plot(levels["mu"][reference], y[reference], "o", ms=5, mfc=SURFACE, mec=INK_SECONDARY,
+            mew=1.2, zorder=3, label="reference (fixed at 0)")  # fmt: skip
+    ax.set_yticks(y, [league_name(code) for code in levels["league"]])
+    ax.tick_params(axis="y", length=0)
+    ax.set_xlabel("League mean (goals per 90 per player, Premier League = 0)")
+    handles, labels = ax.get_legend_handles_labels()
+    handles.append(Line2D([], [], color=BLUE, lw=1.3))
+    labels.append("90% bootstrap interval")
+    ax.legend(handles, labels, loc="lower right")
+    fig.tight_layout()
+    return fig
+
+
 TABLES: dict[str, Callable[[], str]] = {
     "tab-coverage": table_coverage,
     "tab-reliability": table_reliability,
@@ -2088,6 +2739,12 @@ TABLES: dict[str, Callable[[], str]] = {
     "tab-robustness": table_robustness,
     "tab-firsts-by-dimension": table_firsts_by_dimension,
     "tab-recognition-curated": table_recognition_curated,
+    "tab-leakage": table_leakage,
+    "tab-club-rapm": table_club_rapm,
+    "tab-league-levels": table_league_levels,
+    "tab-league-factors": table_league_factors,
+    "tab-league-ranking": table_league_ranking,
+    "tab-on-off": table_on_off,
     "tab-pool": table_pool,
 }
 FIGURES: dict[str, Callable[[float], Figure]] = {
@@ -2106,6 +2763,7 @@ FIGURES: dict[str, Callable[[float], Figure]] = {
     "fig-variance-decomposition": figure_variance_decomposition,
     "fig-decided-pairs": figure_decided_pairs,
     "fig-recovery": figure_recovery,
+    "fig-league-levels": figure_league_levels,
 }
 MACRO_SOURCES: tuple[Callable[[], dict[str, str]], ...] = (
     macros_data,
@@ -2118,11 +2776,18 @@ MACRO_SOURCES: tuple[Callable[[], dict[str, str]], ...] = (
     macros_m7a,
     macros_m7b,
     macros_m8_views,
+    macros_rapm_seasons,
+    macros_point_ranks,
     macros_m6_extra,
     macros_assortative,
     macros_bias_corrected,
     macros_europe,
     macros_curated,
+    macros_leakage,
+    macros_league_rapm,
+    macros_league_validation,
+    macros_league_ranking,
+    macros_on_off,
 )
 
 
@@ -2143,6 +2808,13 @@ def main() -> None:
             macros.update(source())
         except FileNotFoundError as error:
             skipped.append(f"{source.__name__}: {_missing(error)}")
+    for path, entries in KEYED.items():
+        try:
+            values = json_values(RESULTS / path)
+        except FileNotFoundError as error:
+            skipped.append(f"{path}: {_missing(error)}")
+            continue
+        macros.update({macro: fmt(values[key]) for macro, key, fmt in entries if key in values})
     macros.update(macros_named(set(declared), set(macros)))
     stray = sorted(set(macros) - set(declared))
     if stray:
@@ -2174,6 +2846,8 @@ def main() -> None:
     print(f"pending tables and figures ({len(pending)}):")
     for name, reason in pending.items():
         print(f"  {name}: {reason}")
+    for claim in CHECKS:
+        print(f"text check failed: {claim}")
 
 
 if __name__ == "__main__":
