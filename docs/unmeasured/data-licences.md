@@ -158,3 +158,61 @@ automated access.
 > results: compiled by hand from the sources listed in
 > paper-unmeasured/data/. No raw third-party data is redistributed with this
 > paper; the code reproduces every number from the public sources.
+
+## 5. American Soccer Analysis API (pre-registration A20 vi)
+
+Read 2026-11-18. Used only for the coverage-fill variant.
+
+**What applies**
+
+- API: https://app.americansocceranalysis.com/api/v1, documented at
+  https://app.americansocceranalysis.com/api/v1/__docs__/ (OpenAPI file:
+  https://app.americansocceranalysis.com/api/v1/openapi.json). Its description
+  reads: "Data returned by this API is licensed under CC BY-SA 4.0", with a
+  link to https://spdx.org/licenses/CC-BY-SA-4.0.html.
+- The README of ASA's client says: "The API is **free and public** — no
+  authentication required."
+  https://github.com/American-Soccer-Analysis/itscalledsoccer
+- The README of ASA's web application asks: "If you use any of the data we
+  make publicly available, we kindly ask that you provide credit and link back
+  to the American Soccer Analysis website", and repeats "Data is licensed under
+  CC BY-SA 4.0." https://github.com/American-Soccer-Analysis/asa-shiny-app
+- CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/). Attribution:
+  "You must give appropriate credit, provide a link to the license, and
+  indicate if changes were made." ShareAlike: "If you remix, transform, or
+  build upon the material, you must distribute your contributions under the
+  same license as the original."
+- No terms-of-use page, rate limit or `robots.txt` was found for the API host
+  (`app.americansocceranalysis.com/robots.txt` returns 404). The documentation
+  lists the query parameters, not the response fields; the fields were read
+  from the responses. The pages read do not name ASA's upstream data
+  provider, and CC BY-SA covers only the rights ASA holds.
+
+**What is used**
+
+- Requests, all with a generic User-Agent: the documentation page and its
+  OpenAPI file, two small test calls to see the response fields (not kept),
+  and 7 data requests sent once and cached under `data/players/raw/asa/`
+  (`manifest.json` has each URL, time and SHA-256).
+- `mls/players` (name and birth date, to match pool players), `mls/teams`,
+  `mls/players/xgoals` (regular season; `minutes_played`, `goals`,
+  `primary_assists`, and `goals` with `shot_pattern=Penalty`), `mls/games`
+  (date and `expanded_minutes` of 107 games).
+- Output: `data/players/processed/asa_mls_pool.csv.gz`, 5 player-seasons
+  (Messi 2023 and 2024, Suárez 2024, Chiellini 2022 and 2023). The 2025 rows
+  are downloaded only to compare ASA with the panel.
+
+**What the paper and repo must do**
+
+- **Credit ASA, link to it and to the licence, and say what was changed**
+  (season totals taken as served; minutes also rescaled to a 90-minute match).
+- **Share-alike** (conservative reading): a table or file we publish that
+  contains these ASA values, or values computed from them, carries CC BY-SA
+  4.0. `/data/` is gitignored, so nothing is redistributed today.
+- Sentence to add to the §4 statement when the variant is reported:
+
+> MLS regular-season minutes, goals, penalty goals and primary assists for
+> 2022–2024: American Soccer Analysis (americansocceranalysis.com), from its
+> public API (app.americansocceranalysis.com/api/v1), licensed CC BY-SA 4.0
+> (creativecommons.org/licenses/by-sa/4.0/); retrieved 2026-11-18. [If
+> `minutes_scaled` is used: minutes rescaled by us to a 90-minute match.]

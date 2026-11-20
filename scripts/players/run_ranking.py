@@ -24,6 +24,18 @@ Design §5 (M5, M6, M8, M9); pre-registration A1, A11-A14, A16 (i). Stages, in o
   Saudi league season puts Julian Quinones first in 896 of 5,760 specifications: the
   factorial has no league-strength dimension and the context dimension partials out
   own-team Elo, not opposition strength.
+- synthesis_league, synthesis_league_plain, synthesis_league_uefa, synthesis_league_mls
+  (post hoc, A20-A22): M5 + M8 exactly as the primary (same factorial, sigma from the
+  primary M4, omega from the run's own weights, U = 4, B = 200, same seeds) on
+  league-adjusted inputs: league-match goals, non-penalty goals and assists divided by
+  exp(gamma_L) (A21's context factors), league-match on-pitch goal difference shifted
+  by 22 mu_L per 90, RAPM with league means (A22), team Elo centred within
+  competition-season. Variants: the A20 (ii) factors without the team control
+  ("plain"), the UEFA-only restriction of synthesis_europe on top, and A20 (vi)'s MLS
+  fill (skipped while data/players/processed/asa_mls_pool.csv.gz does not exist).
+  Outputs: results/players/multiverse/{league,league_plain,league_uefa,league_mls}/,
+  results/players/synthesis/{league_adjusted,league_plain,league_uefa,league_mls}/ and
+  results/players/synthesis/league_comparison.csv. Verdicts stay with the primary.
 - view_agreement (A19, a correction made after M8 ran): Kendall's W of every synthesis
   variant recomputed from its saved players table with the recognition view as the sum
   of per-edition point shares; no M5 or M8 draw. Writes
@@ -87,6 +99,24 @@ Choices the pre-registration does not fix (post hoc, Claude's calls):
   game). Same sigma, U and task seeds as the primary; omega from this run's weights.
   firsts_by_dimension.csv: the top 8 by M8 P(#1), share of specifications ranking each
   first per (family, aggregation) cell and margin.
+- League-adjusted variants (A20-A22 fix the method; the choices left to this script):
+  the deflation and the shift are applied to each panel row (player-match) before any
+  sum, in the point run and in every replicate, with gamma and mu held at their point
+  estimates (mu of results/players/rapm_league_men/league_means.csv; the replicates'
+  RAPM carries its own league means). The on-pitch shift counts stint minutes only, as
+  the rate does. Elo: each row's team Elo minus the minutes-weighted mean Elo of its
+  competition-season (competition_id + study season) over M5's rows, recomputed under
+  each replicate's weights (and after the UEFA restriction where it applies).
+  Stabilisation constants, sigma and the rule for a missing per-season RAPM are the
+  primary's, unchanged. MLS fill: one row per pool player-season of the file (columns
+  tm_player_id, season, goals, np_goals, assists, and minutes_scaled as the minutes: the
+  file's 90-per-match scale, the panel's unit, not its minutes with stoppage time),
+  weight 1 in every replicate (no games to resample), deflated by the MLS factor, no
+  stint minutes (group-season mean rule for on-pitch GD if the season has none),
+  centred Elo 0 (the row is left out of the competition-season mean); a season with
+  MLS rows already in the panel is not added. league_comparison.csv: outfield pool
+  players; the view ranks are the ranks of the stats and impact views within each
+  variant, ties sharing the best rank.
 - synthesis_leakage: A_g = full-data (not half-data) attribution factor of RAPM total,
   kind "groups"; rel_g = split-half reliability of RAPM total per group
   (results/players/rapm/reliability.csv). Same sigma, omega, U and task seed as the
@@ -186,6 +216,9 @@ LEVEL_LABELS: dict[str, dict[Any, str]] = {
 }  # fmt: skip
 
 RAPM_DIR = RESULTS / "rapm"
+RAPM_LEAGUE_DIR = RESULTS / "rapm_league_men"  # A20 (i) with A22's column
+LEAGUE_DIR = RESULTS / "league"  # A20 (ii), A21: box-score league factors
+ASA_MLS = PROCESSED / "asa_mls_pool.csv.gz"  # A20 (vi)
 GAP_DIR = RESULTS / "construct_gap"
 REL_DIR = RESULTS / "reliability"
 M5_DIR = RESULTS / "multiverse"
@@ -263,12 +296,43 @@ def names() -> pd.Series:
 
 
 @dataclass(frozen=True)
+class Variant:
+    """Input variant of M5 + M8; the defaults are the pre-registered primary."""
+
+    europe: bool = False  # league rows outside UEFA dropped (synthesis_europe)
+    league: str | None = None  # A20-A22 league adjustment with this factor model
+    mls_fill: bool = False  # A20 (vi): pool players' MLS seasons from ASA_MLS
+
+    def __post_init__(self) -> None:
+        if self.mls_fill and self.league is None:
+            raise ValueError("the MLS fill is defined for league-adjusted inputs only")
+
+    @property
+    def rapm_dir(self) -> Path:
+        return RAPM_DIR if self.league is None else RAPM_LEAGUE_DIR
+
+
+PRIMARY = Variant()
+LEAGUE_VARIANTS = {  # synthesis folder -> (inputs, M5 folder)
+    "league_adjusted": (Variant(league="context"), M5_DIR / "league"),
+    "league_plain": (Variant(league="plain"), M5_DIR / "league_plain"),
+    "league_uefa": (Variant(league="context", europe=True), M5_DIR / "league_uefa"),
+    "league_mls": (Variant(league="context", mls_fill=True), M5_DIR / "league_mls"),
+}
+
+
+@dataclass(frozen=True)
 class Panel:
     keys: pd.DataFrame  # player_id, season, scope, position_group: one row per unit
     unit: np.ndarray  # panel row -> unit
     game: np.ndarray  # panel row -> column of the bootstrap counts, -1 outside the design
     values: np.ndarray  # panel rows x SUM_COLUMNS
     non_uefa_league: np.ndarray  # panel row is a league row outside UEFA (synthesis_europe)
+    league: np.ndarray  # panel row -> index into ``leagues``, -1 outside the league scope
+    leagues: list[str]
+    comp_season: np.ndarray  # panel row -> competition-season code (Elo centring)
+    elo: np.ndarray  # pre-match Elo of the player's side; 0 on fill rows
+    fill: np.ndarray  # panel row comes from the MLS fill (one row per player-season)
     counts: dict[str, int]
 
 
@@ -281,15 +345,51 @@ def uefa_leagues() -> list[str]:
     return sorted(c["competition_id"])
 
 
+def mls_fill_rows(pm: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]]:
+    """A20 (vi): pool players' MLS seasons from American Soccer Analysis as panel rows,
+    one per player-season: league scope, MLS1, no game (weight 1 in every replicate), no
+    stints, no Elo. From ``ASA_MLS``: tm_player_id, season (the panel's label),
+    minutes_scaled (minutes on the 90-per-match scale of the panel; its ``minutes``
+    include stoppage time), goals, np_goals, assists. A season with MLS rows already in
+    the panel is not added again."""
+    need = ["player_id", "season", "minutes", *BOX]
+    asa = pd.read_csv(ASA_MLS).drop(columns="minutes", errors="ignore")
+    asa = asa.rename(columns={"tm_player_id": "player_id", "minutes_scaled": "minutes"})
+    if missing := sorted(set(need) - set(asa.columns)):
+        raise ValueError(f"{ASA_MLS} lacks the columns {missing}")
+    asa = asa[asa["player_id"].isin(pool_ids()) & (asa["minutes"] > 0)]
+    if asa.duplicated(["player_id", "season"]).any():
+        raise ValueError(f"{ASA_MLS} has several rows for one player-season")
+    have = pm.loc[pm["competition_id"] == "MLS1", ["player_id", "season"]].drop_duplicates()
+    known = asa.merge(have, on=["player_id", "season"], how="left", indicator=True)["_merge"]
+    rows = asa.loc[(known == "left_only").to_numpy(), need].copy()
+    group_of = pm.drop_duplicates("player_id").set_index("player_id")["position_group"]
+    rows["position_group"] = rows["player_id"].map(group_of)
+    if rows["position_group"].isna().any():
+        raise ValueError("an MLS fill player has no position group in the panel")
+    rows = rows.assign(game_id=-1, competition_id="MLS1", scope="league", fill=True)
+    counts = {
+        "mls_fill_rows": len(rows),
+        "mls_fill_players": int(rows["player_id"].nunique()),
+        "mls_fill_rows_already_in_panel": int((known == "both").sum()),
+    }
+    return rows, counts
+
+
 @functools.cache
-def panel() -> Panel:
+def panel(mls_fill: bool = False) -> Panel:
     cols = ["game_id", "player_id", "season", "competition_id", "scope", "position_group",
             "minutes", *BOX, "on_pitch_gf", "on_pitch_ga", "team_elo"]  # fmt: skip
     pm = pd.read_csv(PROCESSED / "panel_player_match.csv.gz", usecols=cols)
     pm = pm[pm["scope"].isin(SCOPES)]
     pseudo, no_group = pm["player_id"] < 0, pm["position_group"].isna()
     counts = {"rows_pseudo_id": int(pseudo.sum()), "rows_no_group": int((no_group & ~pseudo).sum())}
-    pm = pm[~pseudo & ~no_group].reset_index(drop=True)
+    pm = pm[~pseudo & ~no_group].assign(fill=False)
+    if mls_fill:
+        extra, fill_counts = mls_fill_rows(pm)
+        pm, counts = pd.concat([pm, extra]), counts | fill_counts
+    pm = pm.reset_index(drop=True)
+    fill = pm["fill"].to_numpy(bool)
     unit, keys = pd.factorize(pd.MultiIndex.from_frame(pm[["player_id", "season", "scope"]]))
     frame = keys.to_frame(index=False, name=["player_id", "season", "scope"])
     frame["position_group"] = pm.groupby(unit)["position_group"].first().to_numpy()
@@ -297,28 +397,84 @@ def panel() -> Panel:
         raise ValueError("position_group varies within a player")
     game_ids = pd.Index(np.load(RAPM_DIR / "bootstrap_pooled.npz")["game_ids"])
     game = game_ids.get_indexer(pm["game_id"])
-    counts["games_outside_design"] = int(pm.loc[game < 0, "game_id"].nunique())
-    counts["rows_outside_design"] = int((game < 0).sum())
+    counts["games_outside_design"] = int(pm.loc[(game < 0) & ~fill, "game_id"].nunique())
+    counts["rows_outside_design"] = int(((game < 0) & ~fill).sum())
     stint = pm["on_pitch_gf"].notna().to_numpy()
     m = pm["minutes"].to_numpy(np.float64)
     gd = (pm["on_pitch_gf"] - pm["on_pitch_ga"]).to_numpy(np.float64)
+    elo = pm["team_elo"].where(~pm["fill"], 0.0).to_numpy(np.float64)
     values = np.column_stack(
         [m, *(pm[c].to_numpy(np.float64) for c in BOX), np.where(stint, gd, 0.0),
-         np.where(stint, m, 0.0), m * pm["team_elo"].to_numpy(np.float64)]
+         np.where(stint, m, 0.0), m * elo]
     )  # fmt: skip
-    non_uefa = (pm["scope"] == "league") & ~pm["competition_id"].isin(uefa_leagues())
-    return Panel(frame, np.asarray(unit), game, values, non_uefa.to_numpy(), counts)
+    in_league = pm["scope"] == "league"
+    non_uefa = in_league & ~pm["competition_id"].isin(uefa_leagues())
+    league, leagues = pd.factorize(pm["competition_id"].where(in_league), sort=True)
+    comp_season = pd.factorize(pm["competition_id"] + " " + pm["season"])[0]
+    return Panel(
+        frame, np.asarray(unit), game, values, non_uefa.to_numpy(), np.asarray(league),
+        list(leagues), np.asarray(comp_season), elo, fill, counts,
+    )  # fmt: skip
 
 
-def player_season(weights: np.ndarray) -> tuple[pd.DataFrame, int]:
+@functools.cache
+def league_levels(model: str) -> tuple[pd.DataFrame, pd.Series]:
+    """Per league: the multipliers exp(-gamma) of the box metrics under factor ``model``
+    (A20 ii; "context" is A21's, "plain" its sensitivity) and the RAPM league mean mu of
+    the A22 fit. A pooled league carries the pooled value in both files."""
+    f = pd.read_csv(LEAGUE_DIR / "factors.csv")
+    f = f[f["model"] == model]
+    if f.empty:
+        raise ValueError(f"no factor model {model!r} in {LEAGUE_DIR / 'factors.csv'}")
+    mult = f.pivot(index="league", columns="metric", values="multiplier")[list(BOX)]
+    mu = pd.read_csv(RAPM_LEAGUE_DIR / "league_means.csv").set_index("league")["mu"]
+    return mult, mu
+
+
+@functools.cache
+def league_values(model: str, mls_fill: bool) -> np.ndarray:
+    """``Panel.values`` with league-match goals, non-penalty goals and assists divided by
+    exp(gamma_L) (A20 ii) and league-match on-pitch goal difference shifted by 22 mu_L per
+    90 stint minutes (A20 iii). Row by row, so a season split over two leagues is handled;
+    ucl and intl rows are unchanged."""
+    p = panel(mls_fill)
+    mult, mu = league_levels(model)
+    if missing := sorted(set(p.leagues) - set(mult.index) | set(p.leagues) - set(mu.index)):
+        raise ValueError(f"no league factor or league mean for {missing}")
+    in_league, code = p.league >= 0, np.maximum(p.league, 0)
+    v = p.values.copy()
+    box = [SUM_COLUMNS.index(c) for c in BOX]
+    v[:, box] *= np.where(in_league[:, None], mult.loc[p.leagues].to_numpy()[code], 1.0)
+    shift = np.where(in_league, mu.loc[p.leagues].to_numpy()[code], 0.0)
+    v[:, SUM_COLUMNS.index("gd")] += 22.0 * shift * v[:, SUM_COLUMNS.index("stint_minutes")] / 90.0
+    return v
+
+
+def centred_elo_minutes(p: Panel, weights: np.ndarray) -> np.ndarray:
+    """Per panel row, weight x minutes x (team Elo - the minutes-weighted mean Elo of the
+    row's competition-season under the same weights) (A20 iv); 0 on fill rows."""
+    wm = np.where(p.fill, 0.0, weights * p.values[:, 0])
+    k = int(p.comp_season.max()) + 1
+    total = np.bincount(p.comp_season, weights=wm, minlength=k)
+    mean = np.divide(
+        np.bincount(p.comp_season, weights=wm * p.elo, minlength=k), total,
+        out=np.zeros(k), where=total > 0,
+    )  # fmt: skip
+    return wm * (p.elo - mean[p.comp_season])
+
+
+def player_season(weights: np.ndarray, v: Variant = PRIMARY) -> tuple[pd.DataFrame, int]:
     """M5's player_season from panel row weights (all 1 = the original data), and the
     number of rows whose on_pitch_gd is the group-season mean."""
-    p = panel()
+    p = panel(v.mls_fill)
+    values = p.values if v.league is None else league_values(v.league, v.mls_fill)
     n = len(p.keys)
     s = np.column_stack(
-        [np.bincount(p.unit, weights=p.values[:, j] * weights, minlength=n)
+        [np.bincount(p.unit, weights=values[:, j] * weights, minlength=n)
          for j in range(len(SUM_COLUMNS))]
     )  # fmt: skip
+    if v.league is not None:
+        s[:, 6] = np.bincount(p.unit, weights=centred_elo_minutes(p, weights), minlength=n)
     keep = s[:, 0] > 0
     out = p.keys[keep].reset_index(drop=True)
     s = s[keep]
@@ -367,16 +523,16 @@ def impact_season(
     return out, counts
 
 
-def point_rapm() -> tuple[pd.DataFrame, pd.DataFrame]:
-    season = pd.read_csv(RAPM_DIR / "rapm_season.csv").set_index(["player_id", "season"])
-    pooled = pd.read_csv(RAPM_DIR / "rapm_pooled.csv").set_index("player_id")
+def point_rapm(rapm_dir: Path = RAPM_DIR) -> tuple[pd.DataFrame, pd.DataFrame]:
+    season = pd.read_csv(rapm_dir / "rapm_season.csv").set_index(["player_id", "season"])
+    pooled = pd.read_csv(rapm_dir / "rapm_pooled.csv").set_index("player_id")
     return season[["offence", "defence"]], pooled[["offence", "defence"]]
 
 
 @functools.cache
-def boot_arrays() -> dict[str, Any]:
-    zs = np.load(RAPM_DIR / "bootstrap_season.npz")
-    zp = np.load(RAPM_DIR / "bootstrap_pooled.npz")
+def boot_arrays(rapm_dir: Path = RAPM_DIR) -> dict[str, Any]:
+    zs = np.load(rapm_dir / "bootstrap_season.npz")
+    zp = np.load(rapm_dir / "bootstrap_pooled.npz")
     return {
         "season_keys": pd.MultiIndex.from_arrays(
             [zs["player_id"], zs["season"].astype(str)], names=["player_id", "season"]
@@ -388,20 +544,20 @@ def boot_arrays() -> dict[str, Any]:
     }  # fmt: skip
 
 
-def row_weights(b: int | None, europe: bool) -> np.ndarray:
+def row_weights(b: int | None, v: Variant = PRIMARY) -> np.ndarray:
     """Panel row weights: 1 (original data) or replicate b's game counts (1 outside the
-    RAPM design); 0 for league rows outside UEFA when ``europe``."""
-    p = panel()
+    RAPM design); 0 for league rows outside UEFA when ``v.europe``."""
+    p = panel(v.mls_fill)
     w = np.ones(len(p.unit))
     if b is not None:
-        counts = boot_arrays()["counts"][b]
+        counts = boot_arrays(v.rapm_dir)["counts"][b]
         w = np.where(p.game >= 0, counts[np.maximum(p.game, 0)], 1).astype(np.float64)
-    return np.where(europe & p.non_uefa_league, 0.0, w)
+    return np.where(v.europe & p.non_uefa_league, 0.0, w)
 
 
-def replicate_inputs(b: int, europe: bool = False) -> tuple[pd.DataFrame, pd.DataFrame]:
-    z = boot_arrays()
-    ps, _ = player_season(row_weights(b, europe))
+def replicate_inputs(b: int, v: Variant = PRIMARY) -> tuple[pd.DataFrame, pd.DataFrame]:
+    z = boot_arrays(v.rapm_dir)
+    ps, _ = player_season(row_weights(b, v), v)
     season = pd.DataFrame(
         {"offence": z["season_offence"][b].astype(np.float64),
          "defence": z["season_defence"][b].astype(np.float64)}, index=z["season_keys"],
@@ -414,10 +570,10 @@ def replicate_inputs(b: int, europe: bool = False) -> tuple[pd.DataFrame, pd.Dat
     return ps, imp
 
 
-def point_inputs(europe: bool = False) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, int]]:
-    ps, filled = player_season(row_weights(None, europe))
-    imp, counts = impact_season(ps, *point_rapm())
-    return ps, imp, panel().counts | counts | {"on_pitch_gd_group_season_fill": filled}
+def point_inputs(v: Variant = PRIMARY) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, int]]:
+    ps, filled = player_season(row_weights(None, v), v)
+    imp, counts = impact_season(ps, *point_rapm(v.rapm_dir))
+    return ps, imp, panel(v.mls_fill).counts | counts | {"on_pitch_gd_group_season_fill": filled}
 
 
 @functools.cache
@@ -479,13 +635,13 @@ def m5_scores(result: Multiverse, ids: np.ndarray) -> np.ndarray:
     return r["score"].to_numpy(np.float64).reshape(-1, ids.size)
 
 
-def m5_chunk(task: tuple[list[int], Path, bool]) -> list[tuple[int, float]]:
-    reps, rep_dir, europe = task
+def m5_chunk(task: tuple[list[int], Path, Variant]) -> list[tuple[int, float]]:
+    reps, rep_dir, v = task
     ids = pool_ids()
 
     def inputs() -> Iterator[tuple[pd.DataFrame, pd.DataFrame]]:
         for b in reps:
-            yield replicate_inputs(b, europe)
+            yield replicate_inputs(b, v)
 
     times = []
     t0 = time.perf_counter()
@@ -499,15 +655,15 @@ def m5_chunk(task: tuple[list[int], Path, bool]) -> list[tuple[int, float]]:
 
 
 def stage_multiverse() -> None:
-    run_m5(M5_DIR, europe=False)
+    run_m5(M5_DIR, PRIMARY)
 
 
-def run_m5(m5_dir: Path, europe: bool) -> None:
+def run_m5(m5_dir: Path, v: Variant) -> None:
     """M5 on the original data and the B replicates, outputs in ``m5_dir``."""
     m5_dir.mkdir(parents=True, exist_ok=True)
     rep_dir = m5_dir / "replicates_parts"
     ids = pool_ids()
-    ps, imp, _ = point_inputs(europe)
+    ps, imp, _ = point_inputs(v)
     t0 = time.perf_counter()
     runs = multiverse_runs([(ps, imp)], stabilisation(), list(ids), rng("multiverse"))  # type: ignore[arg-type]
     point = next(runs)
@@ -542,7 +698,7 @@ def run_m5(m5_dir: Path, europe: bool) -> None:
     times: list[tuple[int, float]] = []
     if chunks:
         with ProcessPoolExecutor(max_workers=len(chunks)) as ex:
-            for part in ex.map(m5_chunk, [(c, rep_dir, europe) for c in chunks]):
+            for part in ex.map(m5_chunk, [(c, rep_dir, v) for c in chunks]):
                 times.extend(part)
     wall = time.perf_counter() - t0
     stacked = np.lib.format.open_memmap(
@@ -872,10 +1028,7 @@ def stage_synthesis_leakage() -> None:
 
 def stage_view_agreement() -> None:
     """A19: the view agreement of every synthesis variant from its saved players table."""
-    for out_dir in (M8_DIR, M8_BIAS_DIR, M8_EU_DIR, *sorted(M8_DIR.glob("leakage_*"))):
-        if not (out_dir / "players.csv").exists():
-            print(f"view_agreement: no players.csv in {out_dir}; skipped")
-            continue
+    for out_dir in (M8_DIR, *sorted(f.parent for f in M8_DIR.glob("*/players.csv"))):
         w, w_raw = record_view_agreement(out_dir)
         print(f"{out_dir.relative_to(RESULTS)}: W = {w:.4f} (point shares, A19), "
               f"{w_raw:.4f} (raw points, A13 v)", flush=True)  # fmt: skip
@@ -884,12 +1037,12 @@ def stage_view_agreement() -> None:
 def stage_synthesis_europe() -> None:
     """Post hoc, exploratory: league rows outside UEFA dropped, everything else as the
     primary M5 + M8 (same sigma, omega from this run's weights, U = 4, same seeds)."""
-    run_m5(M5_EU_DIR, europe=True)
+    run_m5(M5_EU_DIR, Variant(europe=True))
     players = run_synthesis(m4_shares(), M8_EU_DIR, "synthesis", "M8, UEFA leagues only "
                             "(post hoc, exploratory)", m5_dir=M5_EU_DIR)  # fmt: skip
     to_csv(firsts_by_dimension(M5_EU_DIR, players), M8_EU_DIR / "firsts_by_dimension.csv")
     # pool player-seasons that lost minutes
-    full, eu = point_inputs()[0], point_inputs(europe=True)[0]
+    full, eu = point_inputs()[0], point_inputs(Variant(europe=True))[0]
     key = ["player_id", "season"]
     lost = full.groupby(key)["minutes"].sum().to_frame("minutes_primary").join(
         eu.groupby(key)["minutes"].sum().rename("minutes_europe"), how="left"
@@ -924,6 +1077,78 @@ def stage_synthesis_europe() -> None:
         "lost_qualifying_900": ([f"{r.player} {r.season}" for r in q900.itertuples()],
                                 "Those player-seasons"),
     })  # fmt: skip
+
+
+def league_entries(v: Variant) -> dict[str, tuple[Any, str]]:
+    """What the league adjustment of ``v`` used and how many rows each part touched."""
+    assert v.league is not None
+    p = panel(v.mls_fill)
+    mult, mu = league_levels(v.league)
+    used = row_weights(None, v) > 0
+    in_league, code = (p.league >= 0) & used, np.maximum(p.league, 0)
+    factor, level = mult.loc[p.leagues].to_numpy()[code], mu.loc[p.leagues].to_numpy()[code]
+    box = p.values[:, [SUM_COLUMNS.index(c) for c in BOX]]
+    deflated = in_league & ((factor != 1) & (box > 0)).any(axis=1)
+    shifted = in_league & (level != 0) & (p.values[:, SUM_COLUMNS.index("stint_minutes")] > 0)
+    in_pool = np.isin(p.keys["player_id"].to_numpy()[p.unit], pool_ids())
+    _, imp, counts = point_inputs(v)
+    note = " (original data; the same rows in every replicate, at the replicate's weights)"
+    return {
+        "factor_model": (v.league, "Box-score factor model of results/players/league/"
+                         "factors.csv (context: A21; plain: A20 ii without the team control)"),
+        "league_factors": ({m: mult.loc[p.leagues, m].to_dict() for m in BOX},
+                           "Multiplier exp(-gamma) of league-match counts, per metric and league"),
+        "league_means": (mu.loc[p.leagues].to_dict(), "RAPM league mean mu (A22 fit); league "
+                         "on-pitch goal difference is shifted by 22 mu per 90 stint minutes"),
+        "n_rows": (int(used.sum()), "Panel rows (player-matches) in the inputs" + note),
+        "n_league_rows": (int(in_league.sum()), "Of those, league-scope rows" + note),
+        "n_rows_box_deflated": (int(deflated.sum()), "League rows with a goal or an assist "
+                                "and a factor other than 1: counts deflated" + note),
+        "n_pool_rows_box_deflated": (int((deflated & in_pool).sum()), "Same, pool players"),
+        "n_rows_gd_shifted": (int(shifted.sum()), "League rows with stint minutes and a league "
+                              "mean other than 0: on-pitch goal difference shifted" + note),
+        "n_pool_rows_gd_shifted": (int((shifted & in_pool).sum()), "Same, pool players"),
+        "n_rows_elo_centred": (int((used & ~p.fill).sum()), "Rows whose team Elo is centred "
+                               "within competition-season: every row but the MLS fill's"),
+        "n_player_seasons_league_rapm": (len(imp), "Player-seasons whose RAPM comes from "
+                                         "results/players/rapm_league_men/"),
+        "n_replicates_adjusted": (N_BOOT, "Replicates in which every adjustment is applied"),
+        **{f"count_{k}": (c, f"Input count: {k}") for k, c in counts.items()},
+    }  # fmt: skip
+
+
+def write_league_comparison() -> None:
+    """Outfield pool players under the primary and every league variant on disk."""
+    columns = ["p_first", "p_top3", "median_rank", "rank_lo", "rank_hi", "stats_view",
+               "impact_view"]  # fmt: skip
+    parts, first = [], None
+    for name, folder in (("primary", M8_DIR), *((n, M8_DIR / n) for n in LEAGUE_VARIANTS)):
+        if not (folder / "players.csv").exists():
+            continue
+        t = pd.read_csv(folder / "players.csv")
+        t = t[t["segment"] == "outfield"].set_index("player_id")
+        first = t[["player", "position_group"]] if first is None else first
+        for view in ("stats_view", "impact_view"):
+            t[f"{view}_rank"] = t[view].rank(method="min").astype(int)
+        parts.append(t[[*columns, "stats_view_rank", "impact_view_rank"]].add_prefix(f"{name}_"))
+    out = pd.concat([first, *parts], axis=1).sort_values("primary_p_first", ascending=False)
+    to_csv(out.reset_index(), M8_DIR / "league_comparison.csv")
+
+
+def run_league_variant(name: str) -> None:
+    """Post hoc (A20-A22): M5 + M8 as the primary on the league-adjusted inputs ``name``."""
+    v, m5_dir = LEAGUE_VARIANTS[name]
+    if v.mls_fill and not ASA_MLS.exists():
+        print(f"{name}: {ASA_MLS} does not exist yet; variant skipped. Rerun "
+              f"--stage synthesis_{name} once it is there.")  # fmt: skip
+        return
+    out_dir = M8_DIR / name
+    run_m5(m5_dir, v)
+    players = run_synthesis(m4_shares(), out_dir, "synthesis",
+                            f"M8, {name} (post hoc, A20-A22)", m5_dir=m5_dir)  # fmt: skip
+    to_csv(firsts_by_dimension(m5_dir, players), out_dir / "firsts_by_dimension.csv")
+    record(out_dir, league_entries(v))
+    write_league_comparison()
 
 
 def stage_synthesis_bias() -> None:
@@ -1337,6 +1562,10 @@ STAGES: dict[str, tuple[Callable[[], None], Path]] = {
     "synthesis_bias": (stage_synthesis_bias, M8_DIR),
     "synthesis_europe": (stage_synthesis_europe, M8_EU_DIR),
     "synthesis_leakage": (stage_synthesis_leakage, M8_DIR),
+    "synthesis_league": (functools.partial(run_league_variant, "league_adjusted"), M8_DIR),
+    "synthesis_league_plain": (functools.partial(run_league_variant, "league_plain"), M8_DIR),
+    "synthesis_league_uefa": (functools.partial(run_league_variant, "league_uefa"), M8_DIR),
+    "synthesis_league_mls": (functools.partial(run_league_variant, "league_mls"), M8_DIR),
     "view_agreement": (stage_view_agreement, M8_DIR),
     "recognition": (stage_recognition, M6_DIR),
     "recognition_curated": (stage_recognition_curated, M6_CURATED_DIR),
