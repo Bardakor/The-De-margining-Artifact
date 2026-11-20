@@ -17,6 +17,11 @@ Stages:
   one league at 0 is a
   constraint and not a normalisation: every other league's mean then also carries the
   effect of an extra player. This column takes that effect.
+- rapm_check (A22's two reasons, reproduced; seconds): the share of stint minutes with
+  unequal sides, what the design as written and the A22 design return for a known truth
+  on the real schedule without noise, and how far the league means of each move at
+  lambda / 10 and 10 lambda (``stage_rapm_check``). Entries merged into
+  results/players/rapm_league_men/summary.json; no other file is written.
 - factors (A20 ii, A21): box-score league factors from players who change league, with
   and without the team-context control (scripts/players/_league_factors_stage.py);
   results/players/league/.
@@ -71,7 +76,14 @@ from run_impact import (
 
 from footy.players.elo import attack_defence, least_squares_ratings
 from footy.players.paths import PAPER, PROCESSED, RESULTS
-from footy.players.rapm import COMPONENTS, REPLACEMENT, build_design, fit_rapm, fit_rapm_by_season
+from footy.players.rapm import (
+    COMPONENTS,
+    REPLACEMENT,
+    Design,
+    build_design,
+    fit_rapm,
+    fit_rapm_by_season,
+)
 
 REFERENCE, REST, OTHER = "GB1", "REST", "OTHER"
 MIN_GAMES = 100  # stint games against clubs of other covered leagues
@@ -167,32 +179,29 @@ def club_means(totals: pd.DataFrame) -> pd.DataFrame:
     return out.loc[list(CLUBS.values())].set_axis(list(CLUBS), axis=0).rename_axis("club")
 
 
-def run(folder: Path, covariate: str | None) -> None:
-    dd, lam_, ls = data(), lam(), lam_season()
-    lo, hi = (1 - LEVEL) / 2, (1 + LEVEL) / 2
-
-    # league shares and the A20 rule
+@functools.cache
+def league_columns() -> tuple[pd.DataFrame, pd.DataFrame, pd.Series]:
+    """The A20 rule per league, the league shares of every stint player (OTHER included)
+    and the mean each league's share goes to (the league itself, REST or OTHER)."""
     minutes = league_minutes()
     links = league_links(minutes)
-    ids = pd.Index(np.sort(dd.stint_players["player_id"].unique()), name="player_id")
+    ids = pd.Index(np.sort(data().stint_players["player_id"].unique()), name="player_id")
     minutes = minutes.reindex(ids, fill_value=0)
     minutes[OTHER] = (minutes.sum(axis=1) == 0).astype(int)
     shares = minutes.div(minutes.sum(axis=1), axis=0)
     column = pd.Series(np.where(links["own_mean"], links.index, REST), index=links.index)
     column[OTHER] = OTHER
-    by_column = shares.T.groupby(column).sum().T
-    long = shares.rename_axis(columns="league").stack().rename("share").reset_index()
-    to_csv(long[long["share"] > 0], folder / "league_shares.csv")
-    own = links.index[links["own_mean"]]
-    print(f"leagues with their own mean ({len(own)}): {', '.join(own)}")
-    print(f"sharing {REST}: {', '.join(links.index[~links['own_mean']])}")
-    print(links.sort_values("games_other_leagues", ascending=False).to_string())
-    n_other = int((shares[OTHER] > 0).sum())
-    print(f"stint players {len(ids):,}; without league minutes ({OTHER}) {n_other:,}", flush=True)
+    return links, shares, column
 
-    # design, pooled and per-season fits
+
+def league_design(covariate: str | None) -> Design:
+    """The primary's design with one column per league mean, the reference left out;
+    ``covariate="men"`` adds the players on the pitch, home side minus away side (A22)."""
+    dd = data()
+    _, shares, column = league_columns()
+    by_column = shares.T.groupby(column).sum().T
     stints = dd.stints.assign(men=dd.stints["home_n"] - dd.stints["away_n"])
-    d = build_design(
+    return build_design(
         stints,
         dd.stint_players,
         group="group",
@@ -200,6 +209,27 @@ def run(folder: Path, covariate: str | None) -> None:
         league_shares=by_column.drop(columns=REFERENCE),
         min_minutes=MIN_MINUTES,
     )
+
+
+def run(folder: Path, covariate: str | None) -> None:
+    dd, lam_, ls = data(), lam(), lam_season()
+    lo, hi = (1 - LEVEL) / 2, (1 + LEVEL) / 2
+
+    # league shares and the A20 rule
+    links, shares, column = league_columns()
+    long = shares.rename_axis(columns="league").stack().rename("share").reset_index()
+    to_csv(long[long["share"] > 0], folder / "league_shares.csv")
+    own = links.index[links["own_mean"]]
+    print(f"leagues with their own mean ({len(own)}): {', '.join(own)}")
+    print(f"sharing {REST}: {', '.join(links.index[~links['own_mean']])}")
+    print(links.sort_values("games_other_leagues", ascending=False).to_string())
+    n_other = int((shares[OTHER] > 0).sum())
+    print(
+        f"stint players {len(shares):,}; without league minutes ({OTHER}) {n_other:,}", flush=True
+    )
+
+    # design, pooled and per-season fits
+    d = league_design(covariate)
     primary = np.load(RAPM_DIR / "bootstrap_pooled.npz")
     same = np.array_equal(primary["game_ids"], d.game_ids.to_numpy())
     if not same or not np.array_equal(primary["players"], d.players.to_numpy()):
@@ -354,6 +384,79 @@ def stage_rapm() -> None:
 
 def stage_rapm_men() -> None:
     run(RAPM_MEN_DIR, "men")
+
+
+def stage_rapm_check() -> None:
+    """A22's two reasons, reproduced from the data, and the stability in lambda it states.
+
+    - Unequal sides: share of the design's stint minutes with home_n != away_n.
+    - Noise-free check on the real schedule. Truth: every coefficient of the rapm_men point
+      fit (league means, player deviations, home terms, intercepts and the coefficient of
+      the players column), checked against the saved league_means.csv. Response: its
+      expected value in every stint row, no noise. Refitted at the primary lambda with the
+      design as written (A20 i, no players column) and with the A22 design. Bias = mean
+      over the free league means of refit minus truth; its SD over those means is recorded
+      too. With the A22 design what is left is the ridge shrinking the planted deviations
+      a second time; ``means_only`` plants the same truth with every deviation at 0, which
+      the A22 design then returns exactly.
+    - Lambda: both designs refitted on the real response at lambda / 10 and 10 lambda; the
+      mean and the largest absolute change of a league mean from its value at lambda.
+    """
+    stints, lam_ = data().stints, lam()
+    uneven = stints["home_n"] != stints["away_n"]
+    designs = {"as_written": league_design(None), "with_men": league_design("men")}
+    what = {"as_written": "the design as written (A20 i)", "with_men": "the A22 design"}
+    at_lam = {name: fit_rapm(d, lam_) for name, d in designs.items()}
+    fit, d_men = at_lam["with_men"], designs["with_men"]
+    truth = fit.leagues
+    saved = pd.read_csv(RAPM_MEN_DIR / "league_means.csv").drop_duplicates("column")
+    saved = saved.set_index("column")["mu"].reindex(truth.index)
+    if not np.allclose(truth, saved, rtol=0, atol=1e-6):
+        raise ValueError("the rapm_men fit is not the saved one")
+    term = d_men.shares @ truth.to_numpy()
+    deviations = np.concatenate([fit.players[c].to_numpy() - term for c in COMPONENTS[:2]])
+    others = np.concatenate([fit.home, fit.intercepts, [fit.covariate], truth])  # Design's order
+    entries: dict[str, tuple[Any, str]] = {
+        "unequal_minutes_share": (
+            stints.loc[uneven, "minutes"].sum() / stints["minutes"].sum(),
+            "Share of stint minutes of the RAPM design with unequal numbers of players on "
+            "the two sides (home_n != away_n)",
+        )
+    }
+    planted = "Noise-free check on the real schedule. Planted: the coefficients of the "
+    planted += "rapm_men point fit (league means, home terms, intercepts, {men:.3f} goals per "
+    planted += "90 per extra player{deviations}); response = their expected value in every "
+    planted += "stint row, no noise. Refitted at the primary lambda with {design}. "
+    for label, scale, with_ in (
+        ("", 1.0, " and the player deviations"),
+        ("_means_only", 0.0, "; every player deviation 0"),
+    ):
+        y = np.asarray(d_men.x @ np.concatenate([scale * deviations, others]))
+        for name, d in designs.items():
+            error = fit_rapm(replace(d, y=y), lam_).leagues - truth
+            how = planted.format(men=fit.covariate, deviations=with_, design=what[name])
+            entries[f"noise_free_bias{label}_{name}"] = (
+                error.mean(),
+                f"{how}Value: mean over the {len(truth)} free league means of refitted minus "
+                "planted (goals per 90 per player)",
+            )
+            entries[f"noise_free_bias_sd{label}_{name}"] = (
+                error.std(),
+                f"{how}Value: SD over the {len(truth)} free league means of refitted minus planted",
+            )
+    for name, d in designs.items():
+        for side, factor in (("low", 0.1), ("high", 10.0)):
+            shift = fit_rapm(d, factor * lam_).leagues - at_lam[name].leagues
+            how = f"League means of {what[name]} on the real response at {factor:g} x the "
+            how += "primary lambda minus those at the primary lambda: "
+            entries[f"lambda_{side}_mean_shift_{name}"] = (shift.mean(), f"{how}mean")
+            entries[f"lambda_{side}_max_shift_{name}"] = (
+                shift.abs().max(),
+                f"{how}largest absolute change ({shift.abs().idxmax()})",
+            )
+    record(RAPM_MEN_DIR, entries)
+    for key, (value, description) in entries.items():
+        print(f"{key}: {value:.6g}  ({description})")
 
 
 def stage_validate() -> None:
@@ -629,6 +732,7 @@ def stage_validate() -> None:
 STAGES: dict[str, Callable[[], None]] = {
     "rapm": stage_rapm,
     "rapm_men": stage_rapm_men,
+    "rapm_check": stage_rapm_check,
     "factors": stage_factors,
     "validate": stage_validate,
 }

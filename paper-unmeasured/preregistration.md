@@ -291,7 +291,11 @@ timestamp.
   clearly) and move with λ. The league-adjusted
   RAPM therefore has one more unpenalised column, the number of players on
   the pitch, home side minus away side. With it the same noise-free check
-  recovers the truth and the means are stable from λ/10 to 10λ. The fit as
+  recovers the truth and the means are stable from λ/10 to 10λ. (Precision
+  added on 2026-11-20 from the recorded check: the recovery is exact when
+  only league means are planted and within 0.005 when the fitted player
+  deviations are planted too; from λ/10 to 10λ a mean moves by 0.007 to
+  0.017 on average and by at most 0.033, against 0.13 as written.) The fit as
   written is kept in the results and not used. Two details A20 left open,
   fixed by the fit: stint players without minutes in a covered league form
   one pseudo-league with its own mean, and the replacement column carries
