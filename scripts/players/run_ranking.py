@@ -36,6 +36,11 @@ Design §5 (M5, M6, M8, M9); pre-registration A1, A11-A14, A16 (i). Stages, in o
   Outputs: results/players/multiverse/{league,league_plain,league_uefa,league_mls}/,
   results/players/synthesis/{league_adjusted,league_plain,league_uefa,league_mls}/ and
   results/players/synthesis/league_comparison.csv. Verdicts stay with the primary.
+- synthesis_league_leakage (post hoc, A23 ii): the leakage term of synthesis_leakage on
+  the league-adjusted run (the M5 scores of results/players/multiverse/league/, no M5
+  rerun), under both attribution factors;
+  results/players/synthesis/league_leakage_{independent,assortative}/, both added to
+  league_comparison.csv.
 - view_agreement (A19, a correction made after M8 ran): Kendall's W of every synthesis
   variant recomputed from its saved players table with the recognition view as the sum
   of per-edition point shares; no M5 or M8 draw. Writes
@@ -46,6 +51,8 @@ Design §5 (M5, M6, M8, M9); pre-registration A1, A11-A14, A16 (i). Stages, in o
   with play-offs, the 2025/26 UCL final, tournaments missing from tm_games, squad lists;
   rules and sources in team_honours_sources.md); results/players/recognition/curated/.
 - recovery: M9's rank recovery on the real schedule (exploratory).
+- on_off (descriptive): team goal difference per 90 with each outfield pool player on
+  the pitch and off it, per club and pooled; results/players/rapm/pool_on_off.csv.
 
 Outputs: results/players/{multiverse,synthesis,recognition,recovery}/, each with a
 summary.json of {"value", "description"} entries (macro names of
@@ -121,6 +128,20 @@ Choices the pre-registration does not fix (post hoc, Claude's calls):
   kind "groups"; rel_g = split-half reliability of RAPM total per group
   (results/players/rapm/reliability.csv). Same sigma, omega, U and task seed as the
   primary.
+- synthesis_league_leakage: lambda_g is synthesis_leakage's, from the attribution
+  factors and the split-half reliability of the primary RAPM (the league fit has no
+  attribution or split-half run of its own).
+- on_off: club matches = domestic-league games and the international club cups CL, EL
+  and Conference League with their qualifying rounds, the Club World Cup and the UEFA
+  Super Cup (Transfermarkt files the last five types apart: its "international_cup"
+  holds CL, CLQ, KLUB and USC only); domestic cups and super cups are left out. Games
+  with stints only. A club-season counts if the player has stint minutes for the club
+  in it; "off" is every stint of that club in that season without him, whole season,
+  so the weeks before a mid-season arrival count as off. Per club and pooled, a rate
+  is 90 x summed goal difference / summed minutes; on_minus_off_within_club is the
+  mean of the per-club differences weighted by his minutes on (the pooled off rate
+  can be dominated by a club where he hardly played). The summary's top 10 of the
+  impact view and pooled RAPM total are the primary's.
 - M9: pool = outfield pool players with at least 900 stint minutes (others dropped and
   counted); positions as M3 (unknown group for the few stint players without one);
   simulations split over worker processes with spawned seeds; gap bins recomputed on
@@ -227,6 +248,8 @@ M8_DIR = RESULTS / "synthesis"
 M8_BIAS_DIR = M8_DIR / "bias_corrected"
 M8_EU_DIR = M8_DIR / "europe"
 N_FIRSTS = 8  # players in firsts_by_dimension.csv
+INTERNATIONAL_CUPS = ("CL", "CLQ", "EL", "ELQ", "UCOL", "ECLQ", "KLUB", "USC")  # on_off
+ON_OFF_NAMED = ("Mohamed Salah", "Lionel Messi", "Kylian Mbappé", "Erling Haaland", "Harry Kane")
 M6_DIR = RESULTS / "recognition"
 M6_CURATED_DIR = M6_DIR / "curated"
 M9_DIR = RESULTS / "recovery"
@@ -1003,27 +1026,41 @@ def onpitch_ratios(attribution: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def stage_synthesis_leakage() -> None:
-    """Post hoc robustness: the primary M8 plus the on-pitch leakage term, with A_g from
-    independent planting (lower A, larger term) and from the real teammate structure."""
+def run_leakage(prefix: str, m5_dir: Path) -> None:
+    """Post hoc robustness: M8 on the M5 outputs of ``m5_dir`` plus the on-pitch leakage
+    term, with A_g from independent planting (lower A, larger term) and from the real
+    teammate structure; outputs in results/players/synthesis/{prefix}leakage_*/."""
     sources = {
         "independent": RAPM_DIR / "attribution.csv",
         "assortative": GAP_DIR / "assortative" / "attribution.csv",
     }
     for name, path in sources.items():
-        out_dir = M8_DIR / f"leakage_{name}"
+        out_dir = M8_DIR / f"{prefix}leakage_{name}"
         table = onpitch_ratios(pd.read_csv(path))
         to_csv(table.rename_axis("group").reset_index(), out_dir / "lambda.csv")
         print(f"{name}:\n{table.round(4).to_string()}", flush=True)
         lam = {str(g): float(v) for g, v in table["lambda"].items()}
-        run_synthesis(m4_shares(), out_dir, "synthesis", f"M8 + leakage, {name} A (post hoc)",
+        run_synthesis(m4_shares(), out_dir, "synthesis",
+                      f"M8 + leakage, {prefix}{name} A (post hoc)", m5_dir=m5_dir,
                       onpitch_ratio=lam)  # fmt: skip
-        entries: dict[str, tuple[Any, str]] = {}
+        entries: dict[str, tuple[Any, str]] = {
+            "m5_folder": (str(m5_dir.relative_to(RESULTS)), "M5 scores behind this run"),
+        }
         for g, row in table.iterrows():
             entries[f"lambda_{g}"] = (row["lambda"], f"On-pitch leakage ratio, group {g}")
             entries[f"attribution_{g}"] = (row["attribution"], f"A_g ({name} planting), {g}")
             entries[f"rapm_reliability_{g}"] = (row["reliability"], f"rel_g of RAPM total, {g}")
         record(out_dir, entries)
+
+
+def stage_synthesis_leakage() -> None:
+    run_leakage("", M5_DIR)
+
+
+def stage_synthesis_league_leakage() -> None:
+    """A23 (ii): the leakage term on the league-adjusted run."""
+    run_leakage("league_", LEAGUE_VARIANTS["league_adjusted"][1])
+    write_league_comparison()
 
 
 def stage_view_agreement() -> None:
@@ -1122,7 +1159,8 @@ def write_league_comparison() -> None:
     columns = ["p_first", "p_top3", "median_rank", "rank_lo", "rank_hi", "stats_view",
                "impact_view"]  # fmt: skip
     parts, first = [], None
-    for name, folder in (("primary", M8_DIR), *((n, M8_DIR / n) for n in LEAGUE_VARIANTS)):
+    variants = [*LEAGUE_VARIANTS, *sorted(d.name for d in M8_DIR.glob("league_leakage_*"))]
+    for name, folder in (("primary", M8_DIR), *((n, M8_DIR / n) for n in variants)):
         if not (folder / "players.csv").exists():
             continue
         t = pd.read_csv(folder / "players.csv")
@@ -1553,6 +1591,105 @@ def stage_recovery() -> None:
     record(M9_DIR, entries)
 
 
+# --- on/off ---------------------------------------------------------------------------
+
+
+def stage_on_off() -> None:
+    """Descriptive: team goal difference per 90 with each outfield pool player on the
+    pitch and off it, in the club-seasons in which he played for the club (module doc)."""
+    sc = schedule()
+    games = pd.read_csv(PROCESSED / "tm_games.csv.gz").set_index("game_id")
+    st = sc.stints.join(games[["competition_type", "home_club_id", "away_club_id"]], on="game_id")
+    st = st[
+        (st["competition_type"] == "domestic_league")
+        | st["competition_id"].isin(INTERNATIONAL_CUPS)
+    ]
+    gd = st["home_goals"] - st["away_goals"]
+    cols = ["stint_id", "side", "club_id", "season", "minutes", "gd"]
+    sides = pd.concat(
+        [st.assign(side="home", club_id=st["home_club_id"], gd=gd)[cols],
+         st.assign(side="away", club_id=st["away_club_id"], gd=-gd)[cols]]
+    )  # fmt: skip
+    outfield = pool()[~pool()["is_goalkeeper"]]["player_id"]
+    sp = sc.stint_players[sc.stint_players["player_id"].isin(outfield)]
+    on = sp.astype({"side": str}).merge(sides, on=["stint_id", "side"])
+    on = on.groupby(["player_id", "club_id", "season"])[["minutes", "gd"]].sum()
+    team = sides.groupby(["club_id", "season"])[["minutes", "gd"]].sum()
+    cs = on.join(team, on=["club_id", "season"], rsuffix="_team").reset_index()
+    cs["minutes_off"], cs["gd_off"] = cs["minutes_team"] - cs["minutes"], cs["gd_team"] - cs["gd"]
+    cs = cs.rename(columns={"minutes": "minutes_on", "gd": "gd_on"})
+    sums = ["minutes_on", "gd_on", "minutes_off", "gd_off"]
+
+    def rates(t: pd.DataFrame) -> pd.DataFrame:
+        t["gd_on_p90"] = 90.0 * t["gd_on"] / t["minutes_on"]
+        t["gd_off_p90"] = 90.0 * t["gd_off"] / t["minutes_off"].where(t["minutes_off"] > 0)
+        t["on_minus_off"] = t["gd_on_p90"] - t["gd_off_p90"]
+        t["minutes_share"] = t["minutes_on"] / (t["minutes_on"] + t["minutes_off"])
+        return t
+
+    by_club = cs.groupby(["player_id", "club_id"]).agg(
+        n_club_seasons=("season", "size"), first_season=("season", "min"),
+        last_season=("season", "max"), **{c: (c, "sum") for c in sums},
+    )  # fmt: skip
+    by_club = rates(by_club.reset_index())
+    by_club["on_minus_off_within_club"] = by_club["on_minus_off"]
+    home = games[["home_club_id", "home_club_name"]].set_axis(["club_id", "club"], axis=1)
+    away = games[["away_club_id", "away_club_name"]].set_axis(["club_id", "club"], axis=1)
+    club_name = pd.concat([home, away]).drop_duplicates("club_id").set_index("club_id")["club"]
+    by_club.insert(2, "club", by_club["club_id"].map(club_name))
+    pooled = by_club.groupby("player_id").agg(
+        n_club_seasons=("n_club_seasons", "sum"), first_season=("first_season", "min"),
+        last_season=("last_season", "max"), **{c: (c, "sum") for c in sums},
+    )  # fmt: skip
+    pooled = rates(pooled)
+    has_off = by_club[by_club["minutes_off"] > 0]
+    weighted = (has_off["on_minus_off"] * has_off["minutes_on"]).groupby(has_off["player_id"])
+    pooled["on_minus_off_within_club"] = (
+        weighted.sum() / has_off.groupby("player_id")["minutes_on"].sum()
+    )
+    pooled = pooled.reset_index().assign(club="all clubs")
+    out = pd.concat([pooled, by_club], ignore_index=True)
+    out.insert(1, "player", out["player_id"].map(names()))
+    out["pooled"] = out["club_id"].isna()
+    out = out.sort_values(["player", "pooled", "minutes_on"], ascending=[True, False, False])
+    columns = ["player_id", "player", "club_id", "club", "n_club_seasons", "first_season",
+               "last_season", "minutes_on", "gd_on_p90", "minutes_off", "gd_off_p90",
+               "on_minus_off", "on_minus_off_within_club", "minutes_share"]  # fmt: skip
+    to_csv(out[columns], RAPM_DIR / "pool_on_off.csv")
+
+    # summary: the primary's impact-view top 10, the named players, and RAPM against on/off
+    view = pd.read_csv(M8_DIR / "players.csv")
+    top = view[view["segment"] == "outfield"].nsmallest(10, "impact_view")["player"]
+    table = pooled.assign(player=pooled["player_id"].map(names())).set_index("player")
+    shown = ["minutes_on", "gd_on_p90", "minutes_off", "gd_off_p90", "on_minus_off",
+             "on_minus_off_within_club", "minutes_share"]  # fmt: skip
+    listed = table.loc[list(dict.fromkeys([*top, *ON_OFF_NAMED])), shown]
+    rapm = pd.read_csv(RAPM_DIR / "rapm_pooled.csv").set_index("player_id")["total"]
+    both = pooled.assign(rapm_total=pooled["player_id"].map(rapm))
+    rho = {c: float(spearmanr(both["rapm_total"], both[c], nan_policy="omit")[0])
+           for c in ("on_minus_off", "on_minus_off_within_club", "minutes_share")}  # fmt: skip
+    print(listed.round(3).to_string())
+    print(f"{len(pooled)} players; Spearman with pooled RAPM total: {rho}", flush=True)
+    record(RAPM_DIR, {
+        "on_off_competitions": (["domestic leagues", *INTERNATIONAL_CUPS], "Club matches "
+                                "behind pool_on_off.csv (games with stints)"),
+        "on_off_n_players": (len(pooled), "Outfield pool players with club stint minutes"),
+        "on_off_players": (listed.reset_index().to_dict("records"), "Pooled on/off figures: "
+                           "the top 10 of the primary's impact view, then Salah, Messi, "
+                           "Mbappé, Haaland, Kane; goal difference per 90 on and off, the "
+                           "difference, and the share of the team's stint minutes played"),
+        "on_off_spearman_rapm_on_minus_off": (rho["on_minus_off"], "Spearman between pooled "
+                                              "RAPM total and on-minus-off goal difference "
+                                              "per 90, outfield pool players with off minutes"),
+        "on_off_spearman_rapm_on_minus_off_within_club": (
+            rho["on_minus_off_within_club"], "Same with the per-club differences weighted by "
+            "minutes on"),
+        "on_off_spearman_rapm_minutes_share": (rho["minutes_share"], "Spearman between pooled "
+                                               "RAPM total and the share of the team's stint "
+                                               "minutes played"),
+    })  # fmt: skip
+
+
 # --- main -----------------------------------------------------------------------------
 
 STAGES: dict[str, tuple[Callable[[], None], Path]] = {
@@ -1566,10 +1703,12 @@ STAGES: dict[str, tuple[Callable[[], None], Path]] = {
     "synthesis_league_plain": (functools.partial(run_league_variant, "league_plain"), M8_DIR),
     "synthesis_league_uefa": (functools.partial(run_league_variant, "league_uefa"), M8_DIR),
     "synthesis_league_mls": (functools.partial(run_league_variant, "league_mls"), M8_DIR),
+    "synthesis_league_leakage": (stage_synthesis_league_leakage, M8_DIR),
     "view_agreement": (stage_view_agreement, M8_DIR),
     "recognition": (stage_recognition, M6_DIR),
     "recognition_curated": (stage_recognition_curated, M6_CURATED_DIR),
     "recovery": (stage_recovery, M9_DIR),
+    "on_off": (stage_on_off, RAPM_DIR),
 }
 
 
