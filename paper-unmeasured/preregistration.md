@@ -312,3 +312,14 @@ timestamp.
   A20 (vi) uses minutes on the 90-per-match scale of the panel (the source
   counts stoppage time). None of this changes a verdict; H1–H8 stay
   decided by the pre-registered analysis.
+- **A24 (2026-11-20), after the validation of A23 (i).** The league means
+  pass the club-results check for eight of the ten pool leagues it can
+  test and fail for La Liga, whose mean is 0.32 goals per game too low
+  (3.3 SE); the club-results levels also agree better with UEFA's
+  coefficients than the league means do. One sensitivity is added: the
+  league-adjusted ranking with the league term of RAPM and the on-pitch
+  shift taken from the club-results level (level/22 per player) for every
+  league that rating can rate, and the estimated mean kept for the others.
+  The players' deviations δ are kept as fitted: a league's level is not
+  identified by its own games, so to first order they do not depend on it.
+  It is reported beside the league-adjusted ranking and decides nothing.
