@@ -20,6 +20,10 @@ Stages:
 - factors (A20 ii, A21): box-score league factors from players who change league, with
   and without the team-context control (scripts/players/_league_factors_stage.py);
   results/players/league/.
+- validate (A23 i, descriptive): the league means of rapm_men and the factors of the
+  ``context`` model against club results, which use no player and no mover, and against
+  UEFA's association coefficients (``stage_validate``); levels.csv (one row per league) and
+  summary.json in results/players/league/validation/.
 
 Outputs in results/players/rapm_league/ (rapm) and results/players/rapm_league_men/
 (rapm_men): league_shares.csv, league_means.csv, rapm_pooled.csv, rapm_season.csv,
@@ -28,7 +32,8 @@ bootstrap_season.npz in the format of run_impact.py's (offence and defence inclu
 league term), the first with two more arrays: leagues and league_means[B, leagues].
 Stage timings in results/players/rapm_league/timings.json.
 
-No random numbers are drawn: the only resampling reuses the primary's game counts.
+The only resampling reuses the primary's game counts. validate alone draws random numbers,
+for the games the primary does not have, from task "validate" (run_impact.rng).
 
 Usage:
     uv run python scripts/players/run_league.py                  # every stage
@@ -47,7 +52,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from _league_factors_stage import stage_factors
+from _league_factors_stage import LEAGUE_DIR, stage_factors
 from run_impact import (
     LEVEL,
     MIN_MINUTES,
@@ -57,12 +62,14 @@ from run_impact import (
     lam_season,
     read_json,
     record,
+    rng,
     season_of_stints,
     to_csv,
     write_json,
 )
 
-from footy.players.paths import PROCESSED, RESULTS
+from footy.players.elo import attack_defence, least_squares_ratings
+from footy.players.paths import PAPER, PROCESSED, RESULTS
 from footy.players.rapm import COMPONENTS, REPLACEMENT, build_design, fit_rapm, fit_rapm_by_season
 
 REFERENCE, REST, OTHER = "GB1", "REST", "OTHER"
@@ -84,6 +91,8 @@ CLUBS = {  # Transfermarkt club ids
 }
 RAPM_LEAGUE_DIR = RESULTS / "rapm_league"
 RAPM_MEN_DIR = RESULTS / "rapm_league_men"
+VALIDATION_DIR = LEAGUE_DIR / "validation"
+ON_PITCH = 22  # an average team of league L is 22 mu_L goals per 90 from the reference's
 
 
 @functools.cache
@@ -98,22 +107,36 @@ def league_minutes() -> pd.DataFrame:
     return league.groupby(["player_id", "competition_id"])["minutes"].sum().unstack(fill_value=0)
 
 
+def club_seasons(games: pd.DataFrame) -> pd.DataFrame:
+    """club, season, league: the covered league a club plays league games in that season."""
+    domestic = games[games["competition_type"] == "domestic_league"]
+    out = pd.concat(
+        [
+            domestic[[f"{side}_club_id", "season", "competition_id"]].set_axis(
+                ["club", "season", "league"], axis=1
+            )
+            for side in ("home", "away")
+        ]
+    ).drop_duplicates()
+    if out.drop_duplicates(["club", "league"])["club"].duplicated().any():
+        raise ValueError("a club in two covered leagues")
+    return out
+
+
 def league_links(minutes: pd.DataFrame) -> pd.DataFrame:
     """The two counts of the A20 rule per league and whether it has its own mean."""
     games = pd.read_csv(
         PROCESSED / "tm_games.csv.gz",
-        usecols=["game_id", "competition_id", "competition_type", "home_club_id", "away_club_id"],
+        usecols=[
+            "game_id",
+            "competition_id",
+            "competition_type",
+            "season",
+            "home_club_id",
+            "away_club_id",
+        ],
     )
-    domestic = games[games["competition_type"] == "domestic_league"]
-    club_league = pd.concat(
-        [
-            domestic[[f"{side}_club_id", "competition_id"]].set_axis(["club", "league"], axis=1)
-            for side in ("home", "away")
-        ]
-    ).drop_duplicates()
-    if club_league["club"].duplicated().any():
-        raise ValueError("a club in two covered leagues")
-    league_of = club_league.set_index("club")["league"]
+    league_of = club_seasons(games).drop_duplicates("club").set_index("club")["league"]
     played = games[games["game_id"].isin(data().stints["game_id"].unique())]
     home, away = (played[f"{side}_club_id"].map(league_of) for side in ("home", "away"))
     cross = home.notna() & away.notna() & (home != away)
@@ -332,10 +355,264 @@ def stage_rapm_men() -> None:
     run(RAPM_MEN_DIR, "men")
 
 
+def stage_validate() -> None:
+    """A23 (i): league levels from club results and from UEFA, beside 22 mu and the factors.
+
+    Games: the club games of tm_games.csv.gz (the window) between two clubs of covered
+    leagues, a club's league being the one it plays league games in (it has one over the
+    window; ``club_seasons``). One rating per club over the window
+    (``footy.players.elo``); a league's value is the mean over its club-seasons, so a club
+    counts once per season it plays in the league.
+
+    - Club-rating level: least squares of goal difference on home rating - away rating + a
+      home term; the league's mean rating minus the reference's. Goals per game, the scale
+      of 22 mu (goals per 90).
+    - Goal multiplier from club results: Poisson model of goals scored, attack - defence
+      + home. Against club j every attack scores exp(-defence_j) times its rate against a
+      defence of 0, so against the clubs of league L it scores c_L = mean of exp(-defence_j)
+      over L's club-seasons. Multiplier of L = c_reference / c_L: what a goal against L's
+      defences is worth in goals against the reference's. The movers' exp(-gamma_L) is that
+      worth for a player who changes league, and so also changes team-mates.
+    - Head-to-head: the games between a club of the league and one of the reference; goal
+      difference per game from the league's side, SE = SD / sqrt(games). Not adjusted for
+      which clubs meet or where.
+    - UEFA: mean of the association's season coefficients in
+      paper-unmeasured/data/uefa_coefficients.csv over the seasons it has a value for.
+
+    Choices A23 does not fix (Claude's calls):
+
+    - A league is rated on club results with at least ``MIN_GAMES`` games against clubs of
+      other covered leagues, the game count of the A20 rule on these games (A20's other
+      count is of players). The others stay in the fit, keep their head-to-head and are
+      left out of every comparison.
+    - SEs: both fits on the game resamples of the rapm_men bootstrap (the primary's), so a
+      replicate has its league means and its club levels from the same draw of games and
+      the SE of club level - 22 mu is the SD of that difference over replicates. The two
+      share the games between leagues: as if independent, that SE would be about 1.6 times
+      larger. The games of the fit without stints, absent from those draws, are resampled
+      among themselves. Against the movers' factors (a player bootstrap) the SE of the
+      difference is taken as if independent.
+    - A comparison takes the leagues with both values: own mean or own factor (a league
+      sharing REST is left out), rated, UEFA member. The reference is one of them: fixing
+      it at 0 or 1 only sets the origin.
+    - Sensitivity: the same level from the games in which both clubs play league games in
+      a covered league in the game's own season (no promoted or relegated club's cup game,
+      no European game of a league before its first season in the data).
+    """
+    columns = ["game_id", "competition_id", "competition_type", "season"]
+    columns += ["home_club_id", "away_club_id", "home_goals", "away_goals"]
+    games = pd.read_csv(PROCESSED / "tm_games.csv.gz", usecols=columns)
+    seasons = club_seasons(games)
+    share = pd.crosstab(seasons["league"], seasons["club"], normalize="index")
+    leagues, clubs = share.index, share.columns
+    games = games[
+        (games["competition_type"] != "national_team_competition")
+        & games["home_club_id"].isin(clubs)
+        & games["away_club_id"].isin(clubs)
+    ].reset_index(drop=True)
+    league_of = seasons.drop_duplicates("club").set_index("club")["league"]
+    home_league, away_league = (
+        games[f"{side}_club_id"].map(league_of) for side in ("home", "away")
+    )
+    cross = home_league != away_league
+    in_league = pd.MultiIndex.from_frame(seasons[["club", "season"]])
+    same_season = np.logical_and(
+        *(
+            pd.MultiIndex.from_frame(games[[f"{side}_club_id", "season"]]).isin(in_league)
+            for side in ("home", "away")
+        )
+    )
+
+    def links(used: pd.Series) -> pd.Series:
+        """Games against clubs of other covered leagues, per league."""
+        sides = pd.concat([home_league[used], away_league[used]])
+        return sides.value_counts().reindex(leagues, fill_value=0)
+
+    # the two fits, on the games and on the game resamples of the rapm_men bootstrap
+    home, away = (clubs.get_indexer(games[f"{side}_club_id"]) for side in ("home", "away"))
+    home_goals, away_goals = games[["home_goals", "away_goals"]].to_numpy(np.float64).T
+    of_league, ref, n, k = share.to_numpy(), leagues.get_loc(REFERENCE), len(games), len(leagues)
+
+    def estimate(weights: np.ndarray) -> np.ndarray:
+        """Per league the club-rating level, then the goal multiplier; then the home term."""
+        rating, home_term = least_squares_ratings(
+            home, away, home_goals - away_goals, weights, len(clubs)
+        )
+        defence = attack_defence(home, away, home_goals, away_goals, weights, len(clubs))[1]
+        level, conceded = of_league @ rating, of_league @ np.exp(-defence)
+        return np.r_[level - level[ref], conceded[ref] / conceded, home_term]
+
+    point = estimate(np.ones(n))
+    boot = np.load(RAPM_MEN_DIR / "bootstrap_pooled.npz")
+    counts = boot["counts"]
+    drawn = pd.Index(boot["game_ids"]).get_indexer(games["game_id"])
+    rest = np.flatnonzero(drawn < 0)  # games without stints
+    g = rng("validate")
+    n_boot = len(counts)
+    reps = np.empty((n_boot, len(point)))
+    t0 = time.perf_counter()
+    for b in range(n_boot):
+        weights = counts[b][drawn].astype(np.float64)
+        weights[rest] = np.bincount(g.integers(len(rest), size=len(rest)), minlength=len(rest))
+        reps[b] = estimate(weights)
+        if (b + 1) % 50 == 0:
+            print(f"  replicate {b + 1}/{n_boot} ({time.perf_counter() - t0:.0f} s)", flush=True)
+    se = reps.std(axis=0, ddof=1)
+    mu_reps = pd.DataFrame(ON_PITCH * boot["league_means"], columns=boot["leagues"].astype(str))
+    paired_se = (pd.DataFrame(reps[:, :k], columns=leagues) - mu_reps).std(ddof=1)
+
+    # head-to-head with the reference, from the league's side
+    versus = cross & ((home_league == REFERENCE) | (away_league == REFERENCE))
+    hosts = away_league[versus] == REFERENCE
+    margin = (games["home_goals"] - games["away_goals"])[versus]
+    h2h = (
+        margin.where(hosts, -margin)
+        .groupby(home_league[versus].where(hosts, away_league[versus]))
+        .agg(["size", "mean", "sem"])
+    )
+
+    mu = pd.read_csv(RAPM_MEN_DIR / "league_means.csv").set_index("league")
+    factors = pd.read_csv(LEAGUE_DIR / "factors.csv")
+    factors = factors[factors["model"] == "context"].set_index("league")
+    uefa = pd.read_csv(PAPER / "data" / "uefa_coefficients.csv").set_index("league")
+    n_links = links(cross)
+    rated = n_links >= MIN_GAMES
+    table = pd.DataFrame(
+        {
+            "own_mean": mu["own_mean"],
+            "mu22": ON_PITCH * mu["mu"],
+            "mu22_se": ON_PITCH * mu["se"],
+            "games_other_leagues": n_links,
+            "rated": rated,
+            "club_level": pd.Series(point[:k], leagues).where(rated),
+            "club_level_se": pd.Series(se[:k], leagues).where(rated),
+            "club_level_minus_mu22_se": paired_se.where(rated),
+            "h2h_games": h2h["size"].reindex(leagues, fill_value=0),
+            "h2h_gd": h2h["mean"],
+            "h2h_gd_se": h2h["sem"],
+            "goal_multiplier_clubs": pd.Series(point[k:-1], leagues).where(rated),
+            "goal_multiplier_clubs_se": pd.Series(se[k:-1], leagues).where(rated),
+        },
+        index=leagues,
+    )
+    metrics = ("goals", "np_goals")
+    for metric in metrics:
+        f = factors[factors["metric"] == metric]
+        table[f"{metric}_multiplier_movers"] = f["multiplier"]
+        table[f"{metric}_multiplier_movers_se"] = f["multiplier"] * f["se"]  # delta method
+    table["own_factor"] = factors.groupby(level=0)["status"].first() != "pooled"
+    table["uefa_mean"] = uefa.filter(like="/").mean(axis=1)
+    table = table.sort_values("mu22", ascending=False)
+    to_csv(table.reset_index(), VALIDATION_DIR / "levels.csv")
+    pd.set_option("display.width", 250)
+    print(table.round(3).to_string(), flush=True)
+
+    # agreement, each pair over the leagues with both values
+    mu22, club = table["mu22"].where(table["own_mean"]), table["club_level"]
+    uefa_mean = table["uefa_mean"]
+    pairs = {  # a, b, SE of a - b and how it is obtained, what they are
+        "mu_club": (
+            club,
+            mu22,
+            table["club_level_minus_mu22_se"],
+            "over the shared game resamples",
+            "the club-rating level and 22 mu",
+        ),
+        "mu_uefa": (mu22, uefa_mean, None, "", "22 mu and the UEFA coefficient"),
+        "club_uefa": (club, uefa_mean, None, "", "the club-rating level and the UEFA coefficient"),
+    } | {
+        f"multiplier_{metric}": (
+            table["goal_multiplier_clubs"],
+            table[f"{metric}_multiplier_movers"].where(table["own_factor"]),
+            np.hypot(table["goal_multiplier_clubs_se"], table[f"{metric}_multiplier_movers_se"]),
+            "as if the two were independent",
+            f"the goal multiplier from club results and the movers' factor for {metric}",
+        )
+        for metric in metrics
+    }
+    entries: dict[str, tuple[Any, str]] = {
+        "n_games": (n, "Club games between two clubs of covered leagues"),
+        "n_games_other_leagues": (int(cross.sum()), "Of which between two leagues"),
+        "n_clubs": (len(clubs), "Clubs rated"),
+        "n_club_seasons": (len(seasons), "Club-seasons the league values are means over"),
+        "n_boot": (n_boot, "Game resamples behind the SEs: the primary's draws"),
+        "n_games_resampled_apart": (len(rest), "Games without stints, resampled among themselves"),
+        "home_term": (point[-1], "Home term of the least-squares rating, goals per game"),
+        "home_term_se": (se[-1], "Its bootstrap SE"),
+        "leagues_rated": (
+            list(leagues[rated]),
+            f"Leagues rated on club results: at least {MIN_GAMES} games against clubs of other "
+            "covered leagues",
+        ),
+        "leagues_not_rated": (
+            n_links[~rated].sort_values(ascending=False).to_dict(),
+            "Leagues not rated, with those games",
+        ),
+    }
+    for key, (a, b, gap_se, how, what) in pairs.items():
+        both = a.notna() & b.notna()
+        entries[f"n_{key}"] = (int(both.sum()), f"Leagues with {what}")
+        for method in ("pearson", "spearman"):
+            entries[f"{method}_{key}"] = (
+                a.corr(b, method=method),
+                f"{method.capitalize()} correlation between {what}, {both.sum()} leagues",
+            )
+        if gap_se is None:
+            continue
+        gap = pd.DataFrame({"difference": a - b, "se": gap_se})[both]
+        gap["z"] = gap["difference"] / gap["se"]  # the reference: 0 / 0, dropped below
+        gap = gap.dropna().sort_values("z", key=np.abs, ascending=False)
+        entries[f"mean_difference_{key}"] = (
+            gap["difference"].mean(),
+            f"Mean of {what.replace(' and ', ' minus ', 1)}, the reference left out",
+        )
+        entries[f"n_2se_{key}"] = (
+            int((gap["z"].abs() >= 2).sum()),
+            f"Leagues of the {len(gap)} where they differ by 2 SEs or more "
+            f"(SE of the difference {how})",
+        )
+        entries[f"disagreements_{key}"] = (
+            gap.head(5).reset_index().to_dict("records"),
+            f"The five largest differences in SEs, {what.replace(' and ', ' minus ', 1)}",
+        )
+    entries["slope_mu_club"] = (
+        (club * mu22).sum() / (mu22[club.notna()] ** 2).sum(),
+        "Least-squares slope through the reference of the club-rating level on 22 mu",
+    )
+
+    # sensitivity: both clubs in a covered league in the game's own season
+    stricter = pd.Series(estimate(same_season.astype(np.float64))[:k], leagues)
+    kept = rated & (links(cross & same_season) >= MIN_GAMES)
+    shift = (stricter - club)[kept]
+    entries |= {
+        "same_season_games": (
+            int(same_season.sum()),
+            "Sensitivity: games with both clubs in a covered league in the game's own season",
+        ),
+        "same_season_leagues": (
+            int(kept.sum()),
+            f"Rated leagues with {MIN_GAMES} games against other leagues among them too",
+        ),
+        "same_season_max_shift": (
+            shift.abs().max(),
+            f"Largest change of their club-rating level ({shift.abs().idxmax()})",
+        ),
+        "same_season_pearson": (
+            stricter[kept].corr(club[kept]),
+            "Pearson correlation between the two levels over them",
+        ),
+    }
+    record(VALIDATION_DIR, entries)
+    for key, (value, description) in entries.items():
+        if not isinstance(value, (list, dict)):
+            print(f"{key}: {value:.6g}  ({description})")
+
+
 STAGES: dict[str, Callable[[], None]] = {
     "rapm": stage_rapm,
     "rapm_men": stage_rapm_men,
     "factors": stage_factors,
+    "validate": stage_validate,
 }
 
 

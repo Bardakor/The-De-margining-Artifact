@@ -18,6 +18,23 @@ so every game's two rating changes sum to zero. Assumptions (stated, not hidden)
   pool's calibration games only, then frozen for every later game. The objective is
   squared error, as design §4.3 states.
 - The no-skill baseline predicts the calibration period's mean home score for every game.
+
+Ratings on results alone (pre-registration A23 i), to check league levels without any
+player: one rating per team over all the games given, no order, no starting value::
+
+    goal difference        = rating_home - rating_away + h         least squares
+    E[goals of i against j] = exp(attack_i - defence_j + h * [i at home])   Poisson ML
+
+- ``h`` applies to every game, as above. Teams are 0 .. n_teams - 1.
+- A game counts ``weights`` times: a game bootstrap passes how often each game was drawn.
+- Only differences between teams joined by a chain of games mean anything. A ridge of
+  ``GAUGE`` on the ratings picks the solution of least norm: the ratings of such a set of
+  teams sum to zero (attack and defence together), and a team whose games all have weight
+  zero gets zero. Differences inside a set barely move: by a factor of the order of
+  ``GAUGE`` when many games tie the teams, more when few do.
+- A higher ``defence`` concedes less: against team j every attack scores ``exp(-defence_j)``
+  times its rate against a defence of zero. A team without a goal scored, or conceded, has
+  no finite estimate; the ridge keeps it finite and far out.
 """
 
 from __future__ import annotations
@@ -27,14 +44,19 @@ from datetime import date
 
 import numpy as np
 import pandas as pd
+import scipy.sparse as sp
 from numpy.typing import NDArray
 
 INITIAL_RATING = 1500.0
 K_GRID = (5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 50.0, 60.0, 80.0)
 HOME_GRID = (0.0, 20.0, 40.0, 60.0, 80.0, 100.0, 120.0, 140.0, 160.0)
 CALIBRATION_END = date(2019, 12, 31)
+GAUGE = 1e-6
+NEWTON_STEPS = 100
+NEWTON_TOL = 1e-10  # largest change of a parameter in the last step
 
 FloatArray = NDArray[np.float64]
+IntArray = NDArray[np.intp]
 
 
 def goal_multiplier(goal_difference: int) -> float:
@@ -173,3 +195,59 @@ def team_elo(
         row["h_on_grid_edge"] = h in (min(home_advantages), max(home_advantages))
         report.append(row)
     return pd.concat(ratings, ignore_index=True), pd.DataFrame(report)
+
+
+def least_squares_ratings(
+    home: IntArray, away: IntArray, goal_difference: FloatArray, weights: FloatArray, n_teams: int
+) -> tuple[FloatArray, float]:
+    """Ratings and home term minimising ``sum(w * (gd - (r_home - r_away + h)) ** 2)``."""
+    n = len(home)
+    games = np.arange(n)
+    x = sp.csr_matrix(
+        (
+            np.repeat([1.0, -1.0, 1.0], n),
+            (np.tile(games, 3), np.concatenate([home, away, np.full(n, n_teams)])),
+        ),
+        shape=(n, n_teams + 1),
+    )
+    xw = x.T.multiply(weights).tocsr()
+    normal = (xw @ x).toarray() + np.diag(np.r_[np.full(n_teams, GAUGE), 0.0])
+    solution = np.linalg.solve(normal, xw @ goal_difference)
+    return solution[:-1], float(solution[-1])
+
+
+def attack_defence(
+    home: IntArray,
+    away: IntArray,
+    home_goals: FloatArray,
+    away_goals: FloatArray,
+    weights: FloatArray,
+    n_teams: int,
+) -> tuple[FloatArray, FloatArray, float]:
+    """Attack, defence and home term of the Poisson model, by Newton's method from zero."""
+    n = len(home)
+    games = np.arange(n)
+    x = sp.csr_matrix(  # one row per game and scoring side: the home sides, then the away sides
+        (
+            np.repeat([1.0, -1.0, 1.0, 1.0, -1.0], n),
+            (
+                np.concatenate([games, games, games, games + n, games + n]),
+                np.concatenate(
+                    [home, n_teams + away, np.full(n, 2 * n_teams), away, n_teams + home]
+                ),
+            ),
+        ),
+        shape=(2 * n, 2 * n_teams + 1),
+    )
+    w = np.tile(weights, 2)
+    scored = w * np.concatenate([home_goals, away_goals])
+    ridge = np.r_[np.full(2 * n_teams, GAUGE), 0.0]
+    theta = np.zeros(2 * n_teams + 1)
+    for _ in range(NEWTON_STEPS):
+        expected = w * np.exp(x @ theta)
+        hessian = (x.T.multiply(expected) @ x).toarray() + np.diag(ridge)
+        step = np.linalg.solve(hessian, x.T @ (scored - expected) - ridge * theta)
+        theta += step
+        if np.abs(step).max() < NEWTON_TOL:
+            return theta[:n_teams], theta[n_teams:-1], float(theta[-1])
+    raise RuntimeError("Poisson attack/defence fit did not converge")

@@ -1,10 +1,25 @@
-"""Elo: hand-computed example, conservation, calibration-only fit, separate pools."""
+"""Elo: hand-computed example, conservation, calibration-only fit, separate pools.
+
+Least-squares ratings and Poisson attack/defence (A23 i): planted league levels on a toy
+schedule of four leagues of six teams. Inside a league everyone hosts everyone; every team
+of league 0 hosts and visits every team of league 1; league 2 meets league 1 in two games
+only; league 3 meets nobody.
+"""
 
 import numpy as np
 import pandas as pd
 import pytest
+from numpy.typing import NDArray
 
-from footy.players.elo import goal_multiplier, grid_search, run, team_elo, update
+from footy.players.elo import (
+    attack_defence,
+    goal_multiplier,
+    grid_search,
+    least_squares_ratings,
+    run,
+    team_elo,
+    update,
+)
 
 
 def test_goal_multiplier() -> None:
@@ -96,3 +111,74 @@ def test_pools_do_not_share_ratings() -> None:
     ratings_alone, _ = team_elo(alone)
     club_mixed = ratings_mixed.set_index("game_id").loc[[1, 3]].to_numpy()
     assert np.allclose(club_mixed, ratings_alone.set_index("game_id").loc[[1, 2]].to_numpy())
+
+
+LEAGUE = np.repeat(np.arange(4), 6)
+LEVEL = np.array([0.0, -0.8, -1.5, 0.4])
+PLANTED = LEVEL[LEAGUE] + np.tile(np.linspace(-0.5, 0.5, 6), 4)  # mean of a league = its level
+
+
+def _toy_schedule() -> tuple[NDArray[np.intp], NDArray[np.intp]]:
+    pairs = [
+        (i, j)
+        for i in range(24)
+        for j in range(24)
+        if i != j and (LEAGUE[i] == LEAGUE[j] or {LEAGUE[i], LEAGUE[j]} == {0, 1})
+    ]
+    home, away = np.array([*pairs, (6, 12), (13, 7)], dtype=np.intp).T
+    return home, away
+
+
+def test_least_squares_recovers_planted_league_levels() -> None:
+    home, away = _toy_schedule()
+    difference = PLANTED[home] - PLANTED[away] + 0.3
+    rating, home_term = least_squares_ratings(home, away, difference, np.ones(len(home)), 24)
+    level = np.bincount(LEAGUE, rating) / 6
+    assert home_term == pytest.approx(0.3, abs=1e-4)
+    assert (level[:3] - level[0]).tolist() == pytest.approx(LEVEL[:3].tolist(), abs=1e-4)
+    # the league without a link: differences inside it, and both linked sets centred at 0
+    assert (rating[18:] - PLANTED[18:]).tolist() == pytest.approx([-LEVEL[3]] * 6, abs=1e-4)
+    assert rating[:18].sum() == pytest.approx(0.0, abs=1e-4)
+
+
+def test_attack_defence_recovers_planted_league_multipliers() -> None:
+    """Expected goals as the response: the score equations hold at the planted values."""
+    home, away = _toy_schedule()
+    attack, defence = 0.2 + PLANTED / 2, PLANTED / 2 - 0.1
+    home_goals = np.exp(attack[home] - defence[away] + 0.25)
+    away_goals = np.exp(attack[away] - defence[home])
+    weights = np.ones(len(home))
+    fit_attack, fit_defence, home_term = attack_defence(
+        home, away, home_goals, away_goals, weights, 24
+    )
+    conceded = np.bincount(LEAGUE, np.exp(-fit_defence)) / 6
+    planted = np.bincount(LEAGUE, np.exp(-defence)) / 6
+    assert home_term == pytest.approx(0.25, abs=1e-4)
+    assert (conceded[0] / conceded[:3]).tolist() == pytest.approx(
+        (planted[0] / planted[:3]).tolist(), abs=1e-4
+    )
+    scored = fit_attack[:, None] - fit_defence[None, :]
+    assert scored[:18, :18] == pytest.approx(
+        (attack[:, None] - defence[None, :])[:18, :18], abs=1e-4
+    )
+
+
+def test_a_weight_counts_a_game_that_many_times() -> None:
+    """What the game bootstrap relies on: weight k is the game played k times, 0 is no game."""
+    rng = np.random.default_rng(11)
+    home, away = _toy_schedule()
+    home_goals = rng.poisson(1.6, len(home)).astype(np.float64)
+    away_goals = rng.poisson(1.2, len(home)).astype(np.float64)
+    weights = rng.integers(0, 3, len(home)).astype(np.float64)
+    rows = np.repeat(np.arange(len(home)), weights.astype(np.intp))
+    ones = np.ones(len(rows))
+    weighted = least_squares_ratings(home, away, home_goals - away_goals, weights, 24)
+    repeated = least_squares_ratings(
+        home[rows], away[rows], (home_goals - away_goals)[rows], ones, 24
+    )
+    assert np.allclose(weighted[0], repeated[0]) and weighted[1] == pytest.approx(repeated[1])
+    fit_weighted = attack_defence(home, away, home_goals, away_goals, weights, 24)
+    fit_repeated = attack_defence(
+        home[rows], away[rows], home_goals[rows], away_goals[rows], ones, 24
+    )
+    assert np.allclose(np.hstack(fit_weighted), np.hstack(fit_repeated), atol=1e-8)

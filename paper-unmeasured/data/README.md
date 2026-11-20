@@ -8,3 +8,11 @@
   URLs and every disagreement are in `ballon_dor_sources.md`. Each edition's
   points sum to voters × points per ballot exactly. Join on `player`, not
   `club`.
+- `team_honours.csv` — 50 team-success indicators the games data missed (play-off
+  champions, MLS Cup, the 2025/26 Champions League final, tournaments absent from the
+  data), each with two sources in `team_honours_sources.md`. Input of the post-hoc M6
+  robustness only.
+- `uefa_coefficients.csv` — UEFA association coefficients per season 2019/20–2025/26 for
+  the 23 UEFA leagues in the data, identical in UEFA's coefficient service and at
+  kassiesa.net (`uefa_coefficients_sources.md`). Used only to validate the estimated
+  league levels (A23); never an input to an estimate.
