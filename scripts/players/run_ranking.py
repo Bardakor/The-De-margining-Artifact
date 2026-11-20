@@ -36,6 +36,11 @@ Design §5 (M5, M6, M8, M9); pre-registration A1, A11-A14, A16 (i). Stages, in o
   Outputs: results/players/multiverse/{league,league_plain,league_uefa,league_mls}/,
   results/players/synthesis/{league_adjusted,league_plain,league_uefa,league_mls}/ and
   results/players/synthesis/league_comparison.csv. Verdicts stay with the primary.
+- synthesis_league_club (post hoc, A24, a sensitivity): the league-adjusted run with the
+  league level of every league the club-results rating rates taken from that rating
+  (results/players/league/validation/levels_bootstrap.npz) instead of the RAPM league
+  mean, in the league term of RAPM and in the on-pitch shift;
+  results/players/multiverse/league_club/, results/players/synthesis/league_club/.
 - synthesis_league_leakage (post hoc, A23 ii): the leakage term of synthesis_leakage on
   the league-adjusted run (the M5 scores of results/players/multiverse/league/, no M5
   rerun), under both attribution factors;
@@ -128,6 +133,16 @@ Choices the pre-registration does not fix (post hoc, Claude's calls):
   kind "groups"; rel_g = split-half reliability of RAPM total per group
   (results/players/rapm/reliability.csv). Same sigma, omega, U and task seed as the
   primary.
+- synthesis_league_club: a player's RAPM offence and defence, pooled and per season,
+  each get sum_L s_pL (c_L / 22 - mu_L) over the rated leagues, s_pL his league shares
+  of results/players/rapm_league_men/league_shares.csv, c_L the club level and mu_L the
+  RAPM league mean: the point values in the point run, replicate b's of both in
+  replicate b (the two files share the 200 game resamples; checked). The deviations
+  are kept as fitted, and so is the mean of an unrated league (its own, the pooled one
+  or the pseudo-league's). The replacement column has no league term and is unchanged.
+  The on-pitch shift of a rated league is c_L per 90 stint minutes, at its point value
+  in every replicate, as mu is in the league-adjusted run. Box factors, centred Elo,
+  sigma, U, B and seeds are the league-adjusted run's.
 - synthesis_league_leakage: lambda_g is synthesis_leakage's, from the attribution
   factors and the split-half reliability of the primary RAPM (the league fit has no
   attribution or split-half run of its own).
@@ -325,10 +340,11 @@ class Variant:
     europe: bool = False  # league rows outside UEFA dropped (synthesis_europe)
     league: str | None = None  # A20-A22 league adjustment with this factor model
     mls_fill: bool = False  # A20 (vi): pool players' MLS seasons from ASA_MLS
+    club: bool = False  # A24: league level from the club-results rating where it exists
 
     def __post_init__(self) -> None:
-        if self.mls_fill and self.league is None:
-            raise ValueError("the MLS fill is defined for league-adjusted inputs only")
+        if (self.mls_fill or self.club) and self.league is None:
+            raise ValueError("the MLS fill and the club levels need league-adjusted inputs")
 
     @property
     def rapm_dir(self) -> Path:
@@ -341,6 +357,7 @@ LEAGUE_VARIANTS = {  # synthesis folder -> (inputs, M5 folder)
     "league_plain": (Variant(league="plain"), M5_DIR / "league_plain"),
     "league_uefa": (Variant(league="context", europe=True), M5_DIR / "league_uefa"),
     "league_mls": (Variant(league="context", mls_fill=True), M5_DIR / "league_mls"),
+    "league_club": (Variant(league="context", club=True), M5_DIR / "league_club"),
 }
 
 
@@ -441,35 +458,88 @@ def panel(mls_fill: bool = False) -> Panel:
 
 
 @functools.cache
-def league_levels(model: str) -> tuple[pd.DataFrame, pd.Series]:
+def club_levels() -> dict[str, Any]:
+    """A24: per league of the club-results rating, whether it is rated, its level (goals
+    per game of an average club against an average Premier League club; NaN if unrated)
+    and the RAPM league mean it replaces, each at the point estimate and in the 200
+    replicates; and the players' league shares (players x leagues)."""
+    z = np.load(LEAGUE_DIR / "validation" / "levels_bootstrap.npz")
+    zl = np.load(RAPM_LEAGUE_DIR / "bootstrap_pooled.npz")
+    if not (
+        np.array_equal(z["game_ids"], zl["game_ids"]) and np.array_equal(z["counts"], zl["counts"])
+    ):
+        raise ValueError("club levels and league RAPM do not share their game resamples")
+    leagues = [str(x) for x in z["leagues"]]
+    means = pd.read_csv(RAPM_LEAGUE_DIR / "league_means.csv").set_index("league").loc[leagues]
+    boot = pd.DataFrame(zl["league_means"], columns=[str(x) for x in zl["leagues"]])
+    shares = pd.read_csv(RAPM_LEAGUE_DIR / "league_shares.csv")
+    shares = shares.pivot(index="player_id", columns="league", values="share")
+    return {
+        "leagues": leagues, "rated": z["rated"],
+        "level": z["club_level"], "level_boot": z["club_level_boot"],
+        "mu": means["mu"].to_numpy(),
+        "mu_boot": boot.assign(GB1=0.0)[means["column"].to_list()].to_numpy(),
+        "shares": shares.reindex(columns=leagues).fillna(0.0),
+    }  # fmt: skip
+
+
+def club_term(b: int | None) -> pd.Series:
+    """Per player, sum_L s_pL (c_L / 22 - mu_L) over the rated leagues: what A24 adds to
+    his RAPM offence and to his defence; point values, or replicate b's."""
+    c = club_levels()
+    level, mu = (c["level"], c["mu"]) if b is None else (c["level_boot"][b], c["mu_boot"][b])
+    change = np.where(c["rated"], level / 22.0 - mu, 0.0)
+    return pd.Series(c["shares"].to_numpy() @ change, index=c["shares"].index)
+
+
+def add_club_term(
+    season: pd.DataFrame, pooled: pd.DataFrame, b: int | None
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Per-season and pooled RAPM (offence, defence) with ``club_term`` added to both."""
+    term = club_term(b)
+    of_season = term.reindex(season.index.get_level_values("player_id")).fillna(0.0)
+    return (
+        season.add(of_season.to_numpy(), axis=0),
+        pooled.add(term.reindex(pooled.index).fillna(0.0), axis=0),
+    )
+
+
+@functools.cache
+def league_levels(model: str, club: bool = False) -> tuple[pd.DataFrame, pd.Series, pd.Series]:
     """Per league: the multipliers exp(-gamma) of the box metrics under factor ``model``
-    (A20 ii; "context" is A21's, "plain" its sensitivity) and the RAPM league mean mu of
-    the A22 fit. A pooled league carries the pooled value in both files."""
+    (A20 ii; "context" is A21's, "plain" its sensitivity), the RAPM league mean mu of the
+    A22 fit, and the shift of league-match on-pitch goal difference per 90: 22 mu
+    (A20 iii) or, with ``club``, the club-results level where that rating rates the
+    league (A24). A pooled league carries the pooled value in the first two."""
     f = pd.read_csv(LEAGUE_DIR / "factors.csv")
     f = f[f["model"] == model]
     if f.empty:
         raise ValueError(f"no factor model {model!r} in {LEAGUE_DIR / 'factors.csv'}")
     mult = f.pivot(index="league", columns="metric", values="multiplier")[list(BOX)]
     mu = pd.read_csv(RAPM_LEAGUE_DIR / "league_means.csv").set_index("league")["mu"]
-    return mult, mu
+    shift = 22.0 * mu
+    if club:
+        c = club_levels()
+        shift.loc[np.array(c["leagues"])[c["rated"]]] = c["level"][c["rated"]]
+    return mult, mu, shift
 
 
 @functools.cache
-def league_values(model: str, mls_fill: bool) -> np.ndarray:
+def league_values(model: str, mls_fill: bool, club: bool = False) -> np.ndarray:
     """``Panel.values`` with league-match goals, non-penalty goals and assists divided by
-    exp(gamma_L) (A20 ii) and league-match on-pitch goal difference shifted by 22 mu_L per
-    90 stint minutes (A20 iii). Row by row, so a season split over two leagues is handled;
-    ucl and intl rows are unchanged."""
+    exp(gamma_L) (A20 ii) and league-match on-pitch goal difference shifted per 90 stint
+    minutes (``league_levels``). Row by row, so a season split over two leagues is
+    handled; ucl and intl rows are unchanged."""
     p = panel(mls_fill)
-    mult, mu = league_levels(model)
-    if missing := sorted(set(p.leagues) - set(mult.index) | set(p.leagues) - set(mu.index)):
+    mult, _, shift = league_levels(model, club)
+    if missing := sorted(set(p.leagues) - set(mult.index) | set(p.leagues) - set(shift.index)):
         raise ValueError(f"no league factor or league mean for {missing}")
     in_league, code = p.league >= 0, np.maximum(p.league, 0)
     v = p.values.copy()
     box = [SUM_COLUMNS.index(c) for c in BOX]
     v[:, box] *= np.where(in_league[:, None], mult.loc[p.leagues].to_numpy()[code], 1.0)
-    shift = np.where(in_league, mu.loc[p.leagues].to_numpy()[code], 0.0)
-    v[:, SUM_COLUMNS.index("gd")] += 22.0 * shift * v[:, SUM_COLUMNS.index("stint_minutes")] / 90.0
+    per90 = np.where(in_league, shift.loc[p.leagues].to_numpy()[code], 0.0)
+    v[:, SUM_COLUMNS.index("gd")] += per90 * v[:, SUM_COLUMNS.index("stint_minutes")] / 90.0
     return v
 
 
@@ -490,7 +560,7 @@ def player_season(weights: np.ndarray, v: Variant = PRIMARY) -> tuple[pd.DataFra
     """M5's player_season from panel row weights (all 1 = the original data), and the
     number of rows whose on_pitch_gd is the group-season mean."""
     p = panel(v.mls_fill)
-    values = p.values if v.league is None else league_values(v.league, v.mls_fill)
+    values = p.values if v.league is None else league_values(v.league, v.mls_fill, v.club)
     n = len(p.keys)
     s = np.column_stack(
         [np.bincount(p.unit, weights=values[:, j] * weights, minlength=n)
@@ -589,13 +659,18 @@ def replicate_inputs(b: int, v: Variant = PRIMARY) -> tuple[pd.DataFrame, pd.Dat
         {"offence": z["pooled_offence"][b].astype(np.float64),
          "defence": z["pooled_defence"][b].astype(np.float64)}, index=z["players"],
     )  # fmt: skip
+    if v.club:
+        season, pooled = add_club_term(season, pooled, b)
     imp, _ = impact_season(ps, season, pooled)
     return ps, imp
 
 
 def point_inputs(v: Variant = PRIMARY) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, int]]:
     ps, filled = player_season(row_weights(None, v), v)
-    imp, counts = impact_season(ps, *point_rapm(v.rapm_dir))
+    season, pooled = point_rapm(v.rapm_dir)
+    if v.club:
+        season, pooled = add_club_term(season, pooled, None)
+    imp, counts = impact_season(ps, season, pooled)
     return ps, imp, panel(v.mls_fill).counts | counts | {"on_pitch_gd_group_season_fill": filled}
 
 
@@ -1120,37 +1195,53 @@ def league_entries(v: Variant) -> dict[str, tuple[Any, str]]:
     """What the league adjustment of ``v`` used and how many rows each part touched."""
     assert v.league is not None
     p = panel(v.mls_fill)
-    mult, mu = league_levels(v.league)
+    mult, mu, shift = league_levels(v.league, v.club)
     used = row_weights(None, v) > 0
     in_league, code = (p.league >= 0) & used, np.maximum(p.league, 0)
-    factor, level = mult.loc[p.leagues].to_numpy()[code], mu.loc[p.leagues].to_numpy()[code]
+    factor, level = mult.loc[p.leagues].to_numpy()[code], shift.loc[p.leagues].to_numpy()[code]
     box = p.values[:, [SUM_COLUMNS.index(c) for c in BOX]]
     deflated = in_league & ((factor != 1) & (box > 0)).any(axis=1)
     shifted = in_league & (level != 0) & (p.values[:, SUM_COLUMNS.index("stint_minutes")] > 0)
     in_pool = np.isin(p.keys["player_id"].to_numpy()[p.unit], pool_ids())
     _, imp, counts = point_inputs(v)
     note = " (original data; the same rows in every replicate, at the replicate's weights)"
+    club: dict[str, tuple[Any, str]] = {}
+    if v.club:
+        c, term = club_levels(), club_term(None)
+        rated = [lg for lg, r in zip(c["leagues"], c["rated"], strict=True) if r]
+        club = {
+            "club_level_leagues": (rated, "Leagues whose level comes from the club-results "
+                                   "rating (A24); the others keep the RAPM league mean"),
+            "n_players_league_term_replaced": (int((term != 0).sum()), "Players whose RAPM "
+                                               "offence and defence change (a share in a "
+                                               "rated league other than the Premier League)"),
+            "n_pool_players_league_term_replaced": (
+                int((term.reindex(pool_ids()).fillna(0.0) != 0).sum()), "Same, pool players"),
+        }  # fmt: skip
     return {
         "factor_model": (v.league, "Box-score factor model of results/players/league/"
                          "factors.csv (context: A21; plain: A20 ii without the team control)"),
         "league_factors": ({m: mult.loc[p.leagues, m].to_dict() for m in BOX},
                            "Multiplier exp(-gamma) of league-match counts, per metric and league"),
-        "league_means": (mu.loc[p.leagues].to_dict(), "RAPM league mean mu (A22 fit); league "
-                         "on-pitch goal difference is shifted by 22 mu per 90 stint minutes"),
+        "league_means": (mu.loc[p.leagues].to_dict(), "RAPM league mean mu (A22 fit)"),
+        "league_gd_shift": (shift.loc[p.leagues].to_dict(), "Shift of league-match on-pitch "
+                            "goal difference per 90 stint minutes: 22 mu, or the club-results "
+                            "level of a rated league in the A24 variant"),
         "n_rows": (int(used.sum()), "Panel rows (player-matches) in the inputs" + note),
         "n_league_rows": (int(in_league.sum()), "Of those, league-scope rows" + note),
         "n_rows_box_deflated": (int(deflated.sum()), "League rows with a goal or an assist "
                                 "and a factor other than 1: counts deflated" + note),
         "n_pool_rows_box_deflated": (int((deflated & in_pool).sum()), "Same, pool players"),
-        "n_rows_gd_shifted": (int(shifted.sum()), "League rows with stint minutes and a league "
-                              "mean other than 0: on-pitch goal difference shifted" + note),
+        "n_rows_gd_shifted": (int(shifted.sum()), "League rows with stint minutes and a "
+                              "shift other than 0: on-pitch goal difference shifted" + note),
         "n_pool_rows_gd_shifted": (int((shifted & in_pool).sum()), "Same, pool players"),
         "n_rows_elo_centred": (int((used & ~p.fill).sum()), "Rows whose team Elo is centred "
                                "within competition-season: every row but the MLS fill's"),
         "n_player_seasons_league_rapm": (len(imp), "Player-seasons whose RAPM comes from "
                                          "results/players/rapm_league_men/"),
         "n_replicates_adjusted": (N_BOOT, "Replicates in which every adjustment is applied"),
-        **{f"count_{k}": (c, f"Input count: {k}") for k, c in counts.items()},
+        **{f"count_{k}": (n, f"Input count: {k}") for k, n in counts.items()},
+        **club,
     }  # fmt: skip
 
 
@@ -1703,6 +1794,7 @@ STAGES: dict[str, tuple[Callable[[], None], Path]] = {
     "synthesis_league_plain": (functools.partial(run_league_variant, "league_plain"), M8_DIR),
     "synthesis_league_uefa": (functools.partial(run_league_variant, "league_uefa"), M8_DIR),
     "synthesis_league_mls": (functools.partial(run_league_variant, "league_mls"), M8_DIR),
+    "synthesis_league_club": (functools.partial(run_league_variant, "league_club"), M8_DIR),
     "synthesis_league_leakage": (stage_synthesis_league_leakage, M8_DIR),
     "view_agreement": (stage_view_agreement, M8_DIR),
     "recognition": (stage_recognition, M6_DIR),
