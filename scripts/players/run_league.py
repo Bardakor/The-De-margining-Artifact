@@ -22,8 +22,9 @@ Stages:
   results/players/league/.
 - validate (A23 i, descriptive): the league means of rapm_men and the factors of the
   ``context`` model against club results, which use no player and no mover, and against
-  UEFA's association coefficients (``stage_validate``); levels.csv (one row per league) and
-  summary.json in results/players/league/validation/.
+  UEFA's association coefficients (``stage_validate``); levels.csv (one row per league),
+  summary.json and levels_bootstrap.npz (the club-results levels on the primary's game
+  resamples, for A24) in results/players/league/validation/.
 
 Outputs in results/players/rapm_league/ (rapm) and results/players/rapm_league_men/
 (rapm_men): league_shares.csv, league_means.csv, rapm_pooled.csv, rapm_season.csv,
@@ -398,6 +399,14 @@ def stage_validate() -> None:
     - Sensitivity: the same level from the games in which both clubs play league games in
       a covered league in the game's own season (no promoted or relegated club's cup game,
       no European game of a league before its first season in the data).
+
+    levels_bootstrap.npz (for A24): leagues, rated, club_level[leagues] and
+    club_level_boot[B, leagues] (league minus the reference, goals per game; NaN where not
+    rated), and game_ids and counts[B, games] copied from
+    results/players/rapm_league_men/bootstrap_pooled.npz. Row b of club_level_boot is the
+    fit with the games weighted by row b of counts (the games without stints by their own
+    draw), so it is the replicate of row b of that file's league_means; a reader checks it
+    by comparing the two files' game_ids and counts.
     """
     columns = ["game_id", "competition_id", "competition_type", "season"]
     columns += ["home_club_id", "away_club_id", "home_goals", "away_goals"]
@@ -504,6 +513,15 @@ def stage_validate() -> None:
     table["uefa_mean"] = uefa.filter(like="/").mean(axis=1)
     table = table.sort_values("mu22", ascending=False)
     to_csv(table.reset_index(), VALIDATION_DIR / "levels.csv")
+    np.savez_compressed(
+        VALIDATION_DIR / "levels_bootstrap.npz",
+        leagues=leagues.to_numpy().astype(str),
+        rated=rated.to_numpy(),
+        club_level=np.where(rated, point[:k], np.nan),
+        club_level_boot=np.where(rated, reps[:, :k], np.nan),
+        game_ids=boot["game_ids"],
+        counts=counts,
+    )
     pd.set_option("display.width", 250)
     print(table.round(3).to_string(), flush=True)
 
