@@ -240,3 +240,10 @@ by a verified alternative:
 
 Spelling corrected against the publisher: Wunderlich's co-author is **Alessandro
 Seck**. Kharrat et al. author order is Kharrat, McHale, López Peña.
+
+## League strength (added 2026-11-18)
+
+The sources on league terms in plus-minus models, league translation factors from
+players who change league, cross-league team ratings and opponent adjustment are
+recorded, with what was and was not verified, in `docs/unmeasured/league-strength.md`
+§1; their BibTeX is in §4 of that file and in `paper-unmeasured/refs.bib`.

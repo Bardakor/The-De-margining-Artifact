@@ -40,12 +40,14 @@ players-data:
 	uv run python scripts/players/acquire_transfermarkt.py
 	uv run python scripts/players/acquire_statsbomb.py
 	uv run python scripts/players/build_panel.py
+	uv run python scripts/players/acquire_asa.py
 
 # Every analysis, master seed 20261114 (pre-registration A12). Hours, not minutes.
 players-results:
 	uv run python scripts/players/run_descriptive.py
 	uv run python scripts/players/run_impact.py
 	uv run python scripts/players/run_tournaments.py
+	uv run python scripts/players/run_league.py
 	uv run python scripts/players/run_ranking.py
 
 # Numbers, tables and figures come from results/players/, never typed into the paper.
