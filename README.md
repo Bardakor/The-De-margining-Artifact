@@ -4,6 +4,8 @@
 
 **[Read the paper (PDF)](The-Demargining-Artifact.pdf)** — compiled from [`paper/main.tex`](paper/main.tex). `make paper` rebuilds it and copies it to the repository root.
 
+This repository also holds a second study, [The Unmeasured Remainder](#second-study-the-unmeasured-remainder).
+
 Reproducible research code testing whether a claimed football-forecasting edge over
 bookmakers survives the choice of de-margining transform, or is substantially an artifact
 of it.
@@ -321,6 +323,49 @@ Boshnakov, Kharrat & McHale (2017) · Wheatcroft (2021) · Goto, Takeishi & Yair
 
 Full citations in [`docs/model.md`](docs/model.md) and the
 [study design spec](docs/superpowers/specs/2026-08-16-demargining-study-design.md).
+
+## Second study: The Unmeasured Remainder
+
+**[Read the paper (PDF)](The-Unmeasured-Remainder.pdf)**, compiled from
+[`paper-unmeasured/main.tex`](paper-unmeasured/main.tex) by `make paper2`.
+
+A second, independent study in the same repository. It starts from a 48-player ranking of
+"the best footballers of 2020–2026" produced by another AI model and asks how much of that
+answer public match data can decide, and how much of what happens on the pitch the
+statistics do not reach.
+
+- **Data.** Every match from 1 January 2020 to 31 August 2026 in the
+  [transfermarkt-datasets](https://github.com/dcaribou/transfermarkt-datasets) snapshot
+  (line-ups, substitutions, goals, cards), StatsBomb open data for the tournaments it lacks,
+  and five MLS player-seasons from American Soccer Analysis. Sources, licences and what is
+  missing are in [`docs/unmeasured/data-licences.md`](docs/unmeasured/data-licences.md).
+- **Method.** Eight hypotheses and the analysis were
+  [pre-registered](paper-unmeasured/preregistration.md) before any player-level number
+  existed; the 24 dated amendments say which were made before and which after a result.
+  Nine modules measure sampling noise, the dependence between metrics, on-pitch impact
+  (regularised adjusted plus-minus), the share of that impact the statistics cannot see,
+  the spread over 5,760 definitions of "best", what the Ballon d'Or vote rewards, big-game
+  performance, and a synthesis that mixes definitions, bootstrap replicates and the
+  unmeasured part. Every estimator is first tested on synthetic leagues with a planted
+  truth.
+- **What it finds.** No outfield player is a likely number one under any analysis, and few
+  pairwise orderings are decided. The pre-registered analysis has a flaw found after its
+  results, no adjustment for league strength; a post-hoc analysis, labelled as such, adds
+  league levels estimated from the data and checks them against club results and UEFA
+  coefficients. The two analyses disagree on who is most likely first, and the paper reports
+  both. A ranking of the best player of the 2020s is a statement about the definition
+  chosen more than about the players.
+
+Reproduce (downloads are cached; the analyses take hours):
+
+```bash
+make players-data      # Transfermarkt, StatsBomb, panel, MLS fill
+make players-results   # every analysis, master seed 20261114
+make paper2            # numbers, tables, figures and the PDF
+```
+
+No number in the paper is typed by hand: `scripts/players/make_paper2.py` writes every
+macro, table and figure from `results/players/`.
 
 ## Licence
 
