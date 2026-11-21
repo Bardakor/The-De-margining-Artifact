@@ -328,3 +328,29 @@ timestamp.
   The players' deviations δ are kept as fitted: a league's level is not
   identified by its own games, so to first order they do not depend on it.
   It is reported beside the league-adjusted ranking and decides nothing.
+- **A25 (2026-11-21), after every ranking above ran: the paper's main
+  ranking becomes a corrected mixture, post hoc.** The registered mixture
+  is kept in full, in its own section, with the verdicts H1–H8 it decides.
+  It is no longer the paper's answer to "who was the best player", because
+  three measured properties of the method, not of any player, make its
+  leaders artefacts: no league-strength adjustment (A20); a RAPM whose
+  stable part is mostly not the player's own, which the game bootstrap
+  cannot see (A23 ii); and repetition. On the last point: per-season RAPM
+  is nearly a career constant and three of the eight dimensions do nothing
+  to it, so the 1,440 specifications of the impact family give 179
+  distinct rankings of the outfield pool, and "every specification weighted
+  equally" counts one RAPM ranking about eight times, a quarter of the
+  mixture. That is the double counting the paper criticises in the list it
+  starts from; an adversarial review of the paper raised it before this
+  decision. The corrected mixture is fixed here before it is computed:
+  (i) the league adjustment of A20–A22 with the factors of A21, the
+  club-results league levels of A24 where a league is rated, and the MLS
+  fill of A20 (vi); (ii) the contamination term of A23 (ii) with the
+  attribution factor that M4 uses (independent planting), the
+  real-structure factor being a sensitivity; (iii) each distinct ranking
+  counts once: within a segment, specifications that rank the pool
+  identically on the original data share one unit of weight; (iv) the main
+  table orders players by median rank and gives P(#1), P(top-3) and the
+  90% rank interval. It is reported beside the same mixture without (iii),
+  without (ii), and beside the registered mixture. Whatever ranking results
+  is reported; no rule is revised after it is seen.
