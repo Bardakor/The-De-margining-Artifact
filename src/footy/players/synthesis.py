@@ -4,7 +4,8 @@ A draw is indexed by (s, b, u): ``s`` a specification of M5's full factorial,
 ``b`` one of the B sampling replicates of the inputs (player-season metrics
 resampled by match, RAPM bootstrap replicate b), ``u`` one of U draws of the
 unmeasured component. Specifications and replicates are finite populations,
-equally weighted; ``u`` is Gaussian and integrated by Monte Carlo. A draw's score
+equally weighted (or the specifications by ``spec_weights``, below); ``u`` is Gaussian
+and integrated by Monte Carlo. A draw's score
 for player i is ``y = x[s, b, i] + tau[s, b, i] * z[s, b, k, i]`` with ``x`` M5's score,
 ranked within the segment (outfield, goalkeepers) as M5 does: 1 = best, ties share
 the best rank, a player without a qualifying season (NaN score) ranks last.
@@ -52,6 +53,19 @@ partly box uses ``omega * sigma_g`` in place of ``sigma_g``.
   On-pitch goal difference counts with the on-pitch part, as for omega; it is noisier
   than RAPM, so the term is conservative for box_gd and hybrid. Without it (default)
   impact specifications get ``tau = 0``.
+
+- Optional specification weights (post hoc, A25 (iii); ``spec_weights``). The mixture
+  over s is then the weighted one, ``w[s, segment]`` normalised to sum to 1 within a
+  segment: every draw of specification s counts ``w_s`` in the rank histogram (P(#1),
+  P(top-k), median, interval), in the pairwise probabilities and in the views (a
+  family's mean rank is weighted within the family), and the decomposition takes its
+  moments over s with these weights, ``Var_s(E[r|s]) = sum_s w_s (E[r|s] - E[r])^2``
+  and the two ``E_s`` terms as weighted means, so the three terms still sum to the
+  total. A specification of weight k is k equally weighted copies of itself.
+  ``distinct_ranking_weights`` gives the weights under which each distinct ranking of
+  the pool counts once. The median specification and its rank sets belong to the
+  factorial, not to the mixture, and do not use the weights. Without weights (default)
+  every specification counts the same and the arithmetic is unchanged.
 
 Outputs.
 
@@ -186,6 +200,7 @@ def synthesise(
     n_unmeasured: int = N_UNMEASURED,
     fixed_spec: int | None = None,
     onpitch_ratio: Mapping[str, float] | None = None,
+    spec_weights: pd.Series | None = None,
 ) -> Synthesis:
     """The (s, b, u) mixture (module doc).
 
@@ -196,7 +211,9 @@ def synthesise(
     (spec_id, segment) to the box share of the weights (``stats_weight_share`` of
     M5's weights on the original data). ``fixed_spec`` defaults to the median
     specification. ``onpitch_ratio`` maps position group to ``lambda_g`` of the
-    on-pitch leakage term (module doc); None leaves it out.
+    on-pitch leakage term (module doc); None leaves it out. ``spec_weights`` maps
+    (spec_id, segment) to a non-negative weight, normalised within segment here (module
+    doc); None weights every specification equally.
     """
     if n_unmeasured < 1:
         raise ValueError("n_unmeasured must be at least 1")
@@ -234,8 +251,16 @@ def synthesise(
         fixed_spec = median_specification(point[point["segment"] == "outfield"])
     fixed = int(np.flatnonzero(spec_ids == fixed_spec)[0])
     parts = {s: np.flatnonzero(segment == s) for s in SEGMENTS if (segment == s).any()}
+    weight: dict[str, FloatArray | None] = dict.fromkeys(parts)
+    if spec_weights is not None:
+        table = spec_weights.unstack().reindex(index=spec_ids)
+        for s in parts:
+            w = table[s].to_numpy(np.float64)
+            if not (np.isfinite(w).all() and (w >= 0).all() and w.sum() > 0):
+                raise ValueError(f"specification weights of the {s} segment are not usable")
+            weight[s] = w / w.sum()
     acc = {
-        s: _Accumulator(spec_ids.size, idx.size, pd.factorize(group.iloc[idx])[0])
+        s: _Accumulator(spec_ids.size, idx.size, pd.factorize(group.iloc[idx])[0], weight[s])
         for s, idx in parts.items()
     }
     boot_fixed = []
@@ -257,10 +282,8 @@ def synthesise(
         mean_rank = a.m1 / n_rep
         summary.insert(0, "segment", s)
         summary.insert(0, "player_id", players[idx])
-        summary["stats_view"] = mean_rank[stats_specs].mean(axis=0) if stats_specs.any() else np.nan
-        summary["impact_view"] = (
-            mean_rank[impact_specs].mean(axis=0) if impact_specs.any() else np.nan
-        )
+        summary["stats_view"] = _family_mean(mean_rank, stats_specs, a.w)
+        summary["impact_view"] = _family_mean(mean_rank, impact_specs, a.w)
         rows.append(summary)
         pairwise[s] = pd.DataFrame(
             a.pairwise(n_rep), index=pd.Index(players[idx], name="player_id"), columns=players[idx]
@@ -277,6 +300,28 @@ def synthesise(
         n_replicates=n_rep,
         n_unmeasured=n_unmeasured,
     )
+
+
+def distinct_ranking_weights(point_ranks: pd.DataFrame) -> pd.Series:
+    """Weights per (spec_id, segment) under which each distinct ranking counts once.
+
+    ``point_ranks`` is an M5 ranks frame of the original data (spec_id, player_id,
+    segment, rank). Within a segment, the specifications that rank the pool
+    identically share one unit of weight (A25 (iii)): a specification gets 1 / (number
+    of specifications with its ranking), so a segment's weights sum to its number of
+    distinct rankings.
+    """
+    parts = []
+    for segment, part in point_ranks.groupby("segment", observed=True):
+        table = part.pivot(index="spec_id", columns="player_id", values="rank")
+        _, inverse, counts = np.unique(
+            table.to_numpy(), axis=0, return_inverse=True, return_counts=True
+        )
+        index = pd.MultiIndex.from_product(
+            [table.index, [str(segment)]], names=["spec_id", "segment"]
+        )
+        parts.append(pd.Series(1.0 / counts[inverse.ravel()], index=index))
+    return pd.concat(parts).rename("weight")
 
 
 def median_specification(ranks: pd.DataFrame) -> int:
@@ -420,16 +465,20 @@ def verdicts(result: Synthesis, indices: pd.DataFrame) -> pd.DataFrame:
 class _Accumulator:
     """Running sums over (b, u) for one segment."""
 
-    def __init__(self, n_specs: int, n: int, codes: IntArray) -> None:
+    def __init__(self, n_specs: int, n: int, codes: IntArray, w: FloatArray | None) -> None:
         self.codes = codes
-        self.hist = np.zeros((n, n), dtype=np.int64)  # player x rank - 1
+        self.w = w  # specification weights summing to 1; None: equal
+        # player x rank - 1: draws, or their weights
+        self.hist: IntArray | FloatArray = (
+            np.zeros((n, n), dtype=np.int64) if w is None else np.zeros((n, n))
+        )
         self.m1 = np.zeros((n_specs, n))  # sum_b E_u[r | s, b]
         self.m2 = np.zeros((n_specs, n))  # sum_b E_u[r | s, b]^2
         self.vu = np.zeros((n_specs, n))  # sum_b Var_u(r | s, b)
-        self.r1, self.r2 = np.zeros(n), np.zeros(n)  # sum_{s,b} E_u[r], E_u[r^2]
+        self.r1, self.r2 = np.zeros(n), np.zeros(n)  # sum_{s,b} (w_s) E_u[r], E_u[r^2]
         self.iu, self.ju = np.triu_indices(n, 1)
         self.inc_i, self.inc_j = np.eye(n)[self.iu], np.eye(n)[self.ju]  # pair -> player
-        self.pairs = np.zeros(self.iu.size)  # sum_{s,b} P(i above j | s, b), i < j
+        self.pairs = np.zeros(self.iu.size)  # sum_{s,b} (w_s) P(i above j | s, b), i < j
 
     def add(self, x: FloatArray, ratio: FloatArray, rng: np.random.Generator, n_u: int) -> None:
         n_specs, n = x.shape
@@ -445,25 +494,47 @@ class _Accumulator:
                 d = x[sl][:, self.iu] - x[sl][:, self.ju]
                 p = ndtr(d / np.sqrt(tau2[sl][:, self.iu] + tau2[sl][:, self.ju]))
             tie = np.isnan(p)
-            self.pairs += np.where(tie, 0.5, p).sum(axis=0)
             above, below = np.where(tie, 0.0, p), np.where(tie, 0.0, 1.0 - p)
             mean = 1.0 + below @ self.inc_i + above @ self.inc_j
             z = rng.standard_normal((mean.shape[0], n_u, n))
             r = _rank_min(x[sl, None, :] + tau[sl, None, :] * z)
-            self.hist += np.bincount((r - 1 + offset).ravel(), minlength=n * n).reshape(n, n)
+            cell = (r - 1 + offset).ravel()
             square = (r.astype(np.float64) ** 2).mean(axis=1)
             self.m1[sl] += mean
             self.m2[sl] += mean**2
             self.vu[sl] += square - mean**2
-            self.r1 += mean.sum(axis=0)
-            self.r2 += square.sum(axis=0)
+            if self.w is None:
+                self.pairs += np.where(tie, 0.5, p).sum(axis=0)
+                self.hist += np.bincount(cell, minlength=n * n).reshape(n, n)
+                self.r1 += mean.sum(axis=0)
+                self.r2 += square.sum(axis=0)
+            else:
+                w = self.w[sl]
+                self.pairs += w @ np.where(tie, 0.5, p)
+                draws = np.broadcast_to(w[:, None, None], r.shape).ravel()
+                counted = np.bincount(cell, weights=draws, minlength=n * n).reshape(n, n)
+                self.hist = self.hist + counted
+                self.r1 += w @ mean
+                self.r2 += w @ square
 
     def summary(self, n_rep: int) -> pd.DataFrame:
         n = self.hist.shape[0]
         cdf = np.cumsum(self.hist, axis=1) / self.hist.sum(axis=1, keepdims=True)
-        n_draws = self.m1.shape[0] * n_rep
+        n_draws = self.m1.shape[0] * n_rep if self.w is None else n_rep
         total = self.r2 / n_draws - (self.r1 / n_draws) ** 2
         e_s = self.m1 / n_rep
+        if self.w is None:
+            parts = (
+                e_s.var(axis=0),
+                (self.m2 / n_rep - e_s**2).mean(axis=0),
+                (self.vu / n_rep).mean(axis=0),
+            )
+        else:
+            parts = (
+                self.w @ (e_s - self.w @ e_s) ** 2,
+                self.w @ (self.m2 / n_rep - e_s**2),
+                self.w @ (self.vu / n_rep),
+            )
         out = pd.DataFrame(
             {
                 "p_first": cdf[:, 0],
@@ -473,9 +544,9 @@ class _Accumulator:
                 "rank_lo": _inverse_cdf(cdf, (1 - LEVEL) / 2),
                 "rank_hi": _inverse_cdf(cdf, (1 + LEVEL) / 2),
                 "var_total": total,
-                "var_specification": e_s.var(axis=0),
-                "var_sampling": (self.m2 / n_rep - e_s**2).mean(axis=0),
-                "var_unmeasured": (self.vu / n_rep).mean(axis=0),
+                "var_specification": parts[0],
+                "var_sampling": parts[1],
+                "var_unmeasured": parts[2],
             }
         )
         with np.errstate(divide="ignore", invalid="ignore"):
@@ -485,11 +556,22 @@ class _Accumulator:
 
     def pairwise(self, n_rep: int) -> FloatArray:
         n = self.hist.shape[0]
-        n_specs = self.m1.shape[0]
+        n_specs = self.m1.shape[0] if self.w is None else 1
         p = np.full((n, n), np.nan)
         p[self.iu, self.ju] = self.pairs / (n_specs * n_rep)
         p[self.ju, self.iu] = 1.0 - p[self.iu, self.ju]
         return p
+
+
+def _family_mean(
+    mean_rank: FloatArray, specs: NDArray[np.bool_], w: FloatArray | None
+) -> FloatArray | float:
+    """A view: each player's mean rank over the family's specifications (weighted by w)."""
+    if not specs.any():
+        return np.nan
+    if w is None:
+        return np.asarray(mean_rank[specs].mean(axis=0), dtype=np.float64)
+    return np.asarray(w[specs] @ mean_rank[specs] / w[specs].sum(), dtype=np.float64)
 
 
 def _visible_variance(x: FloatArray, codes: IntArray) -> FloatArray:

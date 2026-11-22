@@ -12,6 +12,8 @@ from scipy.stats import rankdata
 
 from footy.players.multiverse import STAT_METRICS, run_multiverse, spec_grid, variance_indices
 from footy.players.synthesis import (
+    Synthesis,
+    distinct_ranking_weights,
     kendalls_w,
     median_specification,
     multiverse_runs,
@@ -35,6 +37,14 @@ def _omega(family: Sequence[str], values: Sequence[float] | None = None) -> pd.S
         [range(len(om)), ["outfield", "goalkeeper"]], names=["spec_id", "segment"]
     )
     return pd.Series(np.repeat(om, 2), index=index)
+
+
+def _weights(values: Sequence[float]) -> pd.Series:
+    """Specification weights per (spec_id, segment), the same in both segments."""
+    index = pd.MultiIndex.from_product(
+        [range(len(values)), ["outfield", "goalkeeper"]], names=["spec_id", "segment"]
+    )
+    return pd.Series(np.repeat(np.asarray(values, dtype=np.float64), 2), index=index)
 
 
 def _frames(
@@ -72,6 +82,7 @@ def _run(
     n_unmeasured: int = 6,
     seed: int = 0,
     onpitch_ratio: dict[str, float] | None = None,
+    spec_weights: pd.Series | None = None,
 ) -> pd.DataFrame:
     """Synthesis of ``scores`` (replicates x specs x players); frame 0 is the point."""
     segment = ["goalkeeper" if g == "GK" else "outfield" for g in groups]
@@ -86,6 +97,7 @@ def _run(
         omega=_omega(family, omega),
         n_unmeasured=n_unmeasured,
         onpitch_ratio=onpitch_ratio,
+        spec_weights=spec_weights,
     )
     return result.players.set_index("player_id")
 
@@ -184,6 +196,101 @@ def test_onpitch_ratio_matches_a_brute_force_nested_simulation() -> None:
     }
     for column, value in expected.items():
         np.testing.assert_allclose(players[column], value, rtol=0.03, atol=0.005)
+
+
+def test_weight_k_equals_k_equally_weighted_copies_of_a_specification() -> None:
+    """A25 (iii) read backwards: k copies of a specification are that specification with
+    weight k.
+
+    Equal up to rounding wherever u is integrated analytically: the pairwise
+    probabilities, the views, the specification and sampling variances. The rank
+    histogram and E_u[r^2] are Monte Carlo and every copy draws its own u, so the
+    probabilities, the unmeasured and the total variance agree up to Monte Carlo error
+    only. With 20,000 draws in each of 6 replicates a specification's P(rank <= k) has a
+    standard error of at most 0.0015: atol = 0.006. The mean of r^2 over the same draws
+    differs between the two runs with a standard error near 0.02 for seven players (the
+    largest difference over the 20 values was 0.05 on seven other seeds): atol = 0.12,
+    on variances between 0.2 and 4.
+    """
+    rng = np.random.default_rng(21)
+    family, omega, copies = (
+        ["box", "impact", "hybrid", "box_gd"],
+        [1.0, 0.0, 0.5, 0.75],
+        [1, 3, 2, 5],
+    )
+    groups = ["CF"] * 4 + ["CB"] * 3 + ["GK"] * 3
+    segment = ["goalkeeper" if g == "GK" else "outfield" for g in groups]
+    group_of = pd.Series(groups, index=np.arange(1, len(groups) + 1))
+    share, lam = {"CF": 0.4, "CB": 0.7, "GK": 0.5}, {"CF": 0.5, "CB": 0.8, "GK": 1.0}
+    scores = rng.standard_normal(len(groups)) + rng.standard_normal((7, 4, len(groups)))
+    which = np.repeat(np.arange(4), copies)
+
+    def run(x: FloatArray, fam: list[str], om: list[float], w: pd.Series | None) -> Synthesis:
+        frames = _frames(x, fam, segment)
+        return synthesise(
+            frames[0], frames[1:], share, group_of, np.random.default_rng(3),
+            omega=_omega(fam, om), n_unmeasured=20_000, onpitch_ratio=lam, spec_weights=w,
+        )  # fmt: skip
+
+    weighted = run(scores, family, omega, _weights(copies))
+    copied = run(scores[:, which], [family[i] for i in which], [omega[i] for i in which], None)
+
+    for seg in ("outfield", "goalkeeper"):
+        np.testing.assert_allclose(weighted.pairwise[seg], copied.pairwise[seg], rtol=1e-12)
+    a, b = weighted.players, copied.players
+    exact = ["var_specification", "var_sampling", "stats_view", "impact_view"]
+    np.testing.assert_allclose(a[exact], b[exact], rtol=1e-10, atol=1e-12)
+    np.testing.assert_allclose(a[["p_first", "p_top3"]], b[["p_first", "p_top3"]], atol=0.006)
+    monte_carlo = ["var_unmeasured", "var_total"]
+    np.testing.assert_allclose(a[monte_carlo], b[monte_carlo], rtol=0, atol=0.12)
+    assert (np.abs(a["median_rank"] - b["median_rank"]) <= 1).all()
+
+
+def test_distinct_rankings_share_one_unit_of_weight() -> None:
+    """Outfield: specifications 0, 1 and 3 rank alike, 2 differs. Goalkeepers: all alike."""
+    outfield = {0: [1, 2, 3], 1: [1, 2, 3], 2: [2, 1, 3], 3: [1, 2, 3]}
+    rows = [
+        {"spec_id": s, "player_id": p, "segment": seg, "rank": r}
+        for s, ranking in outfield.items()
+        for p, seg, r in [
+            *zip((1, 2, 3), ["outfield"] * 3, ranking, strict=True),
+            (8, "goalkeeper", 1),
+            (9, "goalkeeper", 2),
+        ]
+    ]
+
+    weights = distinct_ranking_weights(pd.DataFrame(rows))
+
+    np.testing.assert_allclose(weights.xs("outfield", level="segment").sort_index(),
+                               [1 / 3, 1 / 3, 1.0, 1 / 3])  # fmt: skip
+    np.testing.assert_allclose(weights.xs("goalkeeper", level="segment"), 0.25)
+    assert weights.groupby(level="segment").sum().round(12).to_dict() == {
+        "goalkeeper": 1.0,
+        "outfield": 2.0,
+    }
+
+
+def test_components_sum_to_the_total_with_unequal_weights() -> None:
+    rng = np.random.default_rng(1)
+    family = ["box", "box_gd", "impact", "hybrid", "hybrid", "box", "impact", "box_gd"]
+    omega = [1.0, 0.6, 0.0, 0.7, 0.4, 1.0, 0.0, 0.75]
+    groups = ["CF"] * 5 + ["CB"] * 4 + ["W"] * 3 + ["GK"] * 4
+    scores = rng.standard_normal(len(groups)) + rng.standard_normal((7, len(family), len(groups)))
+    scores[:, 2:4, 3] = np.nan
+    share = {"CF": 0.3, "CB": 0.7, "W": 0.4, "GK": 0.5}
+
+    weights = _weights([5.0, 1.0, 0.25, 2.0, 1.0, 0.5, 3.0, 1.0])
+    players = _run(scores, family, groups, share, omega=omega, spec_weights=weights)
+    uniform = _run(scores, family, groups, share, omega=omega, spec_weights=_weights([2.0] * 8))
+    default = _run(scores, family, groups, share, omega=omega)
+
+    np.testing.assert_allclose(players[COMPONENTS].sum(axis=1), players["var_total"], atol=1e-9)
+    np.testing.assert_allclose(players[SHARES].sum(axis=1), 1.0, atol=1e-9)
+    assert not np.allclose(players["var_specification"], default["var_specification"])
+    numeric = default.columns.drop("segment")
+    np.testing.assert_allclose(uniform[numeric], default[numeric], rtol=1e-10, atol=1e-12)
+    with pytest.raises(ValueError, match="weights"):
+        _run(scores, family, groups, share, omega=omega, spec_weights=_weights([-1.0] + [1.0] * 7))
 
 
 def test_dominant_player_is_first_in_every_draw_and_decides_every_pair() -> None:

@@ -41,6 +41,17 @@ Design §5 (M5, M6, M8, M9); pre-registration A1, A11-A14, A16 (i). Stages, in o
   (results/players/league/validation/levels_bootstrap.npz) instead of the RAPM league
   mean, in the league term of RAPM and in the on-pitch shift;
   results/players/multiverse/league_club/, results/players/synthesis/league_club/.
+- synthesis_corrected (post hoc, A25): the corrected mixture, the paper's main ranking.
+  One M5 run on the league-adjusted inputs with A21's factors, A24's club levels and
+  the MLS fill (results/players/multiverse/corrected/), then M8 with the primary's
+  sigma, omega rule, U and seeds, the contamination term under the independent-planting
+  attribution factors and one unit of weight per distinct ranking of the pool on the
+  original data (results/players/synthesis/corrected/). Sensitivities on the same M5
+  run: corrected_equal_weights (no distinct-ranking weights), corrected_no_contamination
+  (no contamination term), corrected_assortative (real-structure attribution factors);
+  and primary_distinct, the registered mixture with only the distinct-ranking weights.
+  All five, with the primary and league_adjusted, in
+  results/players/synthesis/corrected_comparison.csv.
 - synthesis_league_leakage (post hoc, A23 ii): the leakage term of synthesis_leakage on
   the league-adjusted run (the M5 scores of results/players/multiverse/league/, no M5
   rerun), under both attribution factors;
@@ -143,6 +154,15 @@ Choices the pre-registration does not fix (post hoc, Claude's calls):
   The on-pitch shift of a rated league is c_L per 90 stint minutes, at its point value
   in every replicate, as mu is in the league-adjusted run. Box factors, centred Elo,
   sigma, U, B and seeds are the league-adjusted run's.
+- synthesis_corrected: the weights come from ``synthesis.distinct_ranking_weights`` on the
+  point ranks of the M5 run each mixture uses (the corrected run's, or the primary's for
+  primary_distinct), per segment. The median specification, the rank sets and H5's
+  variance indices are properties of the factorial and stay unweighted; H1, H2 and H4
+  are computed on the weighted mixture, for information. The summary's weight entries
+  count the distinct rankings within each family (a ranking shared by two families
+  counts in both) and give each family's share of the weight. corrected_comparison.csv
+  is a new file, sorted by the corrected run's median rank then mean rank;
+  league_comparison.csv is left as it was.
 - synthesis_league_leakage: lambda_g is synthesis_leakage's, from the attribution
   factors and the split-half reliability of the primary RAPM (the league fit has no
   attribution or split-half run of its own).
@@ -178,7 +198,7 @@ import math
 import shutil
 import time
 import zlib
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, fields
 from pathlib import Path
@@ -206,6 +226,7 @@ from footy.players.rapm import REPLACEMENT
 from footy.players.simulation import SimParams, rank_recovery
 from footy.players.synthesis import (
     DECIDED,
+    distinct_ranking_weights,
     multiverse_runs,
     stats_weight_share,
     synthesise,
@@ -263,6 +284,10 @@ M8_DIR = RESULTS / "synthesis"
 M8_BIAS_DIR = M8_DIR / "bias_corrected"
 M8_EU_DIR = M8_DIR / "europe"
 N_FIRSTS = 8  # players in firsts_by_dimension.csv
+ATTRIBUTION = {  # attribution factors behind the contamination (leakage) term
+    "independent": RAPM_DIR / "attribution.csv",
+    "assortative": GAP_DIR / "assortative" / "attribution.csv",
+}
 INTERNATIONAL_CUPS = ("CL", "CLQ", "EL", "ELQ", "UCOL", "ECLQ", "KLUB", "USC")  # on_off
 ON_OFF_NAMED = ("Mohamed Salah", "Lionel Messi", "Kylian Mbappé", "Erling Haaland", "Harry Kane")
 M6_DIR = RESULTS / "recognition"
@@ -359,6 +384,10 @@ LEAGUE_VARIANTS = {  # synthesis folder -> (inputs, M5 folder)
     "league_mls": (Variant(league="context", mls_fill=True), M5_DIR / "league_mls"),
     "league_club": (Variant(league="context", club=True), M5_DIR / "league_club"),
 }
+CORRECTED = Variant(league="context", club=True, mls_fill=True)  # A25 (i)
+M5_CORRECTED_DIR = M5_DIR / "corrected"
+CORRECTED_RUNS = ("corrected", "corrected_equal_weights", "corrected_no_contamination",
+                  "corrected_assortative", "primary_distinct")  # fmt: skip
 
 
 @dataclass(frozen=True)
@@ -929,16 +958,19 @@ def run_synthesis(
     label: str,
     m5_dir: Path = M5_DIR,
     onpitch_ratio: dict[str, float] | None = None,
+    distinct: bool = False,
 ) -> pd.DataFrame:
-    """M8 on the M5 outputs of ``m5_dir``; returns the players table."""
+    """M8 on the M5 outputs of ``m5_dir``; returns the players table. ``distinct``: each
+    distinct ranking of the pool on the original data counts once (A25 iii)."""
     out_dir.mkdir(parents=True, exist_ok=True)
     ranks = point_ranks(m5_dir)
     weights = pd.read_csv(m5_dir / "weights.csv.gz")
     omega = stats_weight_share(weights)
+    spec_weights = distinct_ranking_weights(ranks) if distinct else None
     t0 = time.perf_counter()
     result = synthesise(
         ranks, replicate_frames(m5_dir), share, groups(), rng(task), omega=omega,
-        onpitch_ratio=onpitch_ratio,
+        onpitch_ratio=onpitch_ratio, spec_weights=spec_weights,
     )  # fmt: skip
     seconds = time.perf_counter() - t0
     print(f"synthesise: {seconds:.0f} s", flush=True)
@@ -1043,6 +1075,8 @@ def run_synthesis(
                   "variance shares"),
         **{f"sigma_{g}": (s, "Unmeasured share used for group " + g) for g, s in share.items()},
     }  # fmt: skip
+    if spec_weights is not None:
+        entries |= weight_entries(ranks, spec_weights)
     record(out_dir, entries)
     if out_dir == M8_DIR:
         record(M5_DIR, {
@@ -1101,31 +1135,56 @@ def onpitch_ratios(attribution: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def run_leakage(prefix: str, m5_dir: Path) -> None:
-    """Post hoc robustness: M8 on the M5 outputs of ``m5_dir`` plus the on-pitch leakage
-    term, with A_g from independent planting (lower A, larger term) and from the real
-    teammate structure; outputs in results/players/synthesis/{prefix}leakage_*/."""
-    sources = {
-        "independent": RAPM_DIR / "attribution.csv",
-        "assortative": GAP_DIR / "assortative" / "attribution.csv",
+def weight_entries(ranks: pd.DataFrame, weights: pd.Series) -> dict[str, tuple[Any, str]]:
+    """A25 (iii): per segment, the number of distinct rankings and, per family, its
+    distinct rankings and its share of the mixture's weight."""
+    family = ranks.drop_duplicates("spec_id").set_index("spec_id")["family"].astype(str)
+    entries: dict[str, tuple[Any, str]] = {}
+    for segment, part in ranks.groupby("segment", observed=True):
+        w = weights.xs(str(segment), level="segment")
+        table = part.pivot(index="spec_id", columns="player_id", values="rank")
+        entries[f"n_distinct_{segment}"] = (
+            int(round(float(w.sum()))), f"Distinct {segment} pool rankings on the original "
+            "data: the units of weight of the mixture (A25 iii)")  # fmt: skip
+        for name, ids in family.groupby(family).groups.items():
+            distinct = len(np.unique(table.loc[ids].to_numpy(), axis=0))
+            entries[f"n_distinct_{segment}_{name}"] = (
+                distinct, f"Distinct {segment} rankings among the {len(ids)} specifications "
+                f"of the {name} family")  # fmt: skip
+            entries[f"weight_share_{segment}_{name}"] = (
+                float(w.loc[ids].sum() / w.sum()), f"Share of the {segment} mixture's weight "
+                f"on the {name} family (0.25 with equal weights)")  # fmt: skip
+    return entries
+
+
+def run_contaminated(
+    out_dir: Path, label: str, m5_dir: Path, attribution: str, distinct: bool = False
+) -> None:
+    """Post hoc: M8 on the M5 outputs of ``m5_dir`` plus the on-pitch leakage term, with
+    A_g from the named planting (``ATTRIBUTION``: independent, the lower A and larger
+    term, or assortative, the real teammate structure)."""
+    table = onpitch_ratios(pd.read_csv(ATTRIBUTION[attribution]))
+    to_csv(table.rename_axis("group").reset_index(), out_dir / "lambda.csv")
+    print(f"{attribution}:\n{table.round(4).to_string()}", flush=True)
+    lam = {str(g): float(v) for g, v in table["lambda"].items()}
+    run_synthesis(m4_shares(), out_dir, "synthesis", label, m5_dir=m5_dir, onpitch_ratio=lam,
+                  distinct=distinct)  # fmt: skip
+    entries: dict[str, tuple[Any, str]] = {
+        "m5_folder": (str(m5_dir.relative_to(RESULTS)), "M5 scores behind this run"),
     }
-    for name, path in sources.items():
-        out_dir = M8_DIR / f"{prefix}leakage_{name}"
-        table = onpitch_ratios(pd.read_csv(path))
-        to_csv(table.rename_axis("group").reset_index(), out_dir / "lambda.csv")
-        print(f"{name}:\n{table.round(4).to_string()}", flush=True)
-        lam = {str(g): float(v) for g, v in table["lambda"].items()}
-        run_synthesis(m4_shares(), out_dir, "synthesis",
-                      f"M8 + leakage, {prefix}{name} A (post hoc)", m5_dir=m5_dir,
-                      onpitch_ratio=lam)  # fmt: skip
-        entries: dict[str, tuple[Any, str]] = {
-            "m5_folder": (str(m5_dir.relative_to(RESULTS)), "M5 scores behind this run"),
-        }
-        for g, row in table.iterrows():
-            entries[f"lambda_{g}"] = (row["lambda"], f"On-pitch leakage ratio, group {g}")
-            entries[f"attribution_{g}"] = (row["attribution"], f"A_g ({name} planting), {g}")
-            entries[f"rapm_reliability_{g}"] = (row["reliability"], f"rel_g of RAPM total, {g}")
-        record(out_dir, entries)
+    for g, row in table.iterrows():
+        entries[f"lambda_{g}"] = (row["lambda"], f"On-pitch leakage ratio, group {g}")
+        entries[f"attribution_{g}"] = (row["attribution"], f"A_g ({attribution} planting), {g}")
+        entries[f"rapm_reliability_{g}"] = (row["reliability"], f"rel_g of RAPM total, {g}")
+    record(out_dir, entries)
+
+
+def run_leakage(prefix: str, m5_dir: Path) -> None:
+    """The leakage term under both attribution factors;
+    results/players/synthesis/{prefix}leakage_{independent,assortative}/."""
+    for name in ATTRIBUTION:
+        run_contaminated(M8_DIR / f"{prefix}leakage_{name}",
+                         f"M8 + leakage, {prefix}{name} A (post hoc)", m5_dir, name)  # fmt: skip
 
 
 def stage_synthesis_leakage() -> None:
@@ -1245,12 +1304,12 @@ def league_entries(v: Variant) -> dict[str, tuple[Any, str]]:
     }  # fmt: skip
 
 
-def write_league_comparison() -> None:
-    """Outfield pool players under the primary and every league variant on disk."""
-    columns = ["p_first", "p_top3", "median_rank", "rank_lo", "rank_hi", "stats_view",
+def comparison(variants: Sequence[str], extra: Sequence[str] = ()) -> pd.DataFrame:
+    """Outfield pool players under the primary and the named synthesis variants on disk:
+    P(#1), P(top-3), median rank, 90% interval, the views and their ranks, and ``extra``."""
+    columns = ["p_first", "p_top3", "median_rank", "rank_lo", "rank_hi", *extra, "stats_view",
                "impact_view"]  # fmt: skip
     parts, first = [], None
-    variants = [*LEAGUE_VARIANTS, *sorted(d.name for d in M8_DIR.glob("league_leakage_*"))]
     for name, folder in (("primary", M8_DIR), *((n, M8_DIR / n) for n in variants)):
         if not (folder / "players.csv").exists():
             continue
@@ -1260,8 +1319,41 @@ def write_league_comparison() -> None:
         for view in ("stats_view", "impact_view"):
             t[f"{view}_rank"] = t[view].rank(method="min").astype(int)
         parts.append(t[[*columns, "stats_view_rank", "impact_view_rank"]].add_prefix(f"{name}_"))
-    out = pd.concat([first, *parts], axis=1).sort_values("primary_p_first", ascending=False)
+    return pd.concat([first, *parts], axis=1)
+
+
+def write_league_comparison() -> None:
+    """The primary and every league variant on disk, by the primary's P(#1)."""
+    variants = [*LEAGUE_VARIANTS, *sorted(d.name for d in M8_DIR.glob("league_leakage_*"))]
+    out = comparison(variants).sort_values("primary_p_first", ascending=False)
     to_csv(out.reset_index(), M8_DIR / "league_comparison.csv")
+
+
+def stage_synthesis_corrected() -> None:
+    """A25: the corrected mixture, its three sensitivities and the registered mixture with
+    the distinct-ranking weights only (module doc)."""
+    run_m5(M5_CORRECTED_DIR, CORRECTED)
+    note, share = " (post hoc, A25)", m4_shares()
+    run_contaminated(M8_DIR / "corrected", "M8 corrected" + note, M5_CORRECTED_DIR,
+                     "independent", distinct=True)  # fmt: skip
+    run_contaminated(M8_DIR / "corrected_equal_weights", "M8 corrected, equal weights" + note,
+                     M5_CORRECTED_DIR, "independent")  # fmt: skip
+    run_contaminated(M8_DIR / "corrected_assortative", "M8 corrected, assortative A" + note,
+                     M5_CORRECTED_DIR, "assortative", distinct=True)  # fmt: skip
+    run_synthesis(share, M8_DIR / "corrected_no_contamination", "synthesis",
+                  "M8 corrected, no contamination term" + note, m5_dir=M5_CORRECTED_DIR,
+                  distinct=True)  # fmt: skip
+    run_synthesis(share, M8_DIR / "primary_distinct", "synthesis",
+                  "M8 registered, distinct-ranking weights" + note, distinct=True)  # fmt: skip
+    league = league_entries(CORRECTED)
+    for name in CORRECTED_RUNS:
+        m5_dir = M5_DIR if name == "primary_distinct" else M5_CORRECTED_DIR
+        folder = str(m5_dir.relative_to(RESULTS))
+        record(M8_DIR / name, {"m5_folder": (folder, "M5 scores behind this run")}
+               | (league if m5_dir == M5_CORRECTED_DIR else {}))  # fmt: skip
+    out = comparison(["league_adjusted", *CORRECTED_RUNS], extra=["mean_rank"])
+    out = out.sort_values(["corrected_median_rank", "corrected_mean_rank"])
+    to_csv(out.reset_index(), M8_DIR / "corrected_comparison.csv")
 
 
 def run_league_variant(name: str) -> None:
@@ -1796,6 +1888,7 @@ STAGES: dict[str, tuple[Callable[[], None], Path]] = {
     "synthesis_league_mls": (functools.partial(run_league_variant, "league_mls"), M8_DIR),
     "synthesis_league_club": (functools.partial(run_league_variant, "league_club"), M8_DIR),
     "synthesis_league_leakage": (stage_synthesis_league_leakage, M8_DIR),
+    "synthesis_corrected": (stage_synthesis_corrected, M8_DIR),
     "view_agreement": (stage_view_agreement, M8_DIR),
     "recognition": (stage_recognition, M6_DIR),
     "recognition_curated": (stage_recognition_curated, M6_CURATED_DIR),
