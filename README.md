@@ -341,20 +341,23 @@ statistics do not reach.
   missing are in [`docs/unmeasured/data-licences.md`](docs/unmeasured/data-licences.md).
 - **Method.** Eight hypotheses and the analysis were
   [pre-registered](paper-unmeasured/preregistration.md) before any player-level number
-  existed; the 24 dated amendments say which were made before and which after a result.
+  existed; the 25 dated amendments say which were made before and which after a result.
   Nine modules measure sampling noise, the dependence between metrics, on-pitch impact
   (regularised adjusted plus-minus), the share of that impact the statistics cannot see,
   the spread over 5,760 definitions of "best", what the Ballon d'Or vote rewards, big-game
   performance, and a synthesis that mixes definitions, bootstrap replicates and the
   unmeasured part. Every estimator is first tested on synthetic leagues with a planted
   truth.
-- **What it finds.** No outfield player is a likely number one under any analysis, and few
-  pairwise orderings are decided. The pre-registered analysis has a flaw found after its
-  results, no adjustment for league strength; a post-hoc analysis, labelled as such, adds
-  league levels estimated from the data and checks them against club results and UEFA
-  coefficients. The two analyses disagree on who is most likely first, and the paper reports
-  both. A ranking of the best player of the 2020s is a statement about the definition
-  chosen more than about the players.
+- **What it finds.** The registered analysis decides the hypotheses and is reported in
+  full, but its ranking is not the paper's answer: three measured flaws of the method
+  produced its leaders (no adjustment for league strength, an impact measure contaminated
+  by teammates, and one impact ranking counted about eight times). The paper's main
+  ranking is a corrected mixture, post hoc and labelled as such, whose rules were fixed
+  before it was computed and whose league levels are checked against club results and
+  UEFA coefficients. Its first five places are stable across its sensitivities, yet no
+  outfield player is a likely number one and few pairwise orderings are decided. It is
+  close to a ranking of attacking production: for defenders, most of what they do on the
+  pitch is not in these statistics, which is the unmeasured remainder of the title.
 
 Reproduce (downloads are cached; the analyses take hours):
 
