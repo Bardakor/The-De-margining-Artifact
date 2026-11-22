@@ -562,6 +562,11 @@ def macros_point_ranks() -> dict[str, str]:
     top = ranks[(ranks["spec_id"] == median_spec) & (ranks["rank"] <= 10)]["player_id"]
     players = synthesis_players("outfield").set_index("player_id").loc[top]
     ratio = players["var_specification"] / players["var_sampling"]
+    distinct = RESULTS / "synthesis" / "primary_distinct" / "summary.json"
+    if distinct.exists():
+        weighted = json_values(distinct)["n_distinct_outfield_impact"]
+        if weighted != len(np.unique(vectors, axis=0)):
+            CHECKS.append(f"primary_distinct counts {weighted} distinct impact rankings")
     return {
         "NDistinctRankingsImpact": count(len(np.unique(vectors, axis=0))),
         "HFourNSpecAbove": count((players["var_specification"] > players["var_sampling"]).sum()),
@@ -570,7 +575,7 @@ def macros_point_ranks() -> dict[str, str]:
 
 
 def macros_leakage() -> dict[str, str]:
-    """Post hoc (f): the leakage ratios and the pre-registered leader's P(#1)."""
+    """Post hoc (f): the leakage ratios and the registered leader's P(#1)."""
     out: dict[str, str] = {}
     for run, name in (("leakage_independent", "Indep"), ("leakage_assortative", "Assort")):
         s = summary(f"synthesis/{run}")
@@ -667,7 +672,7 @@ def league_comparison() -> pd.DataFrame:
 
 
 def macros_league_ranking() -> dict[str, str]:
-    """Section 8.5--8.6: the league-adjusted runs beside the pre-registered mixture."""
+    """The league-adjusted runs beside the registered mixture."""
     primary = summary("synthesis")
     runs = {run: summary(f"synthesis/{run}") for run in LEAGUE_RUNS}
     variants = sorted((RESULTS / "synthesis").glob("*/summary.json"))
@@ -698,8 +703,6 @@ def macros_league_ranking() -> dict[str, str]:
         "AllVariantsMaxDecided": num(max(float(s["SharePairsDecided"]) for s in every)),  # type: ignore[arg-type]
         "LeagueSecondPFirst": num(table.loc[leader, f"{adjusted}_p_first"]),
         "LeagueMedianTopThree": best(f"{adjusted}_median_rank", 3),
-        "LeagueStatsViewTopFive": best(f"{adjusted}_stats_view", 5),
-        "LeagueImpactViewTopTwo": best(f"{adjusted}_impact_view", 2),
         "LeagueQuinonesPFirst": num(table.loc["Julián Quiñones", f"{adjusted}_p_first"]),
         "MessiMedianRank": count(table.loc["Lionel Messi", "primary_median_rank"]),
         "LeagueMessiMedianRank": count(table.loc["Lionel Messi", f"{adjusted}_median_rank"]),
@@ -750,6 +753,174 @@ def macros_league_club() -> dict[str, str]:
         "LeagueClubSpearmanMedianRank": num(rho, 3),
         "LeagueClubSharePairsDecided": num(club["SharePairsDecided"]),
     }
+
+
+# The seven runs of the corrected block's conventions, in the column order of
+# tab-corrected-sensitivity; the first four are the corrected mixture and its sensitivities.
+PLACE_RUNS = (
+    "corrected", "corrected_equal_weights", "corrected_no_contamination",
+    "corrected_assortative", "league_adjusted", "primary_distinct", "primary",
+)  # fmt: skip
+CORRECTED_RUNS = PLACE_RUNS[:4]
+ATTACKING_GROUPS = ("CF", "W", "AM")
+FAMILIES = {"box": "Box", "box_gd": "Box + GD", "hybrid": "Hybrid", "impact": "Impact"}
+
+
+def run_summary(run: str) -> dict[str, object]:
+    return summary("synthesis" if run == "primary" else f"synthesis/{run}")
+
+
+def corrected_comparison() -> pd.DataFrame:
+    """The outfield pool under the seven runs, one row per player in the order of the
+    corrected run, with his place in each run: the position when the players are
+    sorted by median rank, then mean rank."""
+    table = csv(RESULTS / "synthesis" / "corrected_comparison.csv").set_index("player")
+    for run in PLACE_RUNS:
+        order = table.sort_values([f"{run}_median_rank", f"{run}_mean_rank"]).index
+        table[f"{run}_place"] = pd.Series(range(1, len(order) + 1), index=order)
+    return table.sort_values("corrected_place")
+
+
+def macros_corrected() -> dict[str, str]:
+    """Sections 8.3 and 9 (A25): the corrected mixture, its weights and its sensitivities."""
+    table = corrected_comparison()
+    s = summary("synthesis/corrected")
+    distinct = summary("synthesis/primary_distinct")
+    registered = summary("synthesis")
+    runs = {run: summary(f"synthesis/{run}") for run in CORRECTED_RUNS}
+    leader = str(registered["TopPlayerName"])
+    top5 = list(table.index[:5])
+    registered_top5 = list(table.sort_values("primary_place").index[:5])
+    new = [name for name in top5 if name not in registered_top5]
+    always = [
+        name for name in top5 if all(table.loc[name, f"{run}_place"] <= 5 for run in PLACE_RUNS)
+    ]
+    pairwise = csv(
+        RESULTS / "synthesis" / "corrected" / "pairwise_outfield.csv", index_col="player_id"
+    )
+    pairwise.columns = pairwise.columns.astype(int)
+    ids = table["player_id"]
+    above = pairwise.loc[ids.iloc[0], ids.iloc[1:5]]
+    other = table[~table["position_group"].isin(ATTACKING_GROUPS)].iloc[0]
+    rodri = table.loc["Rodri"]
+    grid = csv(RESULTS / "multiverse" / "spec_grid.csv")
+    per_family = (grid["family"] == "impact").sum()
+    p_first = {run: float(r["TopPlayerPFirst"]) for run, r in runs.items()}  # type: ignore[arg-type]
+    decided = {run: float(r["SharePairsDecided"]) for run, r in runs.items()}  # type: ignore[arg-type]
+    shares = [num(s[f"weight_share_outfield_{family}"]) for family in ("box", "box_gd", "hybrid")]
+
+    def place(name: str, run: str = "corrected") -> str:
+        return count(table.loc[name, f"{run}_place"])
+
+    def first_place(group: str) -> str:
+        return count(table.loc[table["position_group"] == group, "corrected_place"].min())
+
+    def rho(a: str, b: str) -> str:
+        return num(table[a].corr(table[b], method="spearman"))
+
+    best_dm = table.loc[table["position_group"] == "DM", "corrected_place"].min()
+    same_five = all(
+        set(table.sort_values(f"{run}_place").index[:5]) == set(top5) for run in CORRECTED_RUNS
+    )
+    claims = (
+        (distinct["TopPlayerName"] == registered["SecondPlayerName"],
+         f"primary_distinct is led by {distinct['TopPlayerName']}"),
+        (len(set(shares)) == 1, f"the box, box+GD and hybrid weight shares differ: {shares}"),
+        (s["TopPlayerName"] == table.index[0],
+         f"{s['TopPlayerName']} has the highest P(#1) but place 1 is {table.index[0]}"),
+        (len(new) == 1, f"{5 - len(new)} of the corrected first five are in the registered five"),
+        (len({str(r["TopPlayerName"]) for r in runs.values()}) == 1,
+         "the four corrected runs do not share one leader"),
+        (same_five, "the first five differ between the corrected run and its sensitivities"),
+        (min(decided, key=decided.__getitem__) == "corrected_equal_weights",
+         "the equal-weights run does not have the smallest share of decided pairs"),
+        (max(decided, key=decided.__getitem__) == "corrected_no_contamination",
+         "the run without contamination does not have the largest share of decided pairs"),
+        (rodri["corrected_place"] == best_dm, "Rodri is not the best-placed DM, corrected run"),
+        (other["corrected_place"] > 20,
+         f"{other.name} ({other['position_group']}) is in the first twenty places"),
+    )  # fmt: skip
+    CHECKS.extend(message for holds, message in claims if not holds)
+
+    out = {
+        # 8.3, repetition in the registered factorial
+        "ImpactRepeatMean": num(per_family / float(distinct["n_distinct_outfield_impact"]), 1),  # type: ignore[arg-type]
+        "PrimaryDistinctWeightImpact": num(distinct["weight_share_outfield_impact"]),
+        "PrimaryDistinctTopName": tex(distinct["TopPlayerName"]),
+        "PrimaryDistinctTopPFirst": num(distinct["TopPlayerPFirst"]),
+        "PrimaryDistinctLeaderPFirst": num(table.loc[leader, "primary_distinct_p_first"]),
+        # 9.1, weights of the corrected mixture
+        "CorrectedNDistinctOutfield": count(s["n_distinct_outfield"]),
+        "CorrectedNDistinctImpact": count(s["n_distinct_outfield_impact"]),
+        "CorrectedWeightImpact": num(s["weight_share_outfield_impact"]),
+        "CorrectedWeightOtherFamily": shares[0],
+        "CorrectedWeightBoxFamilies": num(1 - float(s["weight_share_outfield_impact"])),  # type: ignore[arg-type]
+        "CorrectedNDistinctGoalkeeper": count(s["n_distinct_goalkeeper"]),
+        "CorrectedWeightGkImpact": num(s["weight_share_goalkeeper_impact"]),
+        # 9.4, the corrected ranking
+        "CorrectedTopFive": _and_list([tex(name) for name in top5]),
+        "CorrectedNextFive": _and_list([tex(name) for name in table.index[5:10]]),
+        "CorrectedTopFiveMedianLo": count(table["corrected_median_rank"].iloc[:5].min()),
+        "CorrectedTopFiveMedianHi": count(table["corrected_median_rank"].iloc[:5].max()),
+        "CorrectedTopName": tex(s["TopPlayerName"]),
+        "CorrectedTopPFirst": num(s["TopPlayerPFirst"]),
+        "CorrectedTopPTopThree": num(s["TopPlayerPTopThree"]),
+        "CorrectedTopPTopTen": num(s["TopPlayerPTopTen"]),
+        "CorrectedTopMedianRank": count(s["TopPlayerMedianRank"]),
+        "CorrectedTopRankLo": count(s["TopPlayerRankLo"]),
+        "CorrectedTopRankHi": count(s["TopPlayerRankHi"]),
+        "CorrectedSecondName": tex(s["SecondPlayerName"]),
+        "CorrectedSecondPFirst": num(s["SecondPlayerPFirst"]),
+        "CorrectedTopFivePFirstSum": num(table["corrected_p_first"].iloc[:5].sum()),
+        "CorrectedTopPairLo": num(above.min()),
+        "CorrectedTopPairHi": num(above.max()),
+        "CorrectedNPairsDecided": count(s["NPairsDecided"]),
+        "CorrectedSharePairsDecided": num(s["SharePairsDecided"]),
+        "CorrectedTopVarSpec": num(s["TopPlayerVarSpec"]),
+        "CorrectedTopVarSamp": num(s["TopPlayerVarSamp"]),
+        "CorrectedTopVarUnm": num(s["TopPlayerVarUnm"]),
+        "CorrectedHFourRatio": num(s["HFourRatio"]),
+        "CorrectedRegLeaderPlace": place(leader),
+        "CorrectedRegLeaderPFirst": num(table.loc[leader, "corrected_p_first"]),
+        "CorrectedQuinonesPlace": place("Julián Quiñones"),
+        "CorrectedGyokeresPlace": place("Viktor Gyökeres"),
+        "CorrectedMessiPlace": place("Lionel Messi"),
+        "RegisteredTopFive": _and_list([tex(name) for name in registered_top5]),
+        "CorrectedTopFiveInRegistered": count(5 - len(new)),
+        "CorrectedSpearmanRegistered": rho("corrected_median_rank", "primary_median_rank"),
+        "RegisteredLeaderPlace": place(leader, "primary"),
+        "RegisteredQuinonesPlace": place("Julián Quiñones", "primary"),
+        "CorrectedTopGoalkeeperName": tex(s["TopGoalkeeperName"]),
+        "CorrectedTopGoalkeeperPFirst": num(s["TopGoalkeeperPFirst"]),
+        # 9.5, sensitivities
+        "CorrectedSensPFirstLo": num(min(p_first.values())),
+        "CorrectedSensPFirstHi": num(max(p_first.values())),
+        "CorrectedSensDecidedLo": num(min(decided.values())),
+        "CorrectedSensDecidedHi": num(max(decided.values())),
+        "CorrectedAlwaysTopFive": _and_list([tex(name) for name in always]),
+        "CorrectedRodriPlace": place("Rodri"),
+        "CorrectedEqualRodriPlace": place("Rodri", "corrected_equal_weights"),
+        "CorrectedEqualRegLeaderPlace": place(leader, "corrected_equal_weights"),
+        "LeagueRegLeaderPlace": place(leader, "league_adjusted"),
+        # 9.6, scope of the corrected mixture
+        "CorrectedSpearmanStatsView": rho("corrected_median_rank", "corrected_stats_view"),
+        "CorrectedSpearmanImpactView": rho("corrected_median_rank", "corrected_impact_view"),
+        "RegisteredSpearmanStatsView": rho("primary_median_rank", "primary_stats_view"),
+        "RegisteredSpearmanImpactView": rho("primary_median_rank", "primary_impact_view"),
+        "CorrectedFirstOtherName": tex(other.name),
+        "CorrectedFirstOtherPlace": count(other["corrected_place"]),
+        "CorrectedFirstFBPlace": first_place("FB"),
+        "CorrectedFirstCBPlace": first_place("CB"),
+        "CorrectedRodriRankLo": count(rodri["corrected_rank_lo"]),
+        "CorrectedRodriRankHi": count(rodri["corrected_rank_hi"]),
+        "CorrectedRodriPFirst": num(rodri["corrected_p_first"]),
+        # 11, comparison with V1
+        "CorrectedVOneSpearman": num(s["VOneSpearman"]),
+    }
+    if len(new) == 1:
+        out["CorrectedTopFiveNewName"] = tex(new[0])
+        out["CorrectedTopFiveNewRegisteredPlace"] = place(new[0], "primary")
+    return out
 
 
 def on_off() -> pd.DataFrame:
@@ -870,11 +1041,7 @@ KEYED: dict[str, tuple[tuple[str, str, Callable[[object], str]], ...]] = {
         ("LeagueTopMedianRank", "TopPlayerMedianRank", count),
         ("LeagueTopRankLo", "TopPlayerRankLo", count),
         ("LeagueTopRankHi", "TopPlayerRankHi", count),
-        ("LeagueTopGoalkeeperName", "TopGoalkeeperName", tex),
-        ("LeagueTopGoalkeeperPFirst", "TopGoalkeeperPFirst", num),
         ("LeagueSharePairsDecided", "SharePairsDecided", num),
-        ("LeagueHFourRatio", "HFourRatio", num),
-        ("LeagueHFiveAggTotal", "h5_aggregation_total", num),
     ),
     "synthesis/league_leakage_independent/summary.json": (
         ("LeagueLeakIndepTopName", "TopPlayerName", tex),
@@ -2303,7 +2470,7 @@ def table_robustness() -> str:
     """Post-hoc robustness: the M8 headline numbers under each alternative synthesis
     next to the primary; H3 under assortative planting, raw and clipped; M6 with
     curated honours."""
-    variants = {"Primary": RESULTS / "synthesis"}
+    variants = {"Registered": RESULTS / "synthesis"}
     for name, label in (
         ("bias_corrected", r"Bias-corrected $\sigma_g$"),
         ("europe", "European leagues only"),
@@ -2376,17 +2543,20 @@ def table_robustness() -> str:
 def table_recognition_curated() -> str:
     """Post hoc (e): M6 with curated team honours beside the primary fit."""
     shares = {
-        "Primary": csv(RESULTS / "recognition" / "shares.csv").set_index("block"),
+        "Registered": csv(RESULTS / "recognition" / "shares.csv").set_index("block"),
         "Curated honours": csv(RESULTS / "recognition" / "curated" / "shares.csv").set_index(
             "block"
         ),
     }
-    sums = {"Primary": summary("recognition"), "Curated honours": summary("recognition/curated")}
+    sums = {
+        "Registered": summary("recognition"),
+        "Curated honours": summary("recognition/curated"),
+    }
     body: list[str] = []
     for model, label in (("ols", r"OLS, $\log(1 + \text{points})$"), ("pl", "Plackett--Luce")):
         body.append(rf"  \multicolumn{{3}}{{@{{}}l}}{{\textit{{{label}: Shapley share "
                     r"[90\% interval]}} \\")  # fmt: skip
-        for block in shares["Primary"].index:
+        for block in shares["Registered"].index:
             body.append(
                 row(
                     [
@@ -2489,7 +2659,7 @@ def table_club_rapm() -> str:
         row([tex(club), num(s[prefix + club], 3), num(s[f"club_total_league_{club}"], 3)])
         for club in clubs
     ]
-    header = [row(["Club", "Pre-registered fit", "Fit with league means"])]
+    header = [row(["Club", "Registered fit", "Fit with league means"])]
     return tabular("@{}lrr@{}", header, body) + "\n"
 
 
@@ -2623,7 +2793,7 @@ def table_league_factors() -> str:
 # Column groups of tab-league-ranking, in the caption's order; a run that has not
 # happened (no columns in league_comparison.csv) is left out.
 RANKING_VARIANTS = (
-    ("primary", "Pre-registered"),
+    ("primary", "Registered"),
     ("league_adjusted", "League-adjusted (A21)"),
     ("league_plain", "No team term"),
     ("league_uefa", "UEFA leagues only"),
@@ -2636,8 +2806,8 @@ RANKING_PER_PANEL = 4  # variants side by side that fit \linewidth
 
 
 def table_league_ranking() -> str:
-    """Players in the top ten by median rank or by P(#1) under the pre-registered or the
-    league-adjusted run, by pre-registered P(#1); the variants in stacked panels."""
+    """Players in the top ten by median rank or by P(#1) under the registered or the
+    league-adjusted run, by registered P(#1); the variants in stacked panels."""
     table = league_comparison()
     chosen: set[str] = set()
     for run in ("primary", "league_adjusted"):
@@ -2680,7 +2850,7 @@ def table_league_ranking() -> str:
     note = (
         r"\par\smallskip\raggedright \#1 and top 3: $P(\#1)$ and $P(\text{top-3})$; rank: "
         r"median rank [90\% rank interval]. Players in the top ten by median rank or by "
-        r"$P(\#1)$ under the pre-registered or the league-adjusted mixture."
+        r"$P(\#1)$ under the registered or the league-adjusted mixture."
     )
     return (
         "{\\scriptsize\\setlength{\\tabcolsep}{2pt}\n"
@@ -2724,7 +2894,7 @@ def table_on_off() -> str:
 
 def table_leakage() -> str:
     runs = {
-        "Primary": summary("synthesis"),
+        "Registered": summary("synthesis"),
         r"Independent-planting $A_g$": summary("synthesis/leakage_independent"),
         r"Assortative-planting $A_g$": summary("synthesis/leakage_assortative"),
     }
@@ -2776,6 +2946,187 @@ def figure_league_levels(width: float) -> Figure:
     return fig
 
 
+def table_distinct_rankings() -> str:
+    """Distinct rankings per family and the family's weight share when each distinct
+    ranking counts once: registered and corrected factorial, outfield and goalkeepers."""
+    runs = (summary("synthesis/primary_distinct"), summary("synthesis/corrected"))
+
+    def cells(family: str | None) -> list[str]:
+        out = []
+        for segment in ("outfield", "goalkeeper"):
+            for s in runs:
+                if family is None:
+                    n = s[f"n_distinct_{segment}"]
+                    share = sum(float(s[f"weight_share_{segment}_{f}"]) for f in FAMILIES)  # type: ignore[arg-type]
+                else:
+                    n = s[f"n_distinct_{segment}_{family}"]
+                    share = float(s[f"weight_share_{segment}_{family}"])  # type: ignore[arg-type]
+                out += [count(n), num(share)]
+        return out
+
+    factorials = ["Registered", "Corrected"] * 2
+    header = [
+        r"  & \multicolumn{4}{c}{Outfield pool} & \multicolumn{4}{c}{Goalkeepers} \\",
+        r"  \cmidrule(lr){2-5}\cmidrule(lr){6-9}",
+        "  & " + " & ".join(rf"\multicolumn{{2}}{{c}}{{{f}}}" for f in factorials) + r" \\",
+        r"  \cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}",
+        row(["Family", *["rankings", "weight"] * 4]),
+    ]  # fmt: skip
+    body = [
+        *(row([label, *cells(family)]) for family, label in FAMILIES.items()),
+        r"  \midrule",
+        row(["All", *cells(None)]),
+    ]
+    return tabular("@{}l" + "rr" * 4 + "@{}", header, body) + "\n"
+
+
+CORRECTED_ROWS = 20  # places shown in the main table and figure
+
+
+def table_corrected_ranking() -> str:
+    table = corrected_comparison().iloc[:CORRECTED_ROWS]
+    body = [
+        row(
+            [
+                count(r["corrected_place"]),
+                tex(name),
+                tex(r["position_group"]),
+                count(r["corrected_median_rank"]),
+                _rank_set(r["corrected_rank_lo"], r["corrected_rank_hi"]),
+                num(r["corrected_p_first"]),
+                num(r["corrected_p_top3"]),
+                count(r["primary_place"]),
+                count(r["primary_median_rank"]),
+                num(r["primary_p_first"]),
+            ]
+        )
+        for name, r in table.iterrows()
+    ]
+    header = [
+        r"  & & & \multicolumn{4}{c}{Corrected mixture}"
+        r" & \multicolumn{3}{c}{Registered mixture} \\",
+        r"  \cmidrule(lr){4-7}\cmidrule(lr){8-10}",
+        row(
+            [
+                "Place",
+                "Player",
+                "Group",
+                r"\shortstack{median\\rank}",
+                r"\shortstack{90\%\\interval}",
+                r"$P(\#1)$",
+                r"$P(\text{top-3})$",
+                "place",
+                r"\shortstack{median\\rank}",
+                r"$P(\#1)$",
+            ]
+        ),
+    ]
+    return (
+        "{\\setlength{\\tabcolsep}{3pt}\n" + tabular("@{}rllrcrrrrr@{}", header, body) + "\\par}\n"
+    )
+
+
+def _goalkeeper_places(path: Path) -> pd.DataFrame:
+    players = csv(path)
+    keepers = players[players["segment"] == "goalkeeper"].sort_values(["median_rank", "mean_rank"])
+    return keepers.assign(place=range(1, len(keepers) + 1)).set_index("player")
+
+
+def table_corrected_goalkeepers() -> str:
+    corrected = _goalkeeper_places(RESULTS / "synthesis" / "corrected" / "players.csv")
+    registered = _goalkeeper_places(RESULTS / "synthesis" / "players.csv")["place"]
+    body = [
+        row(
+            [
+                tex(name),
+                count(r["median_rank"]),
+                _rank_set(r["rank_lo"], r["rank_hi"]),
+                num(r["p_first"]),
+                num(r["p_top3"]),
+                count(registered[name]),
+            ]
+        )
+        for name, r in corrected.iterrows()
+    ]
+    header = [
+        r"  & \multicolumn{4}{c}{Corrected mixture} & Registered \\",
+        r"  \cmidrule(lr){2-5}",
+        row(["Goalkeeper", "median rank", r"90\% interval", r"$P(\#1)$", r"$P(\text{top-3})$",
+             "place"]),
+    ]  # fmt: skip
+    return tabular("@{}lrcrrr@{}", header, body) + "\n"
+
+
+SENSITIVITY_LABEL = {
+    "corrected": "as run",
+    "corrected_equal_weights": r"\shortstack{equal\\weights}",
+    "corrected_no_contamination": r"\shortstack{no conta-\\mination}",
+    "corrected_assortative": r"\shortstack{real-struc-\\ture $A_g$}",
+    "league_adjusted": r"\shortstack{League-\\adjusted}",
+    "primary_distinct": r"\shortstack{distinct\\weights}",
+    "primary": "as run",
+}
+
+
+def table_corrected_sensitivity() -> str:
+    table = corrected_comparison()
+    places = table[[f"{run}_place" for run in PLACE_RUNS]]
+    shown = table[(places <= 10).any(axis=1)]
+    sums = [run_summary(run) for run in PLACE_RUNS]
+    # First and last name on two lines, so a name is no wider than a place cell.
+    leaders = [r"\shortstack{" + tex(s["TopPlayerName"]).replace(" ", r"\\", 1) + "}" for s in sums]
+    body = [
+        row(
+            [
+                tex(name),
+                *(
+                    f"{count(r[f'{run}_place'])} ({count(r[f'{run}_median_rank'])})"
+                    for run in PLACE_RUNS
+                ),
+            ]
+        )
+        for name, r in shown.iterrows()
+    ]
+    body += [
+        r"  \midrule",
+        row([r"Highest $P(\#1)$", *leaders]),
+        row([r"His $P(\#1)$", *(num(s["TopPlayerPFirst"]) for s in sums)]),
+        row(["Share of pairs decided", *(num(s["SharePairsDecided"]) for s in sums)]),
+    ]
+    header = [
+        r"  & \multicolumn{4}{c}{Corrected} & & \multicolumn{2}{c}{Registered} \\",
+        r"  \cmidrule(lr){2-5}\cmidrule(lr){7-8}",
+        row(["Player", *(SENSITIVITY_LABEL[run] for run in PLACE_RUNS)]),
+    ]
+    return (
+        "{\\footnotesize\\setlength{\\tabcolsep}{4pt}\n"
+        + tabular("@{}l" + "c" * len(PLACE_RUNS) + "@{}", header, body)
+        + "\\par}\n"
+    )
+
+
+def figure_corrected_ranking(width: float) -> Figure:
+    full = corrected_comparison()
+    table = full.iloc[:CORRECTED_ROWS]
+    y = np.arange(len(table))[::-1]
+    fig, ax = plt.subplots(figsize=(width, 0.2 * len(table) + 0.8))
+    _clean(ax)
+    ax.grid(axis="x", zorder=0)
+    ax.hlines(y, table["corrected_rank_lo"], table["corrected_rank_hi"], color=INK_SECONDARY,
+              lw=1.2, zorder=2, label="90% rank interval")  # fmt: skip
+    ax.plot(table["corrected_median_rank"], y, "o", ms=5, color=BLUE, mec=SURFACE, mew=0.7,
+            zorder=3, label="median rank")  # fmt: skip
+    ax.set_yticks(y, [f"{place}. {name}" for place, name in
+                      zip(table["corrected_place"], table.index, strict=True)])  # fmt: skip
+    ax.tick_params(axis="y", length=0)
+    ax.set_xlim(1, len(full))
+    ax.set_xticks([1, *range(10, len(full) + 1, 10)])
+    ax.set_xlabel(f"Rank in the corrected mixture (1 = best of {len(full)} outfield players)")
+    ax.legend(loc="upper right")
+    fig.tight_layout()
+    return fig
+
+
 TABLES: dict[str, Callable[[], str]] = {
     "tab-coverage": table_coverage,
     "tab-reliability": table_reliability,
@@ -2803,6 +3154,10 @@ TABLES: dict[str, Callable[[], str]] = {
     "tab-league-factors": table_league_factors,
     "tab-league-ranking": table_league_ranking,
     "tab-on-off": table_on_off,
+    "tab-distinct-rankings": table_distinct_rankings,
+    "tab-corrected-ranking": table_corrected_ranking,
+    "tab-corrected-goalkeepers": table_corrected_goalkeepers,
+    "tab-corrected-sensitivity": table_corrected_sensitivity,
     "tab-pool": table_pool,
 }
 FIGURES: dict[str, Callable[[float], Figure]] = {
@@ -2822,6 +3177,7 @@ FIGURES: dict[str, Callable[[float], Figure]] = {
     "fig-decided-pairs": figure_decided_pairs,
     "fig-recovery": figure_recovery,
     "fig-league-levels": figure_league_levels,
+    "fig-corrected-ranking": figure_corrected_ranking,
 }
 MACRO_SOURCES: tuple[Callable[[], dict[str, str]], ...] = (
     macros_data,
@@ -2846,6 +3202,7 @@ MACRO_SOURCES: tuple[Callable[[], dict[str, str]], ...] = (
     macros_league_validation,
     macros_league_ranking,
     macros_league_club,
+    macros_corrected,
     macros_on_off,
 )
 
