@@ -295,7 +295,7 @@
 \providecommand{\HSevenAlpha}{\TBD}
 
 % ---------------------------------------------------------------------------
-% Section 6.8 / 7.8 and 10, M8 synthesis (synthesis.py)
+% Section 6.8 / 7.8 and 11, M8 synthesis, the registered mixture (synthesis.py)
 % ---------------------------------------------------------------------------
 % Outfield pool player with the highest P(#1) in the (s, b, u) mixture (name); synthesis.synthesise players; results/players/synthesis/
 \providecommand{\TopPlayerName}{\TBD}
@@ -397,7 +397,7 @@
 \providecommand{\ClutchRDisatt}{\TBD}
 
 % ---------------------------------------------------------------------------
-% Section 9, other post-hoc and robustness analyses (exploratory)
+% Sections 8.2 and 10.2, post-hoc analyses of the registered analysis (exploratory); the (f) macros are those of Section 8.2 (contamination term on the registered mixture)
 % ---------------------------------------------------------------------------
 % (a) Smallest full-data attribution factor of RAPM total over the seven outfield groups, assortative planting; results/players/construct_gap/assortative/attribution.csv (kind groups, full data, group != GK, column total, min)
 \providecommand{\AssortAttrLo}{\TBD}
@@ -549,7 +549,7 @@
 \providecommand{\LeakIndepLeaderPFirst}{\TBD}
 
 % ---------------------------------------------------------------------------
-% Section 8, league-strength-adjusted analysis (post hoc; A20-A24)
+% Sections 8.1, 8.2, 9.1-9.3 and 10.1, league adjustment and its variants (post hoc; A20-A24)
 % ---------------------------------------------------------------------------
 % -- 8.1 the flaw: club means of RAPM total (goals per 90), results/players/rapm_league_men/summary.json. THREE decimals for all six, as tab-club-rapm prints them (with two, "between 0.10 and 0.11" excludes the table's 0.113)
 % Smallest of club_total_primary_{Porto, Benfica, Sporting CP}
@@ -564,7 +564,7 @@
 \providecommand{\ClubRapmLeaguePortugalHi}{\TBD}
 % club_total_league_Real Madrid
 \providecommand{\ClubRapmLeagueRealMadrid}{\TBD}
-% -- 8.2 method
+% -- 9.1 method
 % Leagues with their own RAPM mean, the reference included; results/players/rapm_league_men/summary.json n_leagues_own
 \providecommand{\NLeaguesOwnMean}{\TBD}
 % Leagues sharing one mean (REST); results/players/rapm_league_men/summary.json len(leagues_rest)
@@ -593,7 +593,7 @@
 \providecommand{\NLeaguesOwnFactor}{\TBD}
 % Leagues sharing one factor; results/players/league/summary.json factors_leagues_pooled
 \providecommand{\NLeaguesPooledFactor}{\TBD}
-% MLS-fill player-seasons from American Soccer Analysis; results/players/synthesis/league_mls/summary.json count_mls_fill_rows
+% MLS-fill player-seasons from American Soccer Analysis; results/players/synthesis/league_mls/summary.json count_mls_fill_rows (the same key and value in synthesis/corrected/summary.json, which the text now describes)
 \providecommand{\NMlsFillRows}{\TBD}
 % Pool players in the MLS fill; results/players/synthesis/league_mls/summary.json count_mls_fill_players
 \providecommand{\NMlsFillPlayers}{\TBD}
@@ -601,7 +601,7 @@
 \providecommand{\FactorShiftDummyMaxSe}{\TBD}
 % Same without the cells before a move; results/players/league/summary.json factors_context_goals_shift_dropped_max_se
 \providecommand{\FactorShiftDroppedMaxSe}{\TBD}
-% -- 8.3 levels and factors
+% -- 9.2 levels and factors
 % League mean of the Bundesliga (goals per 90 per player, three decimals, negative: $-0.029$); results/players/rapm_league_men/summary.json mu_L1
 \providecommand{\LeagueMuGermany}{\TBD}
 % League mean of the Portuguese league (three decimals, negative); results/players/rapm_league_men/summary.json mu_PO1
@@ -632,7 +632,7 @@
 \providecommand{\FactorAssistsItaly}{\TBD}
 % Same, Bundesliga; factors_context_assists_multiplier_L1
 \providecommand{\FactorAssistsGermany}{\TBD}
-% -- 8.4 validation (A23 i); results/players/league/validation/summary.json and levels.csv (stage "validate" of run_league.py)
+% -- 9.3 validation (A23 i); results/players/league/validation/summary.json and levels.csv (stage "validate" of run_league.py)
 % Leagues with both the club-results level and 22 mu; summary.json n_mu_club
 \providecommand{\ValNLeaguesClub}{\TBD}
 % Pearson correlation between the club-results level and 22 mu over those leagues; summary.json pearson_mu_club
@@ -669,7 +669,7 @@
 \providecommand{\ValNTwoSeFactorGoals}{\TBD}
 % Same for non-penalty goals; summary.json n_2se_multiplier_np_goals
 \providecommand{\ValNTwoSeFactorNpGoals}{\TBD}
-% -- 8.5 league-adjusted ranking; summaries in results/players/synthesis/<variant>/summary.json, per-player values in results/players/synthesis/league_comparison.csv
+% -- 10.1 league-adjusted variants; summaries in results/players/synthesis/<variant>/summary.json, per-player values in results/players/synthesis/league_comparison.csv
 % Leader (name) of the league-adjusted mixture; synthesis/league_adjusted/summary.json TopPlayerName
 \providecommand{\LeagueTopName}{\TBD}
 % His P(#1); synthesis/league_adjusted/summary.json TopPlayerPFirst
@@ -696,29 +696,17 @@
 \providecommand{\LeagueMessiMedianRank}{\TBD}
 % Same with the MLS fill; league_mls_median_rank
 \providecommand{\LeagueMlsMessiMedianRank}{\TBD}
-% The five players with the best (lowest) league_adjusted_stats_view, in order, as "A, B, C, D and E"; synthesis/league_comparison.csv
-\providecommand{\LeagueStatsViewTopFive}{\TBD}
-% The two players with the best league_adjusted_impact_view, as "A and B"; synthesis/league_comparison.csv
-\providecommand{\LeagueImpactViewTopTwo}{\TBD}
-% Goalkeeper with the highest P(#1) in league_adjusted (name); synthesis/league_adjusted/summary.json TopGoalkeeperName
-\providecommand{\LeagueTopGoalkeeperName}{\TBD}
-% His P(#1); synthesis/league_adjusted/summary.json TopGoalkeeperPFirst
-\providecommand{\LeagueTopGoalkeeperPFirst}{\TBD}
 % Share of outfield pairs decided in league_adjusted; synthesis/league_adjusted/summary.json SharePairsDecided
 \providecommand{\LeagueSharePairsDecided}{\TBD}
 % Smallest SharePairsDecided over the seven league runs listed above
 \providecommand{\LeagueVariantsDecidedLo}{\TBD}
 % Largest of the same
 \providecommand{\LeagueVariantsDecidedHi}{\TBD}
-% Mean specification / sampling variance over the median specification's top ten, league_adjusted; synthesis/league_adjusted/summary.json HFourRatio
-\providecommand{\LeagueHFourRatio}{\TBD}
-% Total-order index of time aggregation for the league-adjusted leader's rank; synthesis/league_adjusted/summary.json h5_aggregation_total
-\providecommand{\LeagueHFiveAggTotal}{\TBD}
-% Largest TopPlayerPFirst over EVERY synthesis run, twelve today: synthesis/summary.json and every synthesis/<variant>/summary.json (bias_corrected, europe, leakage_independent, leakage_assortative, and the seven league runs, league_club included)
+% Largest TopPlayerPFirst over EVERY synthesis run, seventeen today: synthesis/summary.json and every synthesis/<variant>/summary.json (bias_corrected, europe, leakage_independent, leakage_assortative, the seven league runs, and corrected, corrected_equal_weights, corrected_no_contamination, corrected_assortative, primary_distinct). The text states it as the highest value reached, not as a bound
 \providecommand{\AllVariantsMaxPFirst}{\TBD}
 % Largest SharePairsDecided over the same runs
 \providecommand{\AllVariantsMaxDecided}{\TBD}
-% -- 8.4 and 8.5, sensitivity with club-results league levels (A24); results/players/synthesis/league_club/summary.json, results/players/synthesis/league_comparison.csv (outfield pool players, columns league_adjusted_* and league_club_*)
+% -- 9.1, 9.3 and 10.1, club-results league levels (A24); results/players/synthesis/league_club/summary.json, results/players/synthesis/league_comparison.csv (outfield pool players, columns league_adjusted_* and league_club_*)
 % La Liga: (club_level - mu22) / club_level_minus_mu22_se, one decimal (e.g. 3.3); results/players/league/validation/levels.csv, league ES1 (the same value is `z` of the ES1 entry of summary.json disagreements_mu_club)
 \providecommand{\LeagueClubSpainGapZ}{\TBD}
 % Leagues whose level comes from the club-results rating, the reference included; synthesis/league_club/summary.json len(club_level_leagues)
@@ -739,7 +727,7 @@
 \providecommand{\LeagueClubSpearmanMedianRank}{\TBD}
 % Share of outfield pairs decided in the club-levels run; synthesis/league_club/summary.json SharePairsDecided
 \providecommand{\LeagueClubSharePairsDecided}{\TBD}
-% -- 8.6 on/off description; results/players/rapm/pool_on_off.csv, rows with club == "all clubs"
+% -- 8.2 on/off description; results/players/rapm/pool_on_off.csv, rows with club == "all clubs"
 % Leader = primary TopPlayerName: gd_on_p90
 \providecommand{\OnOffLeaderOn}{\TBD}
 % Leader: gd_off_p90
@@ -758,7 +746,7 @@
 \providecommand{\OnOffSpearmanDiff}{\TBD}
 % Spearman of pooled RAPM total with the share of the team's stint minutes played; results/players/rapm/summary.json on_off_spearman_rapm_minutes_share
 \providecommand{\OnOffSpearmanShare}{\TBD}
-% -- 8.6 contamination term on the league-adjusted run (A23 ii)
+% -- 10.1 contamination term on the league-adjusted run (A23 ii)
 % Leader (name), independent-planting A_g; synthesis/league_leakage_independent/summary.json TopPlayerName
 \providecommand{\LeagueLeakIndepTopName}{\TBD}
 % His P(#1); same file TopPlayerPFirst
@@ -777,6 +765,180 @@
 \providecommand{\LeagueLeakAssortLeaderPFirst}{\TBD}
 % Share of outfield pairs decided; synthesis/league_leakage_assortative/summary.json SharePairsDecided
 \providecommand{\LeagueLeakAssortSharePairsDecided}{\TBD}
+
+% ---------------------------------------------------------------------------
+% Sections 8.3 and 9, the corrected analysis (post hoc; A25)
+% Conventions for this block.
+%   "Place" of a player in run R = his position (1 = first) when the outfield
+%   pool players of results/players/synthesis/corrected_comparison.csv are
+%   sorted by R_median_rank, then R_mean_rank, both ascending. The file is
+%   already sorted that way for R = corrected. R is one of: primary (the
+%   registered mixture), league_adjusted, corrected, corrected_equal_weights,
+%   corrected_no_contamination, corrected_assortative, primary_distinct.
+%   "Registered leader" = TopPlayerName of results/players/synthesis/summary.json.
+%   Probabilities and shares: two decimals. Counts and places: integers.
+% ---------------------------------------------------------------------------
+% New slots of this block (each is listed in the header of main.tex). Paths under results/players/.
+%   tab-distinct-rankings (8.3): one row per family (box, box+GD, hybrid, impact; 1,440 specifications each) and a total row.
+%     Outfield, registered factorial: n_distinct_outfield_<family> and weight_share_outfield_<family> of synthesis/primary_distinct/summary.json
+%     (families box, box_gd, hybrid, impact; total n_distinct_outfield). Outfield, corrected factorial: the same keys of
+%     synthesis/corrected/summary.json. Goalkeepers: the same with "goalkeeper" in place of "outfield", both files.
+%   tab-corrected-ranking (9.4, MAIN TABLE): the 20 first rows of synthesis/corrected_comparison.csv (already sorted by
+%     corrected_median_rank, corrected_mean_rank). Columns: place (1-20), player, position_group, corrected_median_rank,
+%     [corrected_rank_lo, corrected_rank_hi], corrected_p_first, corrected_p_top3; then, for comparison, the player's place in the
+%     registered run (conventions above), primary_median_rank and primary_p_first.
+%   fig-corrected-ranking (9.4): the same 20 players in the same order, place 1 at the top: a point at corrected_median_rank and a
+%     bar from corrected_rank_lo to corrected_rank_hi; rank axis from 1 to the number of outfield pool players.
+%   tab-corrected-goalkeepers (9.4): rows segment == goalkeeper of synthesis/corrected/players.csv, sorted by median_rank then
+%     mean_rank: player, median_rank, [rank_lo, rank_hi], p_first, p_top3; last column: the goalkeeper's place in
+%     synthesis/players.csv (segment == goalkeeper, same sort).
+%   tab-corrected-sensitivity (9.5): rows = every outfield player in places 1 to 10 of at least one of the seven runs (18 today),
+%     ordered by corrected place. Columns, in this order: corrected, corrected_equal_weights, corrected_no_contamination,
+%     corrected_assortative, league_adjusted, primary_distinct, primary. Cell: "place (median rank)". Below a rule, three rows
+%     per run from its summary.json (primary: synthesis/summary.json): TopPlayerName, TopPlayerPFirst, SharePairsDecided.
+% -- 8.3 repetition in the registered factorial; results/players/synthesis/primary_distinct/summary.json
+% 1440 / n_distinct_outfield_impact, ONE decimal (8.0): mean number of impact-family specifications per distinct outfield ranking, registered factorial. n_distinct_outfield_impact must equal \NDistinctRankingsImpact
+\providecommand{\ImpactRepeatMean}{\TBD}
+% weight_share_outfield_impact: share of the registered mixture's weight on the impact family when each distinct ranking counts once
+\providecommand{\PrimaryDistinctWeightImpact}{\TBD}
+% TopPlayerName of the registered mixture with only the distinct-ranking weights. The text calls him the Saudi-league forward and says his goals are counted at face value: check it equals SecondPlayerName of synthesis/summary.json
+\providecommand{\PrimaryDistinctTopName}{\TBD}
+% His P(#1); TopPlayerPFirst, same file
+\providecommand{\PrimaryDistinctTopPFirst}{\TBD}
+% P(#1) of the registered leader in that run; synthesis/corrected_comparison.csv primary_distinct_p_first, his row
+\providecommand{\PrimaryDistinctLeaderPFirst}{\TBD}
+% -- 9.1 weights of the corrected mixture; results/players/synthesis/corrected/summary.json
+% n_distinct_outfield (integer with thousands separator, e.g. 4{,}501)
+\providecommand{\CorrectedNDistinctOutfield}{\TBD}
+% n_distinct_outfield_impact
+\providecommand{\CorrectedNDistinctImpact}{\TBD}
+% weight_share_outfield_impact
+\providecommand{\CorrectedWeightImpact}{\TBD}
+% weight_share_outfield_box. The text says each of the three other families has this share: check weight_share_outfield_box_gd and _hybrid round to the same two decimals
+\providecommand{\CorrectedWeightOtherFamily}{\TBD}
+% 1 - weight_share_outfield_impact: share of the weight on the three families that contain goals and assists
+\providecommand{\CorrectedWeightBoxFamilies}{\TBD}
+% n_distinct_goalkeeper
+\providecommand{\CorrectedNDistinctGoalkeeper}{\TBD}
+% weight_share_goalkeeper_impact
+\providecommand{\CorrectedWeightGkImpact}{\TBD}
+% -- 9.4 the corrected ranking (MAIN RESULT); results/players/synthesis/corrected/summary.json unless another file is named
+% Names of the players in places 1 to 5 of the corrected run, in order, as "A, B, C, D and E"; synthesis/corrected_comparison.csv rows 1-5
+\providecommand{\CorrectedTopFive}{\TBD}
+% Names of the players in places 6 to 10, same format; rows 6-10
+\providecommand{\CorrectedNextFive}{\TBD}
+% Smallest corrected_median_rank of places 1 to 5
+\providecommand{\CorrectedTopFiveMedianLo}{\TBD}
+% Largest corrected_median_rank of places 1 to 5
+\providecommand{\CorrectedTopFiveMedianHi}{\TBD}
+% TopPlayerName. The text treats him as place 1 as well: check he is row 1 of corrected_comparison.csv
+\providecommand{\CorrectedTopName}{\TBD}
+% TopPlayerPFirst
+\providecommand{\CorrectedTopPFirst}{\TBD}
+% TopPlayerPTopThree
+\providecommand{\CorrectedTopPTopThree}{\TBD}
+% TopPlayerPTopTen
+\providecommand{\CorrectedTopPTopTen}{\TBD}
+% TopPlayerMedianRank
+\providecommand{\CorrectedTopMedianRank}{\TBD}
+% TopPlayerRankLo
+\providecommand{\CorrectedTopRankLo}{\TBD}
+% TopPlayerRankHi
+\providecommand{\CorrectedTopRankHi}{\TBD}
+% SecondPlayerName
+\providecommand{\CorrectedSecondName}{\TBD}
+% SecondPlayerPFirst
+\providecommand{\CorrectedSecondPFirst}{\TBD}
+% Sum of corrected_p_first over places 1 to 5; synthesis/corrected_comparison.csv
+\providecommand{\CorrectedTopFivePFirstSum}{\TBD}
+% Smallest P(leader above player) over the players in places 2 to 5; results/players/synthesis/corrected/pairwise_outfield.csv, row = player_id of place 1, columns = player_ids of places 2-5
+\providecommand{\CorrectedTopPairLo}{\TBD}
+% Largest of the same four probabilities
+\providecommand{\CorrectedTopPairHi}{\TBD}
+% NPairsDecided
+\providecommand{\CorrectedNPairsDecided}{\TBD}
+% SharePairsDecided
+\providecommand{\CorrectedSharePairsDecided}{\TBD}
+% TopPlayerVarSpec
+\providecommand{\CorrectedTopVarSpec}{\TBD}
+% TopPlayerVarSamp
+\providecommand{\CorrectedTopVarSamp}{\TBD}
+% TopPlayerVarUnm
+\providecommand{\CorrectedTopVarUnm}{\TBD}
+% HFourRatio
+\providecommand{\CorrectedHFourRatio}{\TBD}
+% Place of the registered leader in the corrected run
+\providecommand{\CorrectedRegLeaderPlace}{\TBD}
+% corrected_p_first of the registered leader
+\providecommand{\CorrectedRegLeaderPFirst}{\TBD}
+% Place of Julian Quinones in the corrected run
+\providecommand{\CorrectedQuinonesPlace}{\TBD}
+% Place of Viktor Gyokeres in the corrected run
+\providecommand{\CorrectedGyokeresPlace}{\TBD}
+% Place of Lionel Messi in the corrected run
+\providecommand{\CorrectedMessiPlace}{\TBD}
+% Names of the players in places 1 to 5 of the registered run (primary), in order, as "A, B, C, D and E"
+\providecommand{\RegisteredTopFive}{\TBD}
+% Number of the corrected first five who are also in places 1 to 5 of the registered run (integer). The text names the remaining one, so it must be 4
+\providecommand{\CorrectedTopFiveInRegistered}{\TBD}
+% Name of the corrected first-five player who is not in places 1 to 5 of the registered run
+\providecommand{\CorrectedTopFiveNewName}{\TBD}
+% His place in the registered run
+\providecommand{\CorrectedTopFiveNewRegisteredPlace}{\TBD}
+% Spearman between corrected_median_rank and primary_median_rank over the outfield pool players; computed from synthesis/corrected_comparison.csv
+\providecommand{\CorrectedSpearmanRegistered}{\TBD}
+% Place of the registered leader in the registered run
+\providecommand{\RegisteredLeaderPlace}{\TBD}
+% Place of Julian Quinones in the registered run
+\providecommand{\RegisteredQuinonesPlace}{\TBD}
+% TopGoalkeeperName
+\providecommand{\CorrectedTopGoalkeeperName}{\TBD}
+% TopGoalkeeperPFirst
+\providecommand{\CorrectedTopGoalkeeperPFirst}{\TBD}
+% -- 9.5 sensitivities
+% Smallest TopPlayerPFirst over the four runs corrected, corrected_equal_weights, corrected_no_contamination, corrected_assortative; their summary.json. The text says the same player leads all four: check TopPlayerName is identical
+\providecommand{\CorrectedSensPFirstLo}{\TBD}
+% Largest of the same
+\providecommand{\CorrectedSensPFirstHi}{\TBD}
+% Smallest SharePairsDecided over the same four runs. The text says it is the equal-weights run
+\providecommand{\CorrectedSensDecidedLo}{\TBD}
+% Largest of the same. The text says it is the run without the contamination term
+\providecommand{\CorrectedSensDecidedHi}{\TBD}
+% Names of the players who are in places 1 to 5 of every one of the seven runs of the conventions above, in the order of the corrected run, as "A, B and C"
+\providecommand{\CorrectedAlwaysTopFive}{\TBD}
+% Place of Rodri in the corrected run. The text calls him the first defensive midfielder: check no DM has a better place
+\providecommand{\CorrectedRodriPlace}{\TBD}
+% Place of Rodri in corrected_equal_weights
+\providecommand{\CorrectedEqualRodriPlace}{\TBD}
+% Place of the registered leader in corrected_equal_weights
+\providecommand{\CorrectedEqualRegLeaderPlace}{\TBD}
+% Place of the registered leader in league_adjusted
+\providecommand{\LeagueRegLeaderPlace}{\TBD}
+% -- 9.6 scope of the corrected mixture; synthesis/corrected_comparison.csv
+% Spearman between corrected_median_rank and corrected_stats_view over the outfield pool players
+\providecommand{\CorrectedSpearmanStatsView}{\TBD}
+% Spearman between corrected_median_rank and corrected_impact_view
+\providecommand{\CorrectedSpearmanImpactView}{\TBD}
+% Spearman between primary_median_rank and primary_stats_view
+\providecommand{\RegisteredSpearmanStatsView}{\TBD}
+% Spearman between primary_median_rank and primary_impact_view
+\providecommand{\RegisteredSpearmanImpactView}{\TBD}
+% Name of the best-placed player of the corrected run whose position_group is not CF, W or AM. The text says the first twenty places are all CF, W or AM: check his place is above 20
+\providecommand{\CorrectedFirstOtherName}{\TBD}
+% His place
+\providecommand{\CorrectedFirstOtherPlace}{\TBD}
+% Place of the best-placed player with position_group FB
+\providecommand{\CorrectedFirstFBPlace}{\TBD}
+% Place of the best-placed player with position_group CB
+\providecommand{\CorrectedFirstCBPlace}{\TBD}
+% corrected_rank_lo of Rodri
+\providecommand{\CorrectedRodriRankLo}{\TBD}
+% corrected_rank_hi of Rodri
+\providecommand{\CorrectedRodriRankHi}{\TBD}
+% corrected_p_first of Rodri
+\providecommand{\CorrectedRodriPFirst}{\TBD}
+% -- 11 comparison with V1; results/players/synthesis/corrected/summary.json VOneSpearman
+\providecommand{\CorrectedVOneSpearman}{\TBD}
 
 % ---------------------------------------------------------------------------
 % Section 7.10, hypothesis verdicts (text: "supported", "refuted" or, for H7

@@ -354,3 +354,15 @@ timestamp.
   90% rank interval. It is reported beside the same mixture without (iii),
   without (ii), and beside the registered mixture. Whatever ranking results
   is reported; no rule is revised after it is seen.
+  *Precisions added on 2026-11-22, after the corrected mixture ran; the
+  rules of A25 are unchanged.* (a) In the impact family two dimensions never
+  change a ranking (context and shrinkage); the third source of exact
+  repeats is inside the weights dimension, where the V1-like weights equal
+  the equal-z weights and the first principal component often does. (b)
+  "Mostly not the player's own" holds for the attribution factor of
+  independent planting (0.39); with the real teammate structure it is
+  0.69–0.74, so the statement is about one of two estimates. (c) Ordered by
+  median rank instead of P(#1), the registered mixture is itself led by
+  Kane, Díaz, Haaland, Mbappé and Lewandowski: part of the difference
+  between the two answers is the ordering statistic, not the correction.
+  (d) Ties in median rank are broken by mean rank.
